@@ -2,7 +2,7 @@ name: build-iso
 on:
   workflow_dispatch:
   pull_request:
-    paths: [build/**, Makefile]
+    paths: [build/**]
 permissions:
   contents: read
 jobs:

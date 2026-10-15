@@ -6,9 +6,9 @@
 set -euo pipefail
 run="${1:?usage: ci-summary.sh <run-id> [owner/repo]}"
 repo_arg=(); [[ -n "${2:-}" ]] && repo_arg=(--repo "$2")
-log="$(gh run view "$run" "${repo_arg[@]}" --log-failed 2>/dev/null || true)"
+log="$(gh run view "$run" ${repo_arg[@]+"${repo_arg[@]}"} --log-failed 2>/dev/null || true)"
 if [[ -z "$log" ]]; then
-  gh run view "$run" "${repo_arg[@]}" --json conclusion,url --jq '"run \(.url): \(.conclusion) (no failed-step log)"'
+  gh run view "$run" ${repo_arg[@]+"${repo_arg[@]}"} --json conclusion,url --jq '"run \(.url): \(.conclusion) (no failed-step log)"'
   exit 0
 fi
 step="$(printf '%s\n' "$log" | head -1 | cut -f1-2)"
