@@ -14,9 +14,9 @@
 
 ## Merge requirements
 
-1. All required CI checks are green.
-2. Approved by the **other** model: Codex reviews Claude PRs, a Claude agent reviews Codex PRs. Nobody approves their own PR.
-3. The owner approves anything labeled `decision` or `installer-disk`.
+1. All required CI checks are green: `lint`, `build-iso`, `boot-test`.
+2. Approved by the **other** model: Codex reviews Claude PRs, a Claude agent reviews Codex PRs. Nobody approves their own PR. The `cross-review` status checks this.
+3. The owner approves anything labeled `decision` or `installer-disk`, and any change to ADRs, workflows, `scripts/autopilot/` or signing material. Approval is an approving review or the `owner-approved` label on the head commit (`owner-gate` status). Autopilot never merges these (docs/AUTOPILOT.md).
 4. The PR template is filled in, including **test evidence**: a link to the CI run, the boot log excerpt, and a screenshot when the change is visible.
 
 ## Disagreements

@@ -7,7 +7,9 @@ iso:
 boot-test:
 	@echo "make boot-test ARCH=$(ARCH) SECUREBOOT=$(SECUREBOOT): not implemented yet (Phase 1, agent:vm-integrator)" >&2; exit 2
 lint:
-	shellcheck scripts/*.sh
+	shellcheck -x scripts/*.sh scripts/autopilot/*.sh
 	yamllint -d relaxed .github
+	actionlint
 	reuse lint
 	scripts/sync-agent-docs.sh --check
+	scripts/autopilot/selftest.sh

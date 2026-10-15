@@ -1,0 +1,23 @@
+# Re-dispatch `paused` issues oldest-first within the concurrency caps (docs/AUTOPILOT.md §6).
+name: resume
+on:
+  schedule:
+    - cron: "41 */2 * * *"
+  workflow_dispatch:
+concurrency:
+  group: autopilot
+  cancel-in-progress: false
+permissions:
+  contents: read
+  issues: write
+  actions: write
+jobs:
+  resume:
+    if: vars.AUTOPILOT == 'on'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/autopilot/dispatch.sh --resume

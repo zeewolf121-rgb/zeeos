@@ -29,9 +29,14 @@ fallback() {
 
 # Labels can arrive in any order; the run for the later label does the work.
 [[ -n "$agent" ]] || { echo "no agent:* label yet; waiting for it"; exit 0; }
-# Idempotent: both label events can reach here (runs are serialised per issue).
-if gh api --paginate "repos/$repo/issues/$issue/comments?per_page=100" \
-    --jq '.[] | select(.body | startswith("@codex ")) | .id' | grep -q .; then
+# Idempotent: both label events can reach here (runs are serialised per issue). A task
+# comment newer than the last time the issue was resumed (paused removed) means Codex
+# already has it; a resumed issue gets a fresh mention.
+last_task="$(gh api --paginate "repos/$repo/issues/$issue/comments?per_page=100" \
+  --jq '.[] | select(.body | startswith("@codex ")) | .created_at' | sort | tail -n1)"
+last_resume="$(gh api --paginate "repos/$repo/issues/$issue/events?per_page=100" \
+  --jq '.[] | select(.event == "unlabeled" and .label.name == "paused") | .created_at' | sort | tail -n1)"
+if [[ -n "$last_task" && "$last_task" > "${last_resume:-0}" ]]; then
   echo "#$issue already has an @codex task comment; nothing to do"; exit 0
 fi
 

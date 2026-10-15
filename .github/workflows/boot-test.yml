@@ -1,19 +1,18 @@
+# Boot tests, called by build-iso after a successful build (so the result reports on the PR),
+# or run by hand. P1-7/P1-8 replace the stub with the QEMU harness and SB on/off.
 name: boot-test
 on:
+  workflow_call:
   workflow_dispatch:
-  workflow_run:
-    workflows: [build-iso]
-    types: [completed]
 permissions:
   contents: read
 jobs:
   boot:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: make boot-test ARCH=${{ matrix.arch }} SECUREBOOT=on
