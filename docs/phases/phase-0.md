@@ -24,7 +24,7 @@
 | D5 | Compositor/desktop | KWin + Plasma 6 (ADR-0005) |
 | D6 | Licensing | GPL-3.0+ / CC-BY-SA-4.0 / OFL (ADR-0006) |
 | D7 | Repo | Private GitHub repo `zeeos` under account `zeewolf121-rgb` (or an org you choose) |
-| D8 | Codex access | How Codex is connected: `openai/codex-action` with an `OPENAI_API_KEY` secret, or the Codex GitHub app |
+| D8 | Codex access | **Decided (2026-10-16):** Codex cloud via the GitHub integration. Reviews start with an `@codex review` PR comment, posted by `agent-dispatch.yml` on Claude-authored PRs |
 
 ## After approval
 

@@ -24,6 +24,8 @@ The orchestrator (Claude Code, top level) owns integration, merges, `CLAUDE.md`,
 `agent-dispatch.yml` reads the `model:` label:
 
 - `model:claude` runs `anthropics/claude-code-action` with the subagent from `.claude/agents/<agent>.md`.
-- `model:codex` runs `openai/codex-action` with the role section for that agent in `AGENTS.md`.
+- `model:codex`: issue dispatch to Codex is not wired yet (D8 covers reviews only).
+
+When a Claude-authored PR (`agent/<agent>/…` with a Claude agent, or `agent/orchestrator/…`) is opened or marked ready for review, `agent-dispatch.yml` comments `@codex review`. Codex cloud picks this up through its GitHub integration (D8).
 
 Each run works on `agent/<agent>/<issue>-<slug>` and opens a **draft** PR.

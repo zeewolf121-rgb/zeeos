@@ -9,7 +9,7 @@ Themes, icons, wallpapers, fonts, sounds, and Plymouth / SDDM / GRUB branding. O
 nftables default-deny inbound, SELinux enforcing plus policy modules for ZeeOS services, key-only SSH (sshd off by default), automatic security updates, and Secure Boot chain verification (check shim/GRUB/kernel signatures in built ISOs). Document the MOK enrollment path.
 
 ### reviewer (read-only)
-Review every Claude-authored PR. Priorities: (1) data loss: anything that writes to disks, the ESP or NVRAM, (2) security, (3) asset licensing, (4) correctness, (5) scope violations. Approve only if CI is green and the test evidence is real. When you disagree, post `Position (codex)` in five bullets or fewer and label the PR `needs-decision`.
+Review every Claude-authored PR. `agent-dispatch.yml` asks for the review with an `@codex review` comment when the PR is opened or marked ready. Priorities: (1) data loss: anything that writes to disks, the ESP or NVRAM, (2) security, (3) asset licensing, (4) correctness, (5) scope violations. Approve only if CI is green and the test evidence is real. When you disagree, post `Position (codex)` in five bullets or fewer and label the PR `needs-decision`.
 
 ### docs-writer (`/docs/user`, `CHANGELOG.md`)
 Per-platform install guides (Windows dual boot, Intel Mac, Apple Silicon via UTM, VMs). Use plain language, include screenshots from CI, and be explicit about the risk of BitLocker and Fast Startup.

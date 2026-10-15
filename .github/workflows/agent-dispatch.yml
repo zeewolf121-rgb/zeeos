@@ -1,16 +1,19 @@
-# Routes labelled issues to the right model (docs/agents.md). Inert until the
-# owner adds ANTHROPIC_API_KEY / the Codex integration (Phase 0 decision D8).
+# Routes labelled issues to the right model (docs/agents.md) and requests the
+# cross-model review on Claude-authored PRs (D8: Codex cloud via the GitHub
+# integration, triggered by an "@codex review" PR comment).
 name: agent-dispatch
 on:
   issues:
     types: [labeled]
+  pull_request:
+    types: [opened, ready_for_review]
 permissions:
   contents: write
   issues: write
   pull-requests: write
 jobs:
   claude:
-    if: github.event.label.name == 'model:claude'
+    if: github.event_name == 'issues' && github.event.label.name == 'model:claude'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +24,30 @@ jobs:
       # Phase 1: add anthropics/claude-code-action here with the subagent from
       # .claude/agents/<agent>.md, branch agent/<agent>/<issue>-<slug>, draft PR.
   codex:
-    if: github.event.label.name == 'model:codex'
+    if: github.event_name == 'issues' && github.event.label.name == 'model:codex'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Codex dispatch pending owner decision D8 (skipped)"
+      - run: echo "Codex issue dispatch not wired yet (skipped); D8 covers reviews only"
+  codex-review:
+    # Claude-authored = branch agent/<agent>/… where <agent> is the orchestrator
+    # or has a Claude subagent in .claude/agents/, and no model:codex label.
+    # Drafts wait until they are marked ready for review.
+    if: >-
+      github.event_name == 'pull_request' && !github.event.pull_request.draft &&
+      startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      !contains(github.event.pull_request.labels.*.name, 'model:codex')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Request Codex review
+        env:
+          # Optional PAT if Codex ignores comments from github-actions[bot].
+          GH_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN || github.token }}
+          REF: ${{ github.event.pull_request.head.ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          agent="${REF#agent/}"; agent="${agent%%/*}"
+          if [[ "$agent" != orchestrator && ! -f ".claude/agents/$agent.md" ]]; then
+            echo "agent '$agent' is not a Claude agent; no Codex review requested"; exit 0
+          fi
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "@codex review"
