@@ -39,6 +39,7 @@ jobs:
   publish:
     needs: [guard, build]
     runs-on: ubuntu-latest
+    environment: release   # ADR-0007: signing secrets live here (repo-level secrets also resolve)
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.guard.outputs.tag }}

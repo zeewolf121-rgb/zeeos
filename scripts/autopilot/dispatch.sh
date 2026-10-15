@@ -11,9 +11,10 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 from=ready; [[ "${1:-}" == --resume ]] && from=paused
 stagger="${AUTOPILOT_STAGGER:-300}"
 
-inflight() {
+inflight() { # running agents of a model; paused / needs-human issues hold no slot
   gh issue list --repo "$REPO" --state open --label in-progress --limit 200 --json labels \
-    --jq "[.[] | select(any(.labels[]; .name == \"model:$1\"))] | length"
+    --jq "[.[] | select(any(.labels[]; .name == \"model:$1\"))
+           | select(all(.labels[]; .name != \"paused\" and .name != \"needs-human\"))] | length"
 }
 deps_closed() {
   local d

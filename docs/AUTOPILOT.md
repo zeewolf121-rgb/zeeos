@@ -140,7 +140,7 @@ The final `v1.0.0` is tagged by the owner.
 | `AUTOPILOT` | variable | Kill switch (`on` to run) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | secret | All `claude-code-action` steps (set by `/install-github-app`) |
 | `CODEX_TRIGGER_TOKEN` | secret | Owner fine-grained PAT, Pull requests read/write: `@codex` comments only |
-| `MINISIGN_SECRET_KEY`, `MINISIGN_PASSWORD` | secrets | `release.yml` only (Phase 5) |
+| `MINISIGN_SECRET_KEY`, `MINISIGN_PASSWORD` | secrets in the `release` environment | `release.yml` publish job only (Phase 5). Required reviewers on an environment need GitHub Pro for a private repo |
 
 ## Turning it on
 

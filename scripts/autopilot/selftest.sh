@@ -107,6 +107,17 @@ for n in 1 2 3; do echo '{"labels":[{"name":"model:claude"},{"name":"agent:image
 "$here/dispatch.sh" 2>/dev/null
 ok "only one Claude slot left: priority:high #2 goes first" 'grep -q "workflow run agent-dispatch.yml --repo o/r -f issue=2" "$CALLS" && [[ $(grep -c "workflow run" "$CALLS") == 1 ]]'
 
+reset
+echo '[{"number":1,"createdAt":"2026-01-01","labels":[{"name":"ready"}]}]' | fx issue_list_ready
+echo '[{"labels":[{"name":"model:codex"},{"name":"needs-human"}]}]' | fx issue_list_in-progress
+echo '{"labels":[{"name":"model:codex"},{"name":"agent:theme-designer"},{"name":"ready"}]}' | fx issue_view_1
+"$here/dispatch.sh" 2>/dev/null
+ok "a needs-human Codex issue doesn't hold the Codex slot" 'grep -q "issue=1" "$CALLS"'
+
+reset; claude_pr
+echo '{"labels":[{"name":"model:claude"},{"name":"agent:installer-engineer"},{"name":"installer-disk"}]}' | fx issue_view_6
+ok "installer-disk on the linked issue -> Opus review" '[[ "$(gates review-model 5)" == claude-opus-5-5 ]]'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones

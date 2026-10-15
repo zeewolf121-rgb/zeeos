@@ -7,6 +7,7 @@
 #   status          post both results as commit statuses on the head commit
 #   request-review  ask the other model to review the head commit (once per commit)
 #   merge           merge if every gate passes; hard-stop PRs are left for the owner
+#   review-model    model id for a Claude review: Opus for installer-disk work (PR or linked issue)
 # Env: see lib.sh; CODEX_TOKEN (owner token for "@codex review" comments).
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
@@ -185,12 +186,14 @@ merge() {
   log "#$pr merged at ${sha:0:7}"
 }
 
-cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge> <pr>}"; pr="${2:?pr}"
+cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|review-model> <pr>}"; pr="${2:?pr}"
 case "$cmd" in
   cross-review) cross_review "$pr" ;;
   owner-gate) owner_gate "$pr" ;;
   status) status "$pr" ;;
   request-review) request_review "$pr" ;;
   merge) merge "$pr" ;;
+  review-model)
+    if [[ "$(hard_stop_reasons "$pr")" == *label:installer-disk* ]]; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
   *) echo "unknown command: $cmd" >&2; exit 2 ;;
 esac
