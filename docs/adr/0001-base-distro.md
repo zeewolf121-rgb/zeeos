@@ -1,6 +1,6 @@
 # ADR-0001: Base distribution
 
-- Status: **Proposed** (needs owner approval, labeled `decision`)
+- Status: **Accepted** (owner, 2026-10-16, Phase 0 decision D1)
 - Date: 2026-10-16
 - Deciders: owner; architect (Claude); reviewer (Codex)
 
@@ -24,9 +24,11 @@ a Microsoft-signed shim, a signed GRUB and kernel, a current KDE Plasma 6 on Way
 | Support window | ~13 months per release, so we rebase twice a year | ~3 years + LTS |
 | Kernel / hardware | Very recent, which helps new laptops and T2 Macs | Older. Backports kernel available |
 
-## Decision (proposed)
+## Decision
 
-**Fedora, tracking the current stable release** (Fedora 44 today, rebasing to 45 after its GA has been tested in CI).
+**Fedora 44** (pinned; Fedora 45 is in Beta as of 2026-10-16).
+
+**Upgrade policy:** ZeeOS moves to Fedora N+1 **one month after N+1's GA**. From N+1 Beta onward CI also builds against N+1 so the rebase PR is ready; the pin changes in one PR that updates this ADR, `build/` and the build container together.
 
 Why:
 1. The desktop is the product. Fedora keeps us on current Plasma 6 / KWin. With Debian we would be stuck on Plasma 6.3 until 2027, and the Plasma 6.4+ features we want (better tiling, HDR, per-screen virtual desktops) would be missing.
@@ -36,7 +38,7 @@ Why:
 
 ## Consequences
 
-- **Rebase twice a year.** CI has to build against `fedora:N+1` from Beta onward. This is the main cost compared with Debian.
+- **Rebase twice a year**, one month after each Fedora GA (next: Fedora 45). CI has to build against `fedora:N+1` from Beta onward. This is the main cost compared with Debian.
 - The installer choice (ADR-0003) has to deal with Calamares not being Fedora's default installer.
 - AppArmor in the brief becomes SELinux. Custom services need SELinux policy modules, which `security-hardener` owns.
 

@@ -1,11 +1,14 @@
 # ADR-0004: Bootloader
 
-- Status: **Proposed** (needs owner approval)
+- Status: **Accepted** (owner, 2026-10-16, Phase 0 decision D4)
 - Date: 2026-10-16
 
-## Decision (proposed)
+## Decision
 
-**GRUB 2 through the base distro's signed shim**, with a custom ZeeOS theme.
+**GRUB 2 through Fedora's signed shim and Fedora's signed GRUB binaries only.**
+
+- Ship `shim*.efi` and `grub*.efi` exactly as Fedora signs them. No rebuilt GRUB images, no `grub2-mkimage`, no extra or custom GRUB modules.
+- Theming is **config-level only**: `theme.txt`, PNG backgrounds and `.pf2` fonts under `/branding/grub/`, plus `/etc/default/grub` settings. Nothing that GRUB would execute as code.
 
 ## Why not systemd-boot
 

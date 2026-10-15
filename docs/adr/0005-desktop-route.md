@@ -1,9 +1,9 @@
 # ADR-0005: Desktop and compositor
 
-- Status: **Proposed** (needs owner approval)
+- Status: **Accepted** (owner, 2026-10-16, Phase 0 decision D5)
 - Date: 2026-10-16
 
-## Decision (proposed)
+## Decision
 
 - **v1: customized KDE Plasma 6 on KWin (Wayland only).** No X11 session is installed.
 - **v2: custom shell.** Decide in v1.x whether that means a new Plasma shell package (QML on top of KWin) or a separate compositor. Not in scope now.

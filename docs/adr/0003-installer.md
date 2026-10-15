@@ -1,6 +1,6 @@
 # ADR-0003: Installer
 
-- Status: **Proposed** (needs owner approval, labeled `decision`, `installer-disk`)
+- Status: **Accepted** (owner, 2026-10-16, Phase 0 decision D3)
 - Date: 2026-10-16
 
 ## Context
@@ -18,7 +18,7 @@ The brief prefers Calamares, or Anaconda if the base is Fedora, with a written j
 | Fedora integration | Packaged, community-maintained | Native, best tested |
 | RTL / Arabic | Qt, RTL supported | Supported |
 
-## Decision (proposed)
+## Decision
 
 **Calamares**, even though the base is Fedora. Anaconda's Web UI has no guided resize-alongside flow, and that flow is a core v1 requirement. Calamares also lets us add the BitLocker and Fast Startup checks as small, separately testable modules.
 

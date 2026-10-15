@@ -2,7 +2,7 @@
 
 # ZeeOS: shared agent context
 
-ZeeOS is a Fedora-based (proposed, ADR-0001) Linux distro with an original hybrid desktop on KDE Plasma 6 / KWin (Wayland only). It ships signed hybrid ISOs for x86_64 and aarch64 and a UTM bundle. The installer is Calamares with custom dual-boot safety modules.
+ZeeOS is a Fedora 44-based (ADR-0001) Linux distro with an original hybrid desktop on KDE Plasma 6 / KWin (Wayland only). It ships signed hybrid ISOs for x86_64 and aarch64 and a UTM bundle. The installer is Calamares with custom dual-boot safety modules.
 
 ## Read first
 

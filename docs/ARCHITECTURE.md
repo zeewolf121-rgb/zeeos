@@ -60,7 +60,7 @@ Everything is shared except files under `build/arch/<arch>/`:
 | Boot loader files  | `shimx64.efi`, `grubx64.efi`   | `shimaa64.efi`, `grubaa64.efi`   |
 | Legacy BIOS        | optional (GRUB i386-pc)        | none                             |
 | Extra packages     | microcode, Intel Mac/T2 notes  | VM guest tools (spice/qemu-ga)   |
-| CI runner          | `ubuntu-24.04`                 | `ubuntu-24.04-arm`               |
+| CI runner          | `ubuntu-24.04`                 | self-hosted macOS ARM64 (D9, [setup](ci/macos-arm64-runner.md)) |
 
 If a desktop, installer or branding file needs an `if arch == …`, that is a design smell. Move the difference into `build/arch/`.
 
@@ -101,7 +101,7 @@ If a desktop, installer or branding file needs an `if arch == …`, that is a de
 ## 8. Open risks
 
 1. **Calamares on Fedora.** Fedora's own KDE edition installs with Anaconda, so the Fedora Calamares package gets less testing. Mitigation: pin the version and run `install-test.yml` on every installer change. Fallback: ADR-0003.
-2. **aarch64 CI capacity.** GitHub's `ubuntu-24.04-arm` runners have no nested KVM on every plan. If KVM is missing, aarch64 boot tests fall back to TCG (slow) or a self-hosted Apple Silicon runner.
+2. **aarch64 CI capacity.** GitHub's `ubuntu-24.04-arm` runners have no nested KVM on every plan. Decided (D9): aarch64 builds and tests run on a self-hosted Apple Silicon runner (HVF acceleration). Risk now: one machine is a single point of failure; `ubuntu-24.04-arm` + TCG stays as the slow fallback.
 3. **Secure Boot in CI.** Testing Secure Boot ON needs OVMF variable stores with Microsoft keys enrolled (`OVMF_VARS.secboot.fd`). These ship in Fedora's `edk2-ovmf`. The aarch64 equivalent needs to be checked in Phase 1.
 4. **ISO size.** The full Plasma desktop plus Arabic fonts and locales has to fit under 4 GB. Today's Fedora KDE live ISO is about 2.5–3 GB, so there is room, but the package list gets a size check in CI.
 5. **Base release cadence.** Fedora releases every ~6 months and supports each release for ~13 months. ZeeOS has to rebase twice a year (see ADR-0001).
