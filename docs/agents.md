@@ -24,7 +24,7 @@ The orchestrator (Claude Code, top level) owns integration, merges, `CLAUDE.md`,
 `agent-dispatch.yml` reads the `model:` label:
 
 - `model:claude` runs `anthropics/claude-code-action` with the subagent from `.claude/agents/<agent>.md`.
-- `model:codex`: issue dispatch to Codex is not wired yet (D8 covers reviews only).
+- `model:codex` runs `scripts/codex-dispatch.sh`: it comments `@codex` on the issue (as the owner, via `CODEX_TRIGGER_TOKEN`) with the task summary and a pointer to `AGENTS.md`. If Codex doesn't react or reply with a task link within 5 minutes, the issue gets `needs-human` and the owner starts it from Codex cloud.
 
 When a Claude-authored PR (`agent/<agent>/…` with a Claude agent, or `agent/orchestrator/…`) is opened or marked ready for review, `agent-dispatch.yml` comments `@codex review`. Codex cloud picks this up through its GitHub integration (D8).
 

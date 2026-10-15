@@ -1,4 +1,5 @@
-# Routes labelled issues to the right model (docs/agents.md) and requests the
+# Routes labelled issues to the right model (docs/agents.md; model:codex via an
+# "@codex" issue comment, else needs-human) and requests the
 # cross-model review on Claude-authored PRs (D8: Codex cloud via the GitHub
 # integration, triggered by an "@codex review" PR comment).
 name: agent-dispatch
@@ -26,8 +27,14 @@ jobs:
   codex:
     if: github.event_name == 'issues' && github.event.label.name == 'model:codex'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - run: echo "Codex issue dispatch not wired yet (skipped); D8 covers reviews only"
+      - uses: actions/checkout@v4
+      - name: Mention Codex, else label needs-human
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+        run: scripts/codex-dispatch.sh "${{ github.event.issue.number }}"
   codex-review:
     # Claude-authored = branch agent/<agent>/… where <agent> is the orchestrator
     # or has a Claude subagent in .claude/agents/, and no model:codex label.

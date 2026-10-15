@@ -26,3 +26,4 @@
 - installer-disk|b60205|Writes disks/ESP/NVRAM: dry-run + owner approval required
 - decision|fbca04|Needs owner decision
 - paused|cccccc|Agent hit a limit; resume from handoff
+- needs-human|d93f0b|Automation gave up; owner action needed
