@@ -1,0 +1,27 @@
+# Routes labelled issues to the right model (docs/agents.md). Inert until the
+# owner adds ANTHROPIC_API_KEY / the Codex integration (Phase 0 decision D8).
+name: agent-dispatch
+on:
+  issues:
+    types: [labeled]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+jobs:
+  claude:
+    if: github.event.label.name == 'model:claude'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secret
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: test -n "$KEY" || { echo "ANTHROPIC_API_KEY not set; skipping (reported as skipped)"; exit 0; }
+      # Phase 1: add anthropics/claude-code-action here with the subagent from
+      # .claude/agents/<agent>.md, branch agent/<agent>/<issue>-<slug>, draft PR.
+  codex:
+    if: github.event.label.name == 'model:codex'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Codex dispatch pending owner decision D8 (skipped)"

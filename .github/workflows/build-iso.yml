@@ -1,0 +1,23 @@
+name: build-iso
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: [build/**, Makefile]
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: make iso ARCH=${{ matrix.arch }}
+      - if: failure()
+        run: echo "Summarise with scripts/ci-summary.sh ${{ github.run_id }}"
