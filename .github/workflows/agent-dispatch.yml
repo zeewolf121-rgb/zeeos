@@ -25,7 +25,15 @@ jobs:
       # Phase 1: add anthropics/claude-code-action here with the subagent from
       # .claude/agents/<agent>.md, branch agent/<agent>/<issue>-<slug>, draft PR.
   codex:
-    if: github.event_name == 'issues' && github.event.label.name == 'model:codex'
+    # Either label can come last: run on model:codex, or on agent:* once
+    # model:codex is present. The script waits until both are set.
+    if: >-
+      github.event_name == 'issues' && (github.event.label.name == 'model:codex' ||
+      (startsWith(github.event.label.name, 'agent:') &&
+      contains(github.event.issue.labels.*.name, 'model:codex')))
+    concurrency:
+      group: codex-dispatch-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

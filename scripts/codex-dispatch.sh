@@ -27,10 +27,18 @@ fallback() {
   echo "needs-human: $1"
 }
 
-[[ -n "$agent" ]] || { fallback "no agent:* label"; exit 0; }
+# Labels can arrive in any order; the run for the later label does the work.
+[[ -n "$agent" ]] || { echo "no agent:* label yet; waiting for it"; exit 0; }
+# Idempotent: both label events can reach here (runs are serialised per issue).
+if [[ "$(gh api "repos/$repo/issues/$issue/comments?per_page=100" \
+    --jq '[.[] | select(.body | startswith("@codex "))] | length')" != 0 ]]; then
+  echo "#$issue already has an @codex task comment; nothing to do"; exit 0
+fi
 
 # Task summary: the template sections before "## Labels to set", max 1500 chars.
-summary="$(printf '%s\n' "$body" | sed '/^## Labels to set/,$d' | head -c 1500)"
+# (Substring, not `| head -c`: an early-closing pipe SIGPIPEs sed under pipefail.)
+summary="$(sed '/^## Labels to set/,$d' <<<"$body")"
+summary="${summary:0:1500}"
 slug="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
 msg="@codex ${title}
 
