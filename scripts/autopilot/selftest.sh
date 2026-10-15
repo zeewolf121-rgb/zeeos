@@ -89,6 +89,10 @@ ok "owner-approved before the head commit doesn't count" '! gates owner-gate 5 >
 echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
 ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev/null'
 
+reset; claude_pr; codex_done
+echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
+ok "installer-disk once on the linked issue still counts" '! gates owner-gate 5 >/dev/null'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"

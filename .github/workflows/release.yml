@@ -26,12 +26,16 @@ jobs:
           EVENT: ${{ github.event_name }}
           ACTOR: ${{ github.actor }}
           OWNER: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then pre=true
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             [[ "$EVENT" == push && "$ACTOR" == "$OWNER" ]] || { echo "::error::final $TAG must be pushed by the owner (hard stop)"; exit 1; }
             pre=false
           else echo "::error::not a release tag: $TAG"; exit 1; fi
+          # The build uses this run's commit, so the tag must point at it (run from the tag ref).
+          tagged="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha 2>/dev/null || true)"
+          [[ "$tagged" == "$GITHUB_SHA" ]] || { echo "::error::tag $TAG is ${tagged:-missing}, run is at $GITHUB_SHA; dispatch with --ref $TAG"; exit 1; }
           printf 'tag=%s\nprerelease=%s\n' "$TAG" "$pre" >>"$GITHUB_OUTPUT"
   build:
     needs: guard
@@ -72,4 +76,4 @@ jobs:
           PRE: ${{ needs.guard.outputs.prerelease }}
         run: |
           flag=""; [[ "$PRE" == true ]] && flag=--prerelease
-          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "ZeeOS $TAG" --generate-notes $flag
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "ZeeOS $TAG" --generate-notes --verify-tag $flag

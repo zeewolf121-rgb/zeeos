@@ -28,21 +28,23 @@ has_label() { labels_of "$1" | grep -qxF "$2"; }
 issue_model() { labels_of "$1" | sed -n 's/^model://p' | head -n1; }
 issue_agent() { labels_of "$1" | sed -n 's/^agent://p' | head -n1; }
 
+# The issue a PR implements: from agent/<agent>/<N>-… or "Closes #N" (empty if none).
+linked_issue() {
+  local s
+  s="$(gh pr view "$1" --repo "$REPO" --json headRefName,body --jq '"\(.headRefName) \(.body)"')"
+  if [[ "$s" =~ ^agent/[^/]+/([0-9]+)- || "$s" =~ [Cc]loses\ \#([0-9]+) ]]; then echo "${BASH_REMATCH[1]}"; fi
+}
+
 # Which model wrote a PR: claude | codex | human | unknown.
 pr_model() {
-  local pr="$1" ref body num="" m=""
+  local pr="$1" ref num m=""
   ref="$(gh pr view "$pr" --repo "$REPO" --json headRefName --jq .headRefName)"
   case "$ref" in
     agent/orchestrator/*) echo claude; return ;;
     codex/*) echo codex; return ;;
     human/*) echo human; return ;;
   esac
-  if [[ "$ref" =~ ^agent/[^/]+/([0-9]+)- ]]; then
-    num="${BASH_REMATCH[1]}"
-  else
-    body="$(gh pr view "$pr" --repo "$REPO" --json body --jq .body)"
-    if [[ "$body" =~ [Cc]loses\ \#([0-9]+) ]]; then num="${BASH_REMATCH[1]}"; fi
-  fi
+  num="$(linked_issue "$pr")"
   if [[ -n "$num" ]]; then m="$(issue_model "$num")"; fi
   echo "${m:-unknown}"
 }

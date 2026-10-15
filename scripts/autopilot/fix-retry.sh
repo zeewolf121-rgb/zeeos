@@ -26,6 +26,9 @@ summary="$("$here/../ci-summary.sh" "$run" "$REPO" 2>/dev/null || echo "(no summ
 
 if (( tries >= max )); then
   w gh issue edit "$pr" --repo "$REPO" --add-label needs-human >/dev/null
+  # The source issue too, so it stops holding a dispatch slot (dispatch.sh ignores needs-human).
+  num="$(linked_issue "$pr")"
+  if [[ -n "$num" ]]; then w gh issue edit "$num" --repo "$REPO" --add-label needs-human >/dev/null; fi
   w gh pr comment "$pr" --repo "$REPO" --body "@$OWNER CI still fails on ${sha:0:7} after $max automatic retries ($url). Labelled needs-human; autopilot leaves this PR alone until the label is removed." >/dev/null
   log "#$pr needs-human after $max retries"
   exit 0

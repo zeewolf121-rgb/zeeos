@@ -85,12 +85,12 @@ cross_review() {
 hard_stop_reasons() { # empty if none
   # Labels count if they are on the PR now, were ever put on it, or are on its linked issue,
   # so removing a label can't lift a hard stop.
-  local pr="$1" l r="" hits seen num body
-  seen="$(labels_of "$pr"; gh api --paginate "repos/$REPO/issues/$pr/events" --jq '.[] | select(.event == "labeled") | .label.name')"
-  body="$(gh pr view "$pr" --repo "$REPO" --json body,headRefName --jq '"\(.headRefName) \(.body)"')"
-  if [[ "$body" =~ ^agent/[^/]+/([0-9]+)- || "$body" =~ [Cc]loses\ \#([0-9]+) ]]; then
-    num="${BASH_REMATCH[1]}"; seen+=$'\n'"$(labels_of "$num")"
-  fi
+  local pr="$1" l r="" hits seen n
+  seen=""
+  for n in "$pr" $(linked_issue "$pr"); do
+    seen+="$(labels_of "$n"; gh api --paginate "repos/$REPO/issues/$n/events" \
+      --jq '.[] | select(.event == "labeled") | .label.name')"$'\n'
+  done
   for l in $HARD_STOP_LABELS; do if grep -qxF "$l" <<<"$seen"; then r+="label:$l "; fi; done
   hits="$(gh api --paginate "repos/$REPO/pulls/$pr/files" --jq '.[].filename' | grep -E "$HARD_STOP_PATHS" || true)"
   if [[ -n "$hits" ]]; then r+="files:$(head -n3 <<<"$hits" | paste -sd, -)"; fi
