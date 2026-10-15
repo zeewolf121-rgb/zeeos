@@ -1,0 +1,72 @@
+# Routes labelled issues to the right model (docs/agents.md; model:codex via an
+# "@codex" issue comment, else needs-human) and requests the
+# cross-model review on Claude-authored PRs (D8: Codex cloud via the GitHub
+# integration, triggered by an "@codex review" PR comment).
+name: agent-dispatch
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [opened, ready_for_review]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+jobs:
+  claude:
+    if: github.event_name == 'issues' && github.event.label.name == 'model:claude'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secret
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: test -n "$KEY" || { echo "ANTHROPIC_API_KEY not set; skipping (reported as skipped)"; exit 0; }
+      # Phase 1: add anthropics/claude-code-action here with the subagent from
+      # .claude/agents/<agent>.md, branch agent/<agent>/<issue>-<slug>, draft PR.
+  codex:
+    # Either label can come last: run on model:codex, or on agent:* once
+    # model:codex is present. The script waits until both are set.
+    if: >-
+      github.event_name == 'issues' && (github.event.label.name == 'model:codex' ||
+      (startsWith(github.event.label.name, 'agent:') &&
+      contains(github.event.issue.labels.*.name, 'model:codex')))
+    concurrency:
+      group: codex-dispatch-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mention Codex, else label needs-human
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+        run: scripts/codex-dispatch.sh "${{ github.event.issue.number }}"
+  codex-review:
+    # Claude-authored = branch agent/orchestrator/…, or agent/<agent>/<issue>-…
+    # whose issue is labelled model:claude (docs-writer can be either model).
+    # Drafts wait until they are marked ready for review.
+    if: >-
+      github.event_name == 'pull_request' && !github.event.pull_request.draft &&
+      startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      !contains(github.event.pull_request.labels.*.name, 'model:codex')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request Codex review
+        env:
+          # Optional PAT if Codex ignores comments from github-actions[bot].
+          GH_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN || github.token }}
+          REF: ${{ github.event.pull_request.head.ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          rest="${REF#agent/}"; agent="${rest%%/*}"; num="${rest#*/}"; num="${num%%-*}"
+          if [[ "$agent" != orchestrator ]]; then
+            model=""
+            if [[ "$num" =~ ^[0-9]+$ ]]; then
+              model="$(gh issue view "$num" --repo "$GITHUB_REPOSITORY" \
+                --json labels --jq '[.labels[].name | select(startswith("model:"))][0] // ""')"
+            fi
+            [[ "$model" == model:claude ]] || { echo "issue #$num is '${model:-unlabelled}', not model:claude; no Codex review"; exit 0; }
+          fi
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "@codex review"

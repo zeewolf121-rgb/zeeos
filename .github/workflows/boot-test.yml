@@ -1,0 +1,19 @@
+name: boot-test
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [build-iso]
+    types: [completed]
+permissions:
+  contents: read
+jobs:
+  boot:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make boot-test ARCH=${{ matrix.arch }} SECUREBOOT=on

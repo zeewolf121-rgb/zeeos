@@ -1,0 +1,30 @@
+# Applied by scripts/gh-bootstrap.sh. name|color|description
+- agent:architect|5319e7|
+- agent:image-builder|5319e7|
+- agent:installer-engineer|5319e7|
+- agent:desktop-shell|5319e7|
+- agent:theme-designer|5319e7|
+- agent:security-hardener|5319e7|
+- agent:vm-integrator|5319e7|
+- agent:ci-engineer|5319e7|
+- agent:reviewer|5319e7|
+- agent:docs-writer|5319e7|
+- model:claude|d97757|Dispatched to Claude
+- model:codex|10a37f|Dispatched to Codex
+- phase:0|c5def5|
+- phase:1|c5def5|
+- phase:2|c5def5|
+- phase:3|c5def5|
+- phase:4|c5def5|
+- phase:5|c5def5|
+- phase:6|c5def5|
+- phase:7|c5def5|
+- arch:x86_64|bfd4f2|
+- arch:aarch64|bfd4f2|
+- arch:both|bfd4f2|
+- parallel-safe|0e8a16|No blocking dependencies
+- installer-disk|b60205|Writes disks/ESP/NVRAM: dry-run + owner approval required
+- decision|fbca04|Needs owner decision
+- needs-decision|fbca04|Models disagree; owner decides (CONVENTIONS)
+- paused|cccccc|Agent hit a limit; resume from handoff
+- needs-human|d93f0b|Automation gave up; owner action needed
