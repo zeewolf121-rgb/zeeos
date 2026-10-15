@@ -25,5 +25,6 @@
 - parallel-safe|0e8a16|No blocking dependencies
 - installer-disk|b60205|Writes disks/ESP/NVRAM: dry-run + owner approval required
 - decision|fbca04|Needs owner decision
+- needs-decision|fbca04|Models disagree; owner decides (CONVENTIONS)
 - paused|cccccc|Agent hit a limit; resume from handoff
 - needs-human|d93f0b|Automation gave up; owner action needed

@@ -44,8 +44,8 @@ jobs:
           CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
         run: scripts/codex-dispatch.sh "${{ github.event.issue.number }}"
   codex-review:
-    # Claude-authored = branch agent/<agent>/… where <agent> is the orchestrator
-    # or has a Claude subagent in .claude/agents/, and no model:codex label.
+    # Claude-authored = branch agent/orchestrator/…, or agent/<agent>/<issue>-…
+    # whose issue is labelled model:claude (docs-writer can be either model).
     # Drafts wait until they are marked ready for review.
     if: >-
       github.event_name == 'pull_request' && !github.event.pull_request.draft &&
@@ -53,7 +53,6 @@ jobs:
       !contains(github.event.pull_request.labels.*.name, 'model:codex')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Request Codex review
         env:
           # Optional PAT if Codex ignores comments from github-actions[bot].
@@ -61,8 +60,13 @@ jobs:
           REF: ${{ github.event.pull_request.head.ref }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          agent="${REF#agent/}"; agent="${agent%%/*}"
-          if [[ "$agent" != orchestrator && ! -f ".claude/agents/$agent.md" ]]; then
-            echo "agent '$agent' is not a Claude agent; no Codex review requested"; exit 0
+          rest="${REF#agent/}"; agent="${rest%%/*}"; num="${rest#*/}"; num="${num%%-*}"
+          if [[ "$agent" != orchestrator ]]; then
+            model=""
+            if [[ "$num" =~ ^[0-9]+$ ]]; then
+              model="$(gh issue view "$num" --repo "$GITHUB_REPOSITORY" \
+                --json labels --jq '[.labels[].name | select(startswith("model:"))][0] // ""')"
+            fi
+            [[ "$model" == model:claude ]] || { echo "issue #$num is '${model:-unlabelled}', not model:claude; no Codex review"; exit 0; }
           fi
           gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "@codex review"

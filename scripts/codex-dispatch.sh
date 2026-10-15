@@ -30,8 +30,8 @@ fallback() {
 # Labels can arrive in any order; the run for the later label does the work.
 [[ -n "$agent" ]] || { echo "no agent:* label yet; waiting for it"; exit 0; }
 # Idempotent: both label events can reach here (runs are serialised per issue).
-if [[ "$(gh api "repos/$repo/issues/$issue/comments?per_page=100" \
-    --jq '[.[] | select(.body | startswith("@codex "))] | length')" != 0 ]]; then
+if gh api --paginate "repos/$repo/issues/$issue/comments?per_page=100" \
+    --jq '.[] | select(.body | startswith("@codex ")) | .id' | grep -q .; then
   echo "#$issue already has an @codex task comment; nothing to do"; exit 0
 fi
 
@@ -61,7 +61,7 @@ while (( SECONDS < deadline )); do
       --jq ".[] | select(.user.login | startswith(\"$bot\")) | select(.content | IN(\"eyes\",\"+1\",\"rocket\")) | .id" | grep -q .; then
     echo "Codex picked up #$issue (reaction)"; exit 0
   fi
-  replies="$(gh api "repos/$repo/issues/$issue/comments?per_page=100" \
+  replies="$(gh api --paginate "repos/$repo/issues/$issue/comments?per_page=100" \
     --jq ".[] | select(.id > $cid) | select(.user.login | startswith(\"$bot\")) | .body")"
   if grep -q '/codex/tasks/' <<<"$replies"; then echo "Codex picked up #$issue (task link)"; exit 0; fi
   if [[ -n "$replies" ]]; then fallback "Codex replied without starting a task"; exit 0; fi
