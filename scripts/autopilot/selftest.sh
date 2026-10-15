@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Offline tests for scripts/autopilot/* against a fake `gh` that answers from JSON fixtures
+# and records every write. Run by `make lint`. Needs bash and jq.
+# shellcheck disable=SC2016,SC2034  # ok() evals its checks later, on purpose
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/bin"
+export FIX="$tmp/fix" CALLS="$tmp/calls" GITHUB_REPOSITORY=o/r AUTOPILOT_STAGGER=0 PATH="$tmp/bin:$PATH"
+
+cat >"$tmp/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+# Fake gh: reads answer from $FIX/<key>.json (filtered by --jq); writes are logged to $CALLS.
+jqx=""; key=""; write=""; args=("$@"); i=0
+while (( i < ${#args[@]} )); do
+  a="${args[i]}"
+  case "$a" in
+    --jq) jqx="${args[i+1]}"; i=$((i+2)); continue ;;
+    -X) [[ "${args[i+1]}" != GET ]] && write=1 ;;
+    -f|-F) [[ "${args[1]:-}" != graphql ]] && write=1 ;;
+  esac
+  i=$((i+1))
+done
+case "$1 $2" in
+  "api graphql") key=graphql ;;
+  "api "*) key="$(printf '%s\n' "${args[@]:1}" | grep -m1 '^repos/' | sed 's/[?].*//; s#^repos/o/r/##; s#/#_#g')" ;;
+  "issue view"|"pr view") key="${1}_view_$3" ;;
+  "issue list"|"pr list")
+    key="${1}_list"
+    for ((j=0; j<${#args[@]}; j++)); do
+      [[ "${args[j]}" == --label ]] && key+="_${args[j+1]}"
+      [[ "${args[j]}" == --milestone ]] && key+="_ms"
+    done ;;
+  "run list") key=runs ;;
+  "repo view") echo o/r; exit 0 ;;
+  *) write=1 ;;
+esac
+if [[ -n "$write" ]]; then echo "CALL $*" >>"$CALLS"; [[ "$1 $2" == "issue create" ]] && echo "https://x/issues/99"; exit 0; fi
+f="$FIX/$key.json"
+[[ -f "$f" ]] || { [[ "$key" == *protection* ]] && exit 1; echo "[]" >"$f"; }
+if [[ -n "$jqx" ]]; then jq -r "$jqx" "$f"; else cat "$f"; fi
+EOF
+chmod +x "$tmp/bin/gh"
+
+pass=0; fail=0
+ok() { [[ -n "${VERBOSE:-}" ]] && echo "== $1"; if eval "$2"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; fi; }
+reset() { rm -rf "$FIX"; mkdir -p "$FIX"; : >"$CALLS"; }
+fx() { cat >"$FIX/$1.json"; }
+sha=abcdef1234567890
+
+# A Claude PR (#5 from agent/image-builder/6-x, issue #6 model:claude) at $sha.
+claude_pr() {
+  echo "{\"headRefName\":\"agent/image-builder/6-kiwi\",\"headRefOid\":\"$sha\",\"body\":\"Closes #6\",\"labels\":[],\"isDraft\":false,\"mergeable\":\"MERGEABLE\",\"state\":\"OPEN\"}" | fx pr_view_5
+  echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"}]}' | fx issue_view_6
+  echo '{"labels":[]}' | fx issue_view_5
+  echo '{"commit":{"committer":{"date":"2026-10-16T10:00:00Z"}}}' | fx "commits_$sha"
+  echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}' | fx graphql
+  echo '[{"filename":"build/kiwi.xml"}]' | fx pulls_5_files
+  echo "{\"check_runs\":[{\"name\":\"lint\",\"conclusion\":\"success\",\"completed_at\":\"1\"},{\"name\":\"build-iso\",\"conclusion\":\"success\",\"completed_at\":\"1\"},{\"name\":\"boot-test\",\"conclusion\":\"success\",\"completed_at\":\"1\"}]}" | fx "commits_${sha}_check-runs"
+}
+codex_done() { echo "[{\"user\":{\"login\":\"chatgpt-codex-connector[bot]\"},\"body\":\"| 📝 **Code Review** | ✅ **Completed** x | \`${sha:0:7}\` | Manual |\"}]" | fx issues_5_comments; }
+gates() { if [[ -n "${VERBOSE:-}" ]]; then "$here/gates.sh" "$@" | tee /dev/stderr; else "$here/gates.sh" "$@" 2>/dev/null; fi; }
+
+
+reset; claude_pr
+ok "cross-review waits for Codex" '! gates cross-review 5 >/dev/null'
+codex_done
+ok "cross-review passes after Codex Completed on head" 'gates cross-review 5 >/dev/null'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange)"}]}}]}}}}}' | fx graphql
+ok "unresolved Codex P1 blocks" '! gates cross-review 5 >/dev/null'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P2 Badge](https://img.shields.io/badge/P2-yellow)"}]}}]}}}}}' | fx graphql
+ok "unresolved Codex P2 does not block" 'gates cross-review 5 >/dev/null'
+ok "plain PR needs no owner approval" 'gates owner-gate 5 >/dev/null'
+ok "merge goes through when all gates pass" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+
+reset; claude_pr; codex_done
+echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
+ok "removed installer-disk label still counts" '! gates owner-gate 5 >/dev/null'
+ok "hard stop is never merged, owner pinged" '! gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS"'
+
+reset; claude_pr; codex_done
+echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files
+echo '{"labels":[{"name":"owner-approved"}]}' | fx issue_view_5
+echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"github-actions[bot]"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
+ok "owner-approved by a bot doesn't count" '! gates owner-gate 5 >/dev/null'
+echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_5_events
+ok "owner-approved before the head commit doesn't count" '! gates owner-gate 5 >/dev/null'
+echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
+ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev/null'
+
+# Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
+reset; claude_pr
+jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
+echo "[{\"user\":{\"login\":\"github-actions[bot]\"},\"body\":\"<!-- claude-review sha=$sha verdict=pass run=77 -->\"}]" | fx issues_5_comments
+echo '{"path":".github/workflows/orchestrator.yml","head_branch":"main"}' | fx actions_runs_77
+ok "forged Claude verdict (wrong workflow) rejected" '! gates cross-review 5 >/dev/null'
+echo '{"path":".github/workflows/agent-dispatch.yml","head_branch":"main"}' | fx actions_runs_77
+echo '{"jobs":[{"name":"claude-review"}]}' | fx actions_runs_77_jobs
+ok "verified Claude verdict passes" 'gates cross-review 5 >/dev/null'
+
+# Dispatch: caps, priority, labels.
+reset
+echo '[{"number":1,"createdAt":"2026-01-01","labels":[{"name":"ready"}]},{"number":2,"createdAt":"2026-02-01","labels":[{"name":"ready"},{"name":"priority:high"}]},{"number":3,"createdAt":"2026-03-01","labels":[{"name":"ready"}]}]' | fx issue_list_ready
+echo '[{"labels":[{"name":"model:claude"}]}]' | fx issue_list_in-progress
+for n in 1 2 3; do echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"ready"}]}' | fx "issue_view_$n"; done
+"$here/dispatch.sh" 2>/dev/null
+ok "only one Claude slot left: priority:high #2 goes first" 'grep -q "workflow run agent-dispatch.yml --repo o/r -f issue=2" "$CALLS" && [[ $(grep -c "workflow run" "$CALLS") == 1 ]]'
+
+# Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
+reset
+echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones
+echo '[{"number":6,"state":"OPEN","labels":[{"name":"model:claude"},{"name":"agent:x"}]}]' | fx issue_list_ms
+out="$("$here/phase.sh" status 2>/dev/null)"
+ok "phase 1 current, no LLM needed" '[[ "$out" == *current=1* && "$out" == *needs_llm=false* ]]'
+echo '[{"number":6,"state":"CLOSED","labels":[{"name":"model:claude"},{"name":"agent:x"}]}]' | fx issue_list_ms
+echo '[{"conclusion":"success"}]' | fx runs
+out="$("$here/phase.sh" status 2>/dev/null)"
+ok "phase 1 done + nightly green -> phase 2 needs opening" '[[ "$out" == *current=2* && "$out" == *needs_llm=true* ]]'
+
+echo "selftest: $pass passed, $fail failed"
+(( fail == 0 ))

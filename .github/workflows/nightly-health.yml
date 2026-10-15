@@ -1,0 +1,44 @@
+# Nightly build + boot-test of main (docs/AUTOPILOT.md §5). On failure, opens (or updates) one
+# fix issue labelled ready + priority:high. Red (not skipped) while `make iso` is still a stub,
+# so a phase can't be counted as passing on a build that never ran.
+name: nightly-health
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+  actions: read
+jobs:
+  gate:
+    if: vars.AUTOPILOT == 'on'
+    runs-on: ubuntu-latest
+    outputs:
+      buildable: ${{ steps.b.outputs.buildable }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: b
+        run: |
+          if grep -q 'not implemented yet' Makefile; then echo buildable=false; else echo buildable=true; fi >>"$GITHUB_OUTPUT"
+  ci:
+    needs: gate
+    if: needs.gate.outputs.buildable == 'true'
+    uses: ./.github/workflows/build-iso.yml
+  report:
+    needs: [gate, ci]
+    if: always() && needs.ci.result == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/autopilot/report.sh nightly "${{ github.run_id }}"
+  health:
+    needs: [gate, ci]
+    if: always() && needs.gate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "build+boot on main: ${{ needs.ci.result }}"
+          [[ "${{ needs.ci.result }}" == success ]]

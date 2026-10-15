@@ -1,0 +1,44 @@
+# Posts the `cross-review` and `owner-gate` commit statuses on a PR's head commit and merges
+# the PR when every gate passes (docs/AUTOPILOT.md §2–3). Gate code always comes from main,
+# never from the PR. A new push removes `owner-approved`: approval covers one commit.
+# (Resolving a review thread is not an Actions trigger; the next comment or orchestrator run
+# picks it up.)
+name: cross-review
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+  issue_comment:
+    types: [created, edited]
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  actions: write
+jobs:
+  gates:
+    if: >-
+      vars.AUTOPILOT == 'on' &&
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: cross-review-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+      PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: A new commit voids owner approval
+        if: github.event_name == 'pull_request_target' && github.event.action == 'synchronize'
+        run: gh pr edit "$PR" --remove-label owner-approved >/dev/null 2>&1 || true
+      - name: Post cross-review and owner-gate statuses
+        run: scripts/autopilot/gates.sh status "$PR"
+      - name: Merge when every gate passes
+        run: scripts/autopilot/gates.sh merge "$PR" || true

@@ -1,12 +1,38 @@
+# Builds the ISOs and boot-tests them. Runs on every PR so `build-iso` and `boot-test` always
+# report (they're required checks): the matrix only runs when ISO inputs changed, and the two
+# summary jobs pass as "not affected" otherwise. Also called by nightly-health and release.
+# P1-3 adds caching, artifact upload (iso-<arch>) and widens the paths; P1-8 adds SB on/off.
 name: build-iso
 on:
-  workflow_dispatch:
   pull_request:
-    paths: [build/**, "!build/**/*.md"]
+  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      iso: ${{ steps.d.outputs.iso }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: d
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          iso=true
+          if [[ "$EVENT" == pull_request ]]; then
+            files="$(git diff --name-only "$BASE"...HEAD)"
+            hits="$(grep -E '^(build/|Makefile$|\.github/workflows/(build-iso|boot-test)\.yml$)' <<<"$files" | grep -v '\.md$' || true)"
+            [[ -n "$hits" ]] || iso=false
+          fi
+          echo "iso=$iso" >>"$GITHUB_OUTPUT"
   build:
+    needs: changes
+    if: needs.changes.outputs.iso == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -21,3 +47,22 @@ jobs:
       - run: make iso ARCH=${{ matrix.arch }}
       - if: failure()
         run: echo "Summarise with scripts/ci-summary.sh ${{ github.run_id }}"
+  boot:
+    needs: build
+    uses: ./.github/workflows/boot-test.yml
+  build-iso:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ needs.changes.outputs.iso }}" != true ]]; then echo "no ISO inputs changed"; exit 0; fi
+          [[ "${{ needs.build.result }}" == success ]]
+  boot-test:
+    needs: [changes, boot]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ needs.changes.outputs.iso }}" != true ]]; then echo "no ISO inputs changed"; exit 0; fi
+          [[ "${{ needs.boot.result }}" == success ]]

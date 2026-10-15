@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034  # constants are used by the scripts that source this
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Shared helpers for scripts/autopilot/*. Source it; don't run it.
 # Env: GITHUB_REPOSITORY, DRY_RUN (non-empty = print writes instead of doing them),

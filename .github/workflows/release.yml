@@ -1,0 +1,74 @@
+# Release (docs/AUTOPILOT.md §8, ADR-0007). Autopilot may only start release candidates
+# (vX.Y.Z-rc.N, published as pre-releases). A final vX.Y.Z is a hard stop: it must be a tag the
+# owner pushed. Signing completes in Phase 5; the minisign step below is the intended shape.
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release-candidate tag (vX.Y.Z-rc.N), already pushed
+        required: true
+permissions:
+  contents: write
+jobs:
+  guard:
+    if: vars.AUTOPILOT == 'on'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.g.outputs.tag }}
+      prerelease: ${{ steps.g.outputs.prerelease }}
+    steps:
+      - id: g
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then pre=true
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            [[ "$EVENT" == push && "$ACTOR" == "$OWNER" ]] || { echo "::error::final $TAG must be pushed by the owner (hard stop)"; exit 1; }
+            pre=false
+          else echo "::error::not a release tag: $TAG"; exit 1; fi
+          printf 'tag=%s\nprerelease=%s\n' "$TAG" "$pre" >>"$GITHUB_OUTPUT"
+  build:
+    needs: guard
+    uses: ./.github/workflows/build-iso.yml
+  publish:
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.guard.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: iso-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums
+        run: |
+          ls dist/*.iso >/dev/null 2>&1 || { echo "::error::no ISO artifacts (build-iso uploads iso-<arch>)"; exit 1; }
+          cd dist && sha256sum -- * >SHA256SUMS
+      - name: Sign (minisign, CI key)
+        env:
+          KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          PASS: ${{ secrets.MINISIGN_PASSWORD }}
+          PRE: ${{ needs.guard.outputs.prerelease }}
+        run: |
+          if [[ -z "$KEY" ]]; then
+            [[ "$PRE" == true ]] || { echo "::error::final releases must be signed"; exit 1; }
+            echo "::warning::MINISIGN_SECRET_KEY not set; release candidate is UNSIGNED"; exit 0
+          fi
+          sudo apt-get install -yq minisign >/dev/null
+          umask 077; printf '%s\n' "$KEY" >"$RUNNER_TEMP/ci.key"
+          minisign -S -s "$RUNNER_TEMP/ci.key" -m dist/SHA256SUMS -t "zeeos $TAG" <<<"$PASS"
+          rm -f "$RUNNER_TEMP/ci.key"
+      - name: Publish
+        env:
+          PRE: ${{ needs.guard.outputs.prerelease }}
+        run: |
+          flag=""; [[ "$PRE" == true ]] && flag=--prerelease
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "ZeeOS $TAG" --generate-notes $flag

@@ -1,0 +1,43 @@
+# CI follow-up for agent PRs (docs/AUTOPILOT.md §4). On failure: send the CI summary back to
+# the authoring model, at most 2 retries per PR, then needs-human + owner ping. On success:
+# request the cross-model review of that commit, or merge if every gate already passes.
+name: fix-on-failure
+on:
+  workflow_run:
+    workflows: [lint, build-iso]
+    types: [completed]
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  actions: write
+jobs:
+  follow-up:
+    if: >-
+      vars.AUTOPILOT == 'on' && github.event.workflow_run.event == 'pull_request' &&
+      contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: follow-up-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      RUN: ${{ github.event.workflow_run.id }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          if [[ "$CONCLUSION" == failure ]]; then
+            scripts/autopilot/fix-retry.sh "$BRANCH" "$SHA" "$RUN"
+          else
+            pr="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+            if [[ -n "$pr" ]]; then
+              scripts/autopilot/gates.sh status "$pr"
+              scripts/autopilot/gates.sh merge "$pr" || true
+            fi
+          fi

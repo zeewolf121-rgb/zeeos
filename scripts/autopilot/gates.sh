@@ -15,6 +15,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REQUIRED_CHECKS='lint build-iso boot-test'
 
 unresolved_threads() { # "login first-comment", one line per unresolved thread
+  # shellcheck disable=SC2016  # GraphQL variables, not shell
   gh api graphql -F owner="$OWNER" -F name="${REPO#*/}" -F pr="$1" -f query='
     query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){
       pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved
@@ -37,7 +38,17 @@ codex_reviewed() { # pr sha: a Codex review on this commit, or its summary says 
   comments_by "$1" "$CODEX_BOT" | grep -F 'Code Review' | grep -F 'Completed' | grep -qF "\`${2:0:7}\`"
 }
 claude_verdict() { # pr sha -> pass | fail | (empty)
-  comments_by "$1" "$CLAUDE_BOT" | sed -n "s/.*<!-- claude-review sha=$2 verdict=\([a-z]*\) -->.*/\1/p" | tail -n1
+  # The marker is posted by agent-dispatch's claude-review job (github-actions). It only counts
+  # if its run id really is that job on main, so no other workflow or LLM step can forge one.
+  local m v run
+  m="$(comments_by "$1" 'github-actions' | grep -oE "<!-- claude-review sha=$2 verdict=[a-z]+ run=[0-9]+ -->" | tail -n1)"
+  [[ -n "$m" ]] || return 0
+  v="$(sed -E 's/.*verdict=([a-z]+).*/\1/' <<<"$m")"; run="$(sed -E 's/.*run=([0-9]+).*/\1/' <<<"$m")"
+  if [[ "$(gh api "repos/$REPO/actions/runs/$run" --jq '"\(.path) \(.head_branch)"' 2>/dev/null)" != ".github/workflows/agent-dispatch.yml main" ]] \
+     || ! gh api "repos/$REPO/actions/runs/$run/jobs" --jq '.jobs[].name' | grep -qx claude-review; then
+    echo unverified; return 0
+  fi
+  echo "$v"
 }
 
 cross_review() {
@@ -71,8 +82,15 @@ cross_review() {
 }
 
 hard_stop_reasons() { # empty if none
-  local pr="$1" l r="" hits
-  for l in $HARD_STOP_LABELS; do if has_label "$pr" "$l"; then r+="label:$l "; fi; done
+  # Labels count if they are on the PR now, were ever put on it, or are on its linked issue,
+  # so removing a label can't lift a hard stop.
+  local pr="$1" l r="" hits seen num body
+  seen="$(labels_of "$pr"; gh api --paginate "repos/$REPO/issues/$pr/events" --jq '.[] | select(.event == "labeled") | .label.name')"
+  body="$(gh pr view "$pr" --repo "$REPO" --json body,headRefName --jq '"\(.headRefName) \(.body)"')"
+  if [[ "$body" =~ ^agent/[^/]+/([0-9]+)- || "$body" =~ [Cc]loses\ \#([0-9]+) ]]; then
+    num="${BASH_REMATCH[1]}"; seen+=$'\n'"$(labels_of "$num")"
+  fi
+  for l in $HARD_STOP_LABELS; do if grep -qxF "$l" <<<"$seen"; then r+="label:$l "; fi; done
   hits="$(gh api --paginate "repos/$REPO/pulls/$pr/files" --jq '.[].filename' | grep -E "$HARD_STOP_PATHS" || true)"
   if [[ -n "$hits" ]]; then r+="files:$(head -n3 <<<"$hits" | paste -sd, -)"; fi
   printf '%s' "${r% }"

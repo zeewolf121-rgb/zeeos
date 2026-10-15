@@ -28,3 +28,11 @@
 - needs-decision|fbca04|Models disagree; owner decides (CONVENTIONS)
 - paused|cccccc|Agent hit a limit; resume from handoff
 - needs-human|d93f0b|Automation gave up; owner action needed
+- ready|0e8a16|Autopilot may dispatch this issue
+- in-progress|1d76db|An agent is working on it (counts against the cap)
+- priority:high|b60205|Dispatched before other ready issues
+- owner-approved|5319e7|Owner approval of the PR's head commit (hard stops)
+- manual-gate|fbca04|Release manual gate checklist (owner only)
+- phase-plan|c5def5|Planning issue for the next phase's plan
+- nightly-health|d93f0b|Fix issue opened by nightly-health
+- autopilot-log|ededed|Pinned run log of the orchestrator
