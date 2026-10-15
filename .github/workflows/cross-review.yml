@@ -22,7 +22,7 @@ jobs:
     if: >-
       vars.AUTOPILOT == 'on' &&
       (github.event_name != 'issue_comment' || github.event.issue.pull_request)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
       group: cross-review-${{ github.event.pull_request.number || github.event.issue.number }}

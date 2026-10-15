@@ -13,7 +13,7 @@ permissions:
 jobs:
   gate:
     if: vars.AUTOPILOT == 'on'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       buildable: ${{ steps.b.outputs.buildable }}
     steps:
@@ -28,7 +28,7 @@ jobs:
   report:
     needs: [gate, ci]
     if: always() && needs.ci.result == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -37,7 +37,7 @@ jobs:
   health:
     needs: [gate, ci]
     if: always() && needs.gate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: |
           echo "build+boot on main: ${{ needs.ci.result }}"

@@ -42,7 +42,7 @@ jobs:
          (contains(github.event.issue.labels.*.name, 'model:claude') ||
           contains(github.event.issue.labels.*.name, 'model:codex'))))) ||
       (github.event_name == 'workflow_dispatch' && inputs.mode == 'implement' && inputs.issue != ''))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: route-${{ github.event.issue.number || inputs.issue }}
       cancel-in-progress: false
@@ -63,7 +63,7 @@ jobs:
   claude:
     needs: route
     if: needs.route.outputs.model == 'claude' && needs.route.outputs.agent != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
       group: claude-issue-${{ needs.route.outputs.issue }}
@@ -99,7 +99,7 @@ jobs:
   codex:
     needs: route
     if: needs.route.outputs.model == 'codex'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
       group: codex-dispatch-${{ needs.route.outputs.issue }}
@@ -113,7 +113,7 @@ jobs:
         run: scripts/codex-dispatch.sh "${{ needs.route.outputs.issue }}"
   claude-fix:
     if: vars.AUTOPILOT == 'on' && github.event_name == 'workflow_dispatch' && inputs.mode == 'fix' && inputs.pr != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     concurrency:
       group: claude-pr-${{ inputs.pr }}
@@ -147,7 +147,7 @@ jobs:
             --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(gh pr view:*),Bash(gh pr comment ${{ inputs.pr }}:*),Bash(gh run view:*),Bash(make lint),Bash(bash -n:*)"
   claude-review:
     if: vars.AUTOPILOT == 'on' && github.event_name == 'workflow_dispatch' && inputs.mode == 'review' && inputs.pr != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
       group: claude-review-${{ inputs.pr }}
@@ -189,7 +189,7 @@ jobs:
     if: >-
       vars.AUTOPILOT == 'on' && github.event_name == 'pull_request_target' &&
       !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}

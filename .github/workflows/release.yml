@@ -15,7 +15,7 @@ permissions:
 jobs:
   guard:
     if: vars.AUTOPILOT == 'on'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.g.outputs.tag }}
       prerelease: ${{ steps.g.outputs.prerelease }}
@@ -38,7 +38,7 @@ jobs:
     uses: ./.github/workflows/build-iso.yml
   publish:
     needs: [guard, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release   # ADR-0007: signing secrets live here (repo-level secrets also resolve)
     env:
       GH_TOKEN: ${{ github.token }}
