@@ -3,4 +3,4 @@
 # Empty until first pinned: build/container/run.sh then falls back to the tag and warns.
 BASE_IMAGE_REF=registry.fedoraproject.org/fedora
 BASE_IMAGE_TAG=44
-BASE_IMAGE_DIGEST=
+BASE_IMAGE_DIGEST=sha256:74e857c33dfb387710b2b1a0203824351a25e9844356af2d1e5792ca2a96129b
