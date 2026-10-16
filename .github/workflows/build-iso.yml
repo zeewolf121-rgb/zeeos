@@ -79,7 +79,7 @@ jobs:
             out/${{ matrix.arch }}/eltorito.txt
           if-no-files-found: ignore
           retention-days: 14
-      - name: Failure summary (MISSION §11: agents read this, not raw logs)
+      - name: Failure summary for agents (MISSION §11)
         if: failure()
         run: |
           { echo "### build-iso $ARCH failed"; echo '```'; tail -n 40 "out/build-$ARCH.log" 2>/dev/null; echo '```'
