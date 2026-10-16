@@ -44,6 +44,7 @@ if [[ ${#problems[@]} -eq 0 ]]; then
   exit 0
 fi
 
+# shellcheck disable=SC2016  # backticks are Markdown in the issue body
 body="$(printf 'Commit %s landed on `main` without passing every merge gate.\n\n' "$sha"
   if [[ -n "$pr" ]]; then printf -- '- PR: #%s (head %s), merged by @%s\n' "$pr" "${head:0:7}" "$merged_by"; fi
   printf -- '- %s\n' "${problems[@]}"
