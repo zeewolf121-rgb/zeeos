@@ -9,5 +9,6 @@
 | [0005](0005-desktop-route.md) | Desktop: Plasma 6 / KWin (v1) | Accepted |
 | [0006](0006-licensing.md) | Licensing: GPL-3.0+, CC-BY-SA-4.0, OFL; name/logo reserved | Accepted |
 | [0007](0007-release-signing.md) | Release signing: minisign | Accepted |
+| [0008](0008-package-pinning.md) | Package pinning: per-arch closure lock + GHCR closure repo | Proposed |
 
 New ADRs: copy `template.md`, use the next number, and open a PR labeled `decision`. Only the owner moves an ADR to **Accepted**.
