@@ -24,6 +24,8 @@ if [[ -z "$pr" ]]; then
 else
   read -r head merged_by merged_at < <(gh api "repos/$repo/pulls/$pr" \
     --jq '"\(.head.sha) \(.merged_by.login) \(.merged_at)"')
+  # The audit can run after a late check finishes, so judge each gate by its latest
+  # result recorded no later than merged_at (ISO 8601 UTC strings compare as text).
   # Judge every gate as it stood at merge time: anything that finished after merged_at
   # (e.g. a check that went green while this audit waited for a runner) doesn't count.
   # ISO-8601 UTC timestamps compare correctly as strings.
@@ -31,6 +33,12 @@ else
     --jq ".check_runs[] | select(.completed_at != null and .completed_at <= \"$merged_at\")
           | \"\(.completed_at)\t\(.name)\t\(.conclusion)\"" | sort)"
   for name in $required_checks; do
+    c="$(awk -F'\t' -v n="$name" -v t="$merged_at" '$2 == n && ($1 <= t || $1 == "~") {c = $3} END {print c}' <<<"$runs")"
+    [[ "$c" == success ]] || problems+=("check \`$name\` was ${c:-missing} at merge time")
+  done
+  # /statuses lists every status newest first; the combined /status only has the latest.
+  statuses="$(gh api --paginate "repos/$repo/commits/$head/statuses?per_page=100" \
+    --jq '.[] | "\(.context)\t\(.state)\t\(.description)\t\(.created_at)"')"
     c="$(awk -F'\t' -v n="$name" '$2 == n {c = $3} END {print c}' <<<"$runs")"
     [[ "$c" == success ]] || problems+=("check \`$name\` was ${c:-not finished} at merge time")
   done
@@ -39,7 +47,7 @@ else
   statuses="$(gh api --paginate "repos/$repo/commits/$head/statuses?per_page=100" \
     --jq ".[] | select(.created_at <= \"$merged_at\") | \"\(.context)\t\(.state)\t\(.description)\"")"
   for ctx in $required_statuses; do
-    line="$(awk -F'\t' -v n="$ctx" '$1 == n {print; exit}' <<<"$statuses")"
+    line="$(awk -F'\t' -v n="$ctx" -v t="$merged_at" '$1 == n && $4 <= t {print; exit}' <<<"$statuses")"
     state="$(cut -f2 <<<"$line")"
     [[ "$state" == success ]] || problems+=("gate \`$ctx\` was ${state:-missing} at merge time${line:+: $(cut -f3 <<<"$line")}")
   done
