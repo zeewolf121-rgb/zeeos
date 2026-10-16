@@ -91,6 +91,7 @@ Every 2 hours, `paused` issues (set by an agent that ran out of turns or hit a u
 | `installer-disk` and `decision` PRs | `owner-gate` + never merged by autopilot. The label counts if it's on the PR now, was ever applied to it, or is on the linked issue |
 | ADR changes (`docs/adr/`) | Path rule in `owner-gate`; never merged by autopilot |
 | Workflow changes (`.github/workflows/`) and the gate code itself (`scripts/autopilot/`) | Path rule; agent prompts forbid editing them. `GITHUB_TOKEN` can't push workflow files anyway |
+| Merge guards outside the gate code: Claude session hooks (`.claude/`, incl. `hooks/block-merge.sh`) and `scripts/merge-audit.sh` | Path rule. A guard that stops sessions merging must not be auto-mergeable by those sessions |
 | Signing keys and secrets (`security/keys/`, `*secret*`, `*minisign*`, `*.key`, `*.pem`, `*.minisig`) | Path rule. Signing secrets are only read by `release.yml` |
 | Phase 6 manual gate | Autopilot opens the checklist issue (assigned to the owner) and stops. Phase 7 opens only after the owner closes it **and** tags `v1.0.0` |
 | Final `v1.0.0` tag | Autopilot only creates `-rc.N` tags; `release.yml` refuses a final tag unless the owner pushed it |

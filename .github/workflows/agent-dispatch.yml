@@ -86,7 +86,8 @@ jobs:
                if it exists. Read only what the issue needs (MISSION §11).
             2. Branch `agent/${{ needs.route.outputs.agent }}/${{ needs.route.outputs.issue }}-<slug>`; reuse it if
                it already exists on origin. Write only inside your directories (docs/agents.md). Never edit
-               .github/workflows/, scripts/autopilot/, docs/adr/, security/keys/ or anything holding secrets:
+               .github/workflows/, scripts/autopilot/, scripts/merge-audit.sh, .claude/, docs/adr/, security/keys/
+               or anything holding secrets:
                open an issue for that instead.
             3. Conventional Commits. Push at every green checkpoint; update the handoff file (max 20 lines)
                before each push.

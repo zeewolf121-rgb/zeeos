@@ -14,7 +14,8 @@ CLAUDE_BOT='claude'
 
 # Hard stops (docs/AUTOPILOT.md §7): autopilot never merges these; the owner does.
 HARD_STOP_LABELS='installer-disk decision'
-HARD_STOP_PATHS='^(\.github/workflows/|scripts/autopilot/|docs/adr/|security/keys/)|(^|/)[^/]*(secret|minisign)[^/]*$|\.(key|pem|minisig)$'
+# .claude/ (session hooks incl. block-merge.sh) and scripts/merge-audit.sh guard merges themselves.
+HARD_STOP_PATHS='^(\.github/workflows/|scripts/autopilot/|scripts/merge-audit\.sh$|\.claude/|docs/adr/|security/keys/)|(^|/)[^/]*(secret|minisign)[^/]*$|\.(key|pem|minisig)$'
 
 log() {
   printf '%s\n' "$*" >&2

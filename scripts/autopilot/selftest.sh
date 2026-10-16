@@ -101,6 +101,15 @@ jq '.isCrossRepository = true | .headRefName = "agent/orchestrator/evil"' "$FIX/
 ok "fork PR fails cross-review" '! gates cross-review 5 >/dev/null'
 ok "fork PR is never merged" '! gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS"'
 
+# Merge guards are hard stops; ordinary scripts are not.
+reset; claude_pr; codex_done
+echo '[{"filename":".claude/hooks/block-merge.sh"}]' | fx pulls_5_files
+ok "PR touching .claude/hooks needs owner approval" '! gates owner-gate 5 >/dev/null'
+echo '[{"filename":"scripts/merge-audit.sh"}]' | fx pulls_5_files
+ok "PR touching scripts/merge-audit.sh needs owner approval" '! gates owner-gate 5 >/dev/null'
+echo '[{"filename":"scripts/ci-summary.sh"}]' | fx pulls_5_files
+ok "PR touching an ordinary script needs no owner approval" 'gates owner-gate 5 >/dev/null'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
