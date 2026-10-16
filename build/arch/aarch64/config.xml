@@ -3,7 +3,7 @@
 <!-- ZeeOS aarch64 live ISO (ADR-0001 Fedora 44, ADR-0002 kiwi-ng, ADR-0004 signed shim+GRUB).
      build/build-iso.sh stages this file, build/common/ and root/ into one description dir.
      Boots under QEMU+AAVMF (virt machine, PL011 console on ttyAMA0). -->
-<image schemaversion="8.0" name="ZeeOS-aarch64" xmlns:xi="http://www.w3.org/2001/XInclude">
+<image schemaversion="8.0" name="ZeeOS-aarch64">
   <description type="system">
     <author>ZeeOS</author>
     <contact>https://github.com/zeewolf121-rgb/zeeos</contact>
@@ -16,9 +16,11 @@
     <keytable>us</keytable>
     <timezone>UTC</timezone>
     <rpm-excludedocs>true</rpm-excludedocs>
-    <type image="iso" flags="overlay" firmware="uefi" bootloader="grub2" mediacheck="true"
+    <type image="iso" flags="overlay" firmware="uefi" mediacheck="true"
           volid="ZEEOS_0_1" publisher="ZeeOS" application_id="ZeeOS"
-          kernelcmdline="rd.live.image console=tty0 console=ttyAMA0,115200"/>
+          kernelcmdline="rd.live.image console=tty0 console=ttyAMA0,115200">
+      <bootloader name="grub2"/>
+    </type>
   </preferences>
   <!-- Repos: Fedora 44 mirrors for now. TODO(P1-2): pin to a dated snapshot. -->
   <repository type="rpm-md" alias="fedora" sourcetype="metalink">
@@ -27,7 +29,7 @@
   <repository type="rpm-md" alias="fedora-updates" sourcetype="metalink">
     <source path="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&amp;arch=aarch64"/>
   </repository>
-  <xi:include href="packages.xml"/>
+  <include from="file://packages.xml"/>
   <!-- Fedora-signed boot chain only: shimaa64.efi / grubaa64.efi, no custom or unsigned kernel. -->
   <packages type="image">
     <package name="shim-aa64"/>
