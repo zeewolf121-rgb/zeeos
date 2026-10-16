@@ -5,6 +5,7 @@
 set -euo pipefail
 arch="${1:?usage: run.sh <arch> [out-dir]}"
 out="${2:-}"
+if [[ -n "$out" ]]; then mkdir -p "$out" && out="$(cd "$out" && pwd)"; fi
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$dir/../.." && pwd)"
 # shellcheck source=build/container/base-image.lock
@@ -25,15 +26,23 @@ engine=("$engine_bin")
 # Build and run must use the same (root) image store. Hand out/ back to the caller after.
 if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
   engine=(sudo "$engine_bin")
-  trap 'sudo chown -R "$(id -u):$(id -g)" "$root/out" 2>/dev/null || true' EXIT
+  trap 'sudo chown -R "$(id -u):$(id -g)" "$root/out" ${out:+"$out"} 2>/dev/null || true' EXIT
 fi
 "${engine[@]}" build --build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile" "$dir"
 epoch="${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}"
 args=("$arch")
-[[ -n "$out" ]] && args+=("$out")
+mounts=(-v "$root:/work")
+# A custom out dir outside the checkout must be mounted too, at the same absolute path,
+# or build-iso.sh writes into the container's own filesystem and --rm discards it.
+if [[ -n "$out" ]]; then
+  case "$out/" in
+    "$root"/*) args+=("/work${out#"$root"}") ;;      # inside the checkout: same dir under /work
+    *) args+=("$out"); mounts+=(-v "$out:$out") ;;  # elsewhere: mount at the same path
+  esac
+fi
 # Inside the container we are root, so build-iso.sh skips sudo (ZEEOS_IN_CONTAINER).
 "${engine[@]}" run --rm --privileged \
-  -v "$root:/work" -w /work \
+  "${mounts[@]}" -w /work \
   -e SOURCE_DATE_EPOCH="$epoch" -e DRY_RUN="${DRY_RUN:-0}" -e ZEEOS_IN_CONTAINER=1 \
   -e ZEEOS_SNAPSHOT_URL="${ZEEOS_SNAPSHOT_URL:-}" \
   "$tag" bash -c 'git config --global --add safe.directory /work && exec build/build-iso.sh "$@"' _ "${args[@]}"
