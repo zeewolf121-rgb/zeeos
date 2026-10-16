@@ -12,13 +12,13 @@ Issue #45 (split from #7) asks that `make iso` from a clean checkout uses only p
 - **ISO packages.** `build/arch/<arch>/config.xml` points kiwi at the `fedora-44` and `updates-released-f44` metalinks. `build-iso.sh` swaps those for `$ZEEOS_SNAPSHOT_URL/releases/44/Everything/$arch/os` and `$ZEEOS_SNAPSHOT_URL/updates/44/Everything/$arch` only when that variable is set. Otherwise it prints a warning and uses the live mirrors.
 - **What is pinned.** kiwi `<package>` entries name about 30 packages in `build/common/packages.xml` and the arch `config.xml`. dnf resolves every other package in the image to whatever the repo serves that day.
 - **Reproducibility check.** `build/check-reproducible.sh` builds twice in a row and diffs `packages.list`. Back-to-back builds almost never catch repo drift.
-- **CI runners.** `build-iso.yml` builds x86_64 on `ubuntu-24.04` and aarch64 on `ubuntu-24.04-arm`. ARCHITECTURE.md §4 still says aarch64 CI uses a self-hosted macOS runner. That needs a separate docs fix.
+- **CI runners.** `build-iso.yml` builds x86_64 on `ubuntu-24.04` and aarch64 on `ubuntu-24.04-arm`. Owner decision D9 (ARCHITECTURE.md §4) puts aarch64 on a self-hosted macOS ARM64 runner. The owner or ci-engineer needs to reconcile the two. This ADR works either way, because all it needs is an aarch64 Linux container environment per arch (native, or the Linux VM podman uses on macOS).
 
-Facts about Fedora that this decision relies on. Each was checked on 2026-10-16:
+Facts about Fedora that this decision relies on. Facts 2 and 3 were spot-checked with curl on 2026-10-16. Facts 1 and 4 come from Fedora's release process and the text of #45, not from a check:
 
 1. **`releases/44` is frozen at GA.** It never changes, so it is already reproducible.
-2. **`updates/44` keeps only the newest build of each package.** The mirror listing for `updates/44/Everything/x86_64/Packages/k/` contained a single `kernel-core` (7.2.10-200.fc44). Superseded NEVRAs disappear from mirrors. A NEVRA pin that relies only on mirrors breaks the build the next time Fedora pushes an update.
-3. **Koji still serves superseded builds.** `kojipkgs.fedoraproject.org/packages/kernel/7.2.8/200.fc44/data/signed/6d9f90a6/` exists. Fedora documents no retention guarantee, and a build that never shipped (`bash-5.3.0-1.fc43`) had no signed copy at all. Koji is a useful fallback but not a source we can depend on.
+2. **`updates/44` keeps only the newest build of each package.** We checked one sample: the mirror listing for `updates/44/Everything/x86_64/Packages/k/` contained a single `kernel-core` (7.2.10-200.fc44). Superseded NEVRAs disappear from mirrors. A NEVRA pin that relies only on mirrors breaks the build the next time Fedora pushes an update.
+3. **Koji still serves superseded builds.** `kojipkgs.fedoraproject.org/packages/kernel/7.2.8/200.fc44/data/signed/6d9f90a6/` exists. We found no documented retention guarantee, and `bash-5.3.0-1.fc43` had no signed copy at all (we did not check why). Koji is a useful fallback but not a source we can depend on.
 4. **Fedora has no dated snapshot service.** Koji build-tag repos and updates composes are regenerated and garbage-collected on Fedora's schedule.
 
 Constraints:
@@ -81,7 +81,7 @@ Constraints:
 - **Redistribution:** publishing Fedora binary RPMs is redistribution, just as the ISO already is. The closure artifact should carry the matching SRPMs, or the release process must provide the source offer. The owner should confirm which before the first release (ties to ADR-0006).
 - **Security lag:** the ISO gets Fedora updates only through merged refresh PRs, so there is up to about a day of detection lag plus review time. Installed systems are unaffected (point 5).
 - **CI time:** each build pulls one artifact per arch instead of resolving against mirrors. This is likely faster and removes mirror flakiness.
-- Docs follow-up on acceptance: ARCHITECTURE.md §5 ("pinned to a dated snapshot") changes to "pinned to a per-arch closure lock". §4's aarch64 runner row gets corrected.
+- Docs follow-up on acceptance: ARCHITECTURE.md §5 ("pinned to a dated snapshot") changes to "pinned to a per-arch closure lock". The §4 aarch64 runner row (D9) is reconciled with `build-iso.yml` once the owner or ci-engineer decides which is right.
 
 ### Follow-up work by owning agent
 
@@ -89,7 +89,7 @@ Constraints:
 |---|---|---|
 | image-builder (`build/`, `Makefile`) | Lock format; `build/` resolve, fetch and publish scripts; `make pin-packages`; closure pull and only-repo wiring in `build-iso.sh` / `run.sh`; `packages.list`-vs-lock check; `ZEEOS_UNPINNED` opt-out; tool image lock and pull in `run.sh`; `tools.lock` capture; first locks for both arches | this ADR Accepted |
 | ci-engineer (`.github/`) | Daily refresh workflow (both native runners, `packages: write`, opens the rolling PR, boot-chain label); publish job for the closure and build-container images; scheduled day-apart reproducibility job; PR-trigger token decision. **Workflow files can't be edited by unattended agents, so this needs an interactive session or the owner** | image-builder scripts |
-| architect (`docs/`) | ARCHITECTURE.md §4/§5 updates; mark this ADR Accepted only after the owner decides | owner decision |
+| architect (`docs/`) | ARCHITECTURE.md §5 update, plus §4 if the D9 reconciliation changes it; mark this ADR Accepted only after the owner decides | owner decision |
 
 ## What would flip this decision
 
