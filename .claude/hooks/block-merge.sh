@@ -12,17 +12,6 @@
 # If the command can't be parsed it falls back to a conservative text match.
 set -euo pipefail
 
-input="$(cat)"
-cmd="$(jq -r '.tool_input.command // empty' <<<"$input")"
-cwd="$(jq -r '.cwd // empty' <<<"$input")"
-ws='[[:space:]]'
-pattern="gh${ws}+pr${ws}+merge|pulls/[0-9]+/merge|mergePullRequest|enablePullRequestAutoMerge"
-pattern+="|git${ws}+push${ws}.*(${ws}|:|\+)(refs/heads/)?main(${ws}|$)"
-# A bare `git push` (or `git push origin`) on main updates main without naming it,
-# so while the session's checkout is on main, deny every push.
-if [[ "$(git -C "${cwd:-.}" symbolic-ref --short -q HEAD 2>/dev/null || true)" == main ]]; then
-  pattern+="|git${ws}+push(${ws}|$)"
-fi
 prog="$(cat <<'PY'
 import json, os, re, shlex, subprocess, sys
 
@@ -51,11 +40,19 @@ def strip_heredocs(cmd):
     return "\n".join(out)
 
 def segments(cmd):
-    lex = shlex.shlex(strip_heredocs(cmd), posix=True, punctuation_chars=";&|()")
+    lex = shlex.shlex(strip_heredocs(cmd), posix=True, punctuation_chars=";&|()<>")
     lex.whitespace = " \t\r"  # newline stays a token: it separates commands
-    seg = []
+    seg, redirect = [], False
     for tok in lex:
-        if tok in SEPARATORS or tok == "\n":
+        if redirect:  # the redirection target (file or fd) is not an argument
+            redirect = False
+            if tok not in SEPARATORS:
+                continue
+        if re.fullmatch(r"[<>&]*[<>][<>&|]*", tok):  # >, 2>&1, &>, <<<, >|
+            if seg and seg[-1].isdigit():
+                seg.pop()  # fd number in front of it, as in 2>
+            redirect = True
+        elif tok in SEPARATORS or tok == "\n":
             if seg: yield seg
             seg = []
         else:
