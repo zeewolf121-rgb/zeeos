@@ -15,7 +15,9 @@ repo="${GITHUB_REPOSITORY:?}"
 # admin rights). Commit statuses posted by gates.sh are judged as statuses, the rest as check runs.
 status_gates=' cross-review owner-gate '
 required="$(gh api "repos/$repo/branches/main" --jq '.protection.required_status_checks.contexts // [] | .[]' 2>/dev/null || true)"
-[[ -n "$required" ]] || required=$'lint\nbuild-iso\ncross-review\nowner-gate'
+# Fallback (no protection, or the API failed): the full gates.sh list, so an error can
+# never weaken the audit.
+[[ -n "$required" ]] || required=$'lint\nbuild-iso\nboot-test\ncross-review\nowner-gate'
 required_checks=""; required_statuses=""
 for ctx in $required; do
   if [[ "$status_gates" == *" $ctx "* ]]; then required_statuses+="$ctx "; else required_checks+="$ctx "; fi
