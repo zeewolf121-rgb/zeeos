@@ -7,10 +7,17 @@
 # which checks CI, cross-review and owner-gate itself.
 set -euo pipefail
 
-cmd="$(jq -r '.tool_input.command // empty')"
+input="$(cat)"
+cmd="$(jq -r '.tool_input.command // empty' <<<"$input")"
+cwd="$(jq -r '.cwd // empty' <<<"$input")"
 ws='[[:space:]]'
 pattern="gh${ws}+pr${ws}+merge|pulls/[0-9]+/merge|mergePullRequest|enablePullRequestAutoMerge"
 pattern+="|git${ws}+push${ws}.*(${ws}|:|\+)(refs/heads/)?main(${ws}|$)"
+# A bare `git push` (or `git push origin`) on main updates main without naming it,
+# so while the session's checkout is on main, deny every push.
+if [[ "$(git -C "${cwd:-.}" symbolic-ref --short -q HEAD 2>/dev/null || true)" == main ]]; then
+  pattern+="|git${ws}+push(${ws}|$)"
+fi
 
 if printf '%s' "$cmd" | grep -Eq -- "$pattern"; then
   jq -n '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny",
