@@ -1,0 +1,20 @@
+# Flags anything that reaches main without passing the merge gates. Branch protection
+# isn't available on this plan, so this is detection, not prevention (see scripts/merge-audit.sh).
+name: merge-audit
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  statuses: read
+  issues: write
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: scripts/merge-audit.sh "${{ github.sha }}"
