@@ -151,6 +151,28 @@ echo '{"labels":[{"name":"model:claude"},{"name":"agent:desktop-shell"},{"name":
 "$here/dispatch.sh" 2>/dev/null
 ok "paused issue gets the last slot before a ready one" 'grep -q "issue=7" "$CALLS" && ! grep -q "issue=14" "$CALLS"'
 
+# Pause cap: 3 pauses without commits -> needs-human instead of another resume.
+pause_fx() {
+  reset
+  echo '[{"number":7,"createdAt":"2026-01-05","labels":[{"name":"paused"},{"name":"in-progress"}]}]' | fx issue_list_paused
+  echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"paused"},{"name":"in-progress"}]}' | fx issue_view_7
+}
+pz() { echo "{\"event\":\"$1\",\"label\":{\"name\":\"$2\"},\"created_at\":\"$3\"}"; }
+pause_fx
+echo "[$(pz labeled paused 2026-10-16T01:00:00Z),$(pz labeled paused 2026-10-16T02:00:00Z),$(pz labeled paused 2026-10-16T03:00:00Z)]" | fx issues_7_events
+"$here/dispatch.sh" 2>/dev/null
+ok "3 pauses, no branch -> needs-human, not resumed" 'grep -q "issue edit 7 --repo o/r --add-label needs-human" "$CALLS" && ! grep -q "issue=7" "$CALLS"'
+pause_fx
+echo "[$(pz labeled paused 2026-10-16T01:00:00Z),$(pz labeled paused 2026-10-16T02:00:00Z),$(pz unlabeled needs-human 2026-10-16T02:30:00Z),$(pz labeled paused 2026-10-16T03:00:00Z)]" | fx issues_7_events
+"$here/dispatch.sh" 2>/dev/null
+ok "owner clearing needs-human resets the pause count" 'grep -q "issue=7" "$CALLS"'
+pause_fx
+echo "[$(pz labeled paused 2026-10-16T01:00:00Z),$(pz labeled paused 2026-10-16T02:00:00Z),$(pz labeled paused 2026-10-16T03:00:00Z)]" | fx issues_7_events
+echo '[{"object":{"sha":"c0ffee"}}]' | fx git_matching-refs_heads_agent_image-builder_7-
+echo '{"commit":{"committer":{"date":"2026-10-16T02:30:00Z"}}}' | fx commits_c0ffee
+"$here/dispatch.sh" 2>/dev/null
+ok "pauses with commits in between keep resuming" 'grep -q "issue=7" "$CALLS"'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones
