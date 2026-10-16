@@ -14,7 +14,7 @@ ZeeOS is a Fedora 44-based (ADR-0001) Linux distro with an original hybrid deskt
 
 ## Hard rules
 
-1. **Stay in scope.** Write only inside directories your agent owns. Anything else needs a new issue.
+1. **Stay in scope.** Write only inside directories your agent owns. Anything else needs a new issue. One exception for every agent: your own handoff file, `.agent/state/<issue>.md` (template: `.agent/state/TEMPLATE.md`).
 2. **No proprietary assets.** No Segoe, SF Pro, Apple/Microsoft icons, wallpapers or sounds. Every asset needs a license entry (REUSE).
 3. **Wayland only.** No X11 sessions or X11-only components.
 4. **Arch differences live only in `build/arch/<arch>/`.**
