@@ -5,7 +5,14 @@
 set -euo pipefail
 arch="${1:?usage: run.sh <arch> [out-dir]}"
 out="${2:-}"
-if [[ -n "$out" ]]; then mkdir -p "$out" && out="$(cd "$out" && pwd)"; fi
+if [[ -n "$out" ]]; then
+  # A custom out-dir must be new or empty: on Linux the whole dir is handed back to the
+  # caller after a root build, so it must not contain anyone else's files (e.g. /tmp).
+  if [[ -e "$out" && -n "$(ls -A "$out" 2>/dev/null)" ]]; then
+    echo "out-dir $out must be new or empty" >&2; exit 2
+  fi
+  mkdir -p "$out" && out="$(cd "$out" && pwd)"
+fi
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$dir/../.." && pwd)"
 # shellcheck source=build/container/base-image.lock
@@ -23,15 +30,12 @@ engine=("$engine_bin")
 # On Linux hosts without SELinux (e.g. GitHub's Ubuntu runners), kiwi's SELinux relabel
 # (setfiles) can only store security.selinux labels with real CAP_SYS_ADMIN on the host.
 # A rootless container lacks that even with --privileged, so run the engine as root.
-# Build and run must use the same (root) image store. Afterwards, hand back only what the
-# build created: root-owned entries newer than this run's start, never pre-existing files.
+# Build and run must use the same (root) image store. Afterwards, hand back what the build
+# created: the checkout's out/ (ours) and the custom out-dir (new or empty at start).
 if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
   engine=(sudo "$engine_bin")
-  stamp="$(mktemp)"
   hand_back() {
-    sudo find "$root/out" ${out:+"$out"} -user 0 -newer "$stamp" \
-      -exec chown -h "$(id -u):$(id -g)" {} + 2>/dev/null || true
-    rm -f "$stamp"
+    sudo chown -hR "$(id -u):$(id -g)" "$root/out" ${out:+"$out"} 2>/dev/null || true
   }
   trap hand_back EXIT
 fi

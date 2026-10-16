@@ -17,14 +17,17 @@ rm -rf "$desc"
 mkdir -p "$desc"
 cp -a "$root/build/common/." "$desc/"
 cp -a "$src/." "$desc/"
+# Escape a value for use inside an XML attribute and as a sed replacement (| delimiter).
+xml_sed() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; v="${v//</&lt;}"; printf '%s' "$v" | sed 's/[\\&|]/\\&/g'; }
 # kiwi resolves file:// includes against its cwd, not the description dir: make the path absolute.
-sed -i "s|<include from=\"file://|<include from=\"file://$desc/|" "$desc/config.xml"
+sed -i "s|<include from=\"file://|<include from=\"file://$(xml_sed "$desc")/|" "$desc/config.xml"
 # Repo snapshot pinning: ZEEOS_SNAPSHOT_URL (a dated mirror root) replaces the mirror metalinks.
 if [[ -n "${ZEEOS_SNAPSHOT_URL:-}" ]]; then
+  snap="$(xml_sed "$ZEEOS_SNAPSHOT_URL")"
   sed -i -E \
     -e 's| sourcetype="metalink"||' \
-    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=fedora-44&amp;arch=[a-z0-9_]+|$ZEEOS_SNAPSHOT_URL/releases/44/Everything/$arch/os|" \
-    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=updates-released-f44&amp;arch=[a-z0-9_]+|$ZEEOS_SNAPSHOT_URL/updates/44/Everything/$arch|" \
+    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=fedora-44&amp;arch=[a-z0-9_]+|$snap/releases/44/Everything/$arch/os|" \
+    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=updates-released-f44&amp;arch=[a-z0-9_]+|$snap/updates/44/Everything/$arch|" \
     "$desc/config.xml"
 else
   echo "WARNING: repos not pinned to a snapshot (set ZEEOS_SNAPSHOT_URL)" >&2
