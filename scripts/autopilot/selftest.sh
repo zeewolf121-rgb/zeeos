@@ -131,7 +131,7 @@ ok "installer-disk on the linked issue -> Opus review" '[[ "$(gates review-model
 
 # Route: a Codex agent has no .claude/agents file; routing must still work.
 reset
-echo '{"labels":[{"name":"model:codex"},{"name":"agent:security-hardener"}],"body":"## Turn budget\nmedium 40"}' | fx issue_view_9
+printf '%s\n' '{"labels":[{"name":"model:codex"},{"name":"agent:security-hardener"}],"body":"## Turn budget\nmedium 40"}' | fx issue_view_9
 out="$(cd "$here/../.." && "$here/route.sh" 9 2>/dev/null)" || out="exit $?"
 ok "route works for a Codex agent without a .claude/agents file" '[[ "$out" == *model=codex* && "$out" == *agent=security-hardener* ]]'
 
