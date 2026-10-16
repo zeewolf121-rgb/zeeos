@@ -111,6 +111,16 @@ reset; claude_pr; codex_done
 echo '[{"filename":"scripts/merge-audit-notes.md"}]' | fx pulls_5_files
 ok "a similarly named file is not a hard stop" 'gates owner-gate 5 >/dev/null'
 
+# Review fix: unresolved Codex P1 on a green Claude PR -> one fix round per commit.
+reset; claude_pr; codex_done
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) fix x"}]}}]}}}}}' | fx graphql
+gates merge 5 >/dev/null || true
+ok "blocking review comments -> review fix dispatched" 'grep -q "workflow run agent-dispatch.yml --repo o/r -f pr=5 -f mode=fix" "$CALLS" && grep -q "autopilot-review-fix sha=$sha n=1" "$CALLS"'
+jq --arg m "<!-- autopilot-review-fix sha=$sha n=1 -->" '. + [{"user":{"login":"o"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"; gates merge 5 >/dev/null || true
+ok "at most one review fix per commit (cross-review still blocked by the P1)" '! grep -q "mode=fix" "$CALLS" && [[ "$(gates cross-review 5)" == unresolved* ]]'
+ok "blocking prints the comment for the fix prompt" '[[ "$(gates blocking 5)" == *"fix x"* ]]'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"

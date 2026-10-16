@@ -73,6 +73,7 @@ When `lint` or `build-iso` fails on the **head commit** of a Claude or Codex PR:
 - The CI summary (`scripts/ci-summary.sh`, under 2 KB) goes back to the authoring model. Claude gets a `mode=fix` run on the PR branch (Sonnet, 25 turns); Codex gets an `@codex fix …` comment.
 - There is at most one retry per commit and **2 per PR**. After that the PR gets `needs-human` and a comment mentioning the owner, which triggers a GitHub notification. Autopilot then leaves it alone until the label is removed.
 - MISSION §10 says one retry; the owner raised it to two on 2026-10-16.
+- **Blocking review comments** get the same treatment, with their own counter (`fix-retry.sh --review`). When a PR's checks are green and `cross-review` fails only because of unresolved Codex P0/P1 or Claude `[blocking]` comments, the comments go back to the authoring model: a Claude `mode=fix` run, or an `@codex` comment. That's at most one round per commit and 2 per PR, then `needs-human`.
 
 ## 5. nightly-health
 
