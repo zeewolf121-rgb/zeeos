@@ -129,6 +129,12 @@ reset; claude_pr
 echo '{"labels":[{"name":"model:claude"},{"name":"agent:installer-engineer"},{"name":"installer-disk"}]}' | fx issue_view_6
 ok "installer-disk on the linked issue -> Opus review" '[[ "$(gates review-model 5)" == claude-opus-5-5 ]]'
 
+# Route: a Codex agent has no .claude/agents file; routing must still work.
+reset
+printf '%s\n' '{"labels":[{"name":"model:codex"},{"name":"agent:security-hardener"}],"body":"## Turn budget\nmedium 40"}' | fx issue_view_9
+out="$(cd "$here/../.." && "$here/route.sh" 9 2>/dev/null)" || out="exit $?"
+ok "route works for a Codex agent without a .claude/agents file" '[[ "$out" == *model=codex* && "$out" == *agent=security-hardener* ]]'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones

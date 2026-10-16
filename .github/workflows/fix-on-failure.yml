@@ -11,6 +11,7 @@ permissions:
   pull-requests: write
   issues: write
   statuses: write
+  checks: read          # gates.sh reads check runs (lint, build-iso, boot-test)
   actions: write
 jobs:
   follow-up:
@@ -30,7 +31,7 @@ jobs:
       RUN: ${{ github.event.workflow_run.id }}
       CONCLUSION: ${{ github.event.workflow_run.conclusion }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           if [[ "$CONCLUSION" == failure ]]; then
             scripts/autopilot/fix-retry.sh "$BRANCH" "$SHA" "$RUN"

@@ -15,7 +15,7 @@ jobs:
     outputs:
       iso: ${{ steps.d.outputs.iso }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - id: d
@@ -43,7 +43,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: make iso ARCH=${{ matrix.arch }}
       - if: failure()
         run: echo "Summarise with scripts/ci-summary.sh ${{ github.run_id }}"

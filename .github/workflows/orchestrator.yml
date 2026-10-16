@@ -15,6 +15,7 @@ permissions:
   issues: write
   pull-requests: write
   statuses: write
+  checks: read          # gates.sh reads check runs (lint, build-iso, boot-test)
   actions: write        # workflow_dispatch of agent-dispatch / release
   id-token: write       # claude-code-action
 jobs:
@@ -23,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Gates, merges, dispatch, phase (deterministic)
         id: det
         env:
