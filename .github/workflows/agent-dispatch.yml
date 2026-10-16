@@ -57,6 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: r
+        shell: bash   # -o pipefail: a failing route.sh must fail the step, not hide behind tee
         run: |
           flag=""; [[ "${{ github.event_name }}" == issues ]] && flag=--from-label
           scripts/autopilot/route.sh "${{ github.event.issue.number || inputs.issue }}" $flag | tee -a "$GITHUB_OUTPUT"
