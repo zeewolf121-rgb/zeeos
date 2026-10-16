@@ -36,6 +36,7 @@ case "$1 $2" in
   "repo view") echo o/r; exit 0 ;;
   *) write=1 ;;
 esac
+if [[ "$1 $2" == "workflow run" && -n "${FAIL_WORKFLOW_RUN:-}" ]]; then echo "CALL $*" >>"$CALLS"; exit 1; fi
 if [[ -n "$write" ]]; then echo "CALL $*" >>"$CALLS"; [[ "$1 $2" == "issue create" ]] && echo "https://x/issues/99"; exit 0; fi
 f="$FIX/$key.json"
 [[ -f "$f" ]] || { [[ "$key" == *protection* ]] && exit 1; echo "[]" >"$f"; }
@@ -118,6 +119,12 @@ echo '{"labels":[{"name":"model:codex"},{"name":"agent:theme-designer"},{"name":
 "$here/dispatch.sh" 2>/dev/null
 ok "a needs-human Codex issue doesn't hold the Codex slot" 'grep -q "issue=1" "$CALLS"'
 
+reset
+echo '[{"number":4,"createdAt":"2026-01-01","labels":[{"name":"ready"}]}]' | fx issue_list_ready
+echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"ready"}]}' | fx issue_view_4
+FAIL_WORKFLOW_RUN=1 "$here/dispatch.sh" 2>/dev/null
+ok "failed dispatch gives the slot back" 'grep -q "issue edit 4 --repo o/r --remove-label in-progress --add-label ready" "$CALLS"'
+
 reset; claude_pr
 echo '{"labels":[{"name":"model:claude"},{"name":"agent:installer-engineer"},{"name":"installer-disk"}]}' | fx issue_view_6
 ok "installer-disk on the linked issue -> Opus review" '[[ "$(gates review-model 5)" == claude-opus-5-5 ]]'
@@ -129,7 +136,11 @@ echo '[{"number":6,"state":"OPEN","labels":[{"name":"model:claude"},{"name":"age
 out="$("$here/phase.sh" status 2>/dev/null)"
 ok "phase 1 current, no LLM needed" '[[ "$out" == *current=1* && "$out" == *needs_llm=false* ]]'
 echo '[{"number":6,"state":"CLOSED","labels":[{"name":"model:claude"},{"name":"agent:x"}]}]' | fx issue_list_ms
-echo '[{"conclusion":"success"}]' | fx runs
+echo '[{"databaseId":9}]' | fx runs
+echo '{"jobs":[{"name":"gate","conclusion":"skipped"},{"name":"health","conclusion":"skipped"}]}' | fx actions_runs_9_jobs
+out="$("$here/phase.sh" status 2>/dev/null)"
+ok "skipped nightly (kill switch) doesn't count as green" '[[ "$out" == *prev_exit=false* && "$out" == *needs_llm=false* ]]'
+echo '{"jobs":[{"name":"health","conclusion":"success"}]}' | fx actions_runs_9_jobs
 out="$("$here/phase.sh" status 2>/dev/null)"
 ok "phase 1 done + nightly green -> phase 2 needs opening" '[[ "$out" == *current=2* && "$out" == *needs_llm=true* ]]'
 

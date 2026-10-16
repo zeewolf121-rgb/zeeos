@@ -24,9 +24,12 @@ complete() { # phase
   [[ -n "$rows" ]] && ! grep -q ' OPEN ' <<<"$rows"
 }
 current() { local n; for n in 1 2 3 4 5 6 7; do complete "$n" || { echo "$n"; return; }; done; echo 8; }
-nightly_ok() {
-  [[ "$(gh run list --repo "$REPO" --workflow nightly-health.yml --branch main --limit 1 \
-    --json conclusion --jq '.[0].conclusion // ""')" == success ]]
+nightly_ok() { # the latest nightly's `health` job itself passed (skipped jobs also read as success)
+  local id
+  id="$(gh run list --repo "$REPO" --workflow nightly-health.yml --branch main --limit 1 \
+    --json databaseId --jq '.[0].databaseId // ""')"
+  [[ -n "$id" ]] || return 1
+  [[ "$(gh api "repos/$REPO/actions/runs/$id/jobs" --jq '.jobs[] | select(.name == "health") | .conclusion')" == success ]]
 }
 
 status() {

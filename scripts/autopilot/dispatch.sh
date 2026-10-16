@@ -37,7 +37,11 @@ for n in $(gh issue list --repo "$REPO" --state open --label "$from" --limit 100
   esac
   if [[ "$model" == claude ]] && (( started_claude > 0 )) && [[ -z "${DRY_RUN:-}" ]]; then sleep "$stagger"; fi
   w gh issue edit "$n" --repo "$REPO" --remove-label "$from" --add-label in-progress >/dev/null
-  w gh workflow run agent-dispatch.yml --repo "$REPO" -f issue="$n" -f mode=implement
+  if ! w gh workflow run agent-dispatch.yml --repo "$REPO" -f issue="$n" -f mode=implement; then
+    # Nothing started: give the slot back and leave the issue where it was.
+    w gh issue edit "$n" --repo "$REPO" --remove-label in-progress --add-label "$from" >/dev/null || true
+    log "#$n: dispatch failed; left $from"; continue
+  fi
   log "dispatched #$n ($agent, $model)${from/ready/}"
   if [[ "$model" == claude ]]; then used_claude=$((used_claude + 1)); started_claude=$((started_claude + 1)); else used_codex=$((used_codex + 1)); fi
 done
