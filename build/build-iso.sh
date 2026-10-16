@@ -17,6 +17,8 @@ rm -rf "$desc"
 mkdir -p "$desc"
 cp -a "$root/build/common/." "$desc/"
 cp -a "$src/." "$desc/"
+# kiwi resolves file:// includes against its cwd, not the description dir: make the path absolute.
+sed -i "s|<include from=\"file://|<include from=\"file://$desc/|" "$desc/config.xml"
 # Repo snapshot pinning: ZEEOS_SNAPSHOT_URL (a dated mirror root) replaces the mirror metalinks.
 if [[ -n "${ZEEOS_SNAPSHOT_URL:-}" ]]; then
   sed -i -E \
