@@ -18,7 +18,8 @@ fi
 budget="$(gh issue view "$n" --repo "$REPO" --json body --jq .body \
   | sed -n '/^## Turn budget/,$p' | grep -oE 'small|medium|large' | head -n1 || true)"
 case "$budget" in small) turns=15 ;; large) turns=80 ;; *) turns=40 ;; esac
-tier="$(sed -n 's/^model: *//p' ".claude/agents/$agent.md" 2>/dev/null | head -n1)"
+# Codex agents have no .claude/agents file; under pipefail a missing file must not abort.
+tier="$(sed -n 's/^model: *//p' ".claude/agents/$agent.md" 2>/dev/null | head -n1 || true)"
 if has_label "$n" installer-disk; then tier=opus; fi
 case "${tier:-sonnet}" in
   opus) llm=claude-opus-5-5 ;; haiku) llm=claude-haiku-5-5 ;; *) llm=claude-sonnet-5-5 ;;
