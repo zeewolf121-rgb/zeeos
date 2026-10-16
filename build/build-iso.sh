@@ -17,11 +17,24 @@ rm -rf "$desc"
 mkdir -p "$desc"
 cp -a "$root/build/common/." "$desc/"
 cp -a "$src/." "$desc/"
+# Repo snapshot pinning: ZEEOS_SNAPSHOT_URL (a dated mirror root) replaces the mirror metalinks.
+if [[ -n "${ZEEOS_SNAPSHOT_URL:-}" ]]; then
+  sed -i -E \
+    -e 's| sourcetype="metalink"||' \
+    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=fedora-44&amp;arch=[a-z0-9_]+|$ZEEOS_SNAPSHOT_URL/releases/44/Everything/$arch/os|" \
+    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=updates-released-f44&amp;arch=[a-z0-9_]+|$ZEEOS_SNAPSHOT_URL/updates/44/Everything/$arch|" \
+    "$desc/config.xml"
+else
+  echo "WARNING: repos not pinned to a snapshot (set ZEEOS_SNAPSHOT_URL)" >&2
+fi
 echo "staged description in $desc (SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH)"
 [[ "${DRY_RUN:-0}" == 1 ]] && exit 0
 
-sudo -E "$(command -v kiwi-ng)" --type iso system build \
+if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
+"${run[@]}" "$(command -v kiwi-ng)" --type iso system build \
   --description "$desc" --target-dir "$out/image"
+pk="$(find "$out/image" -name '*.packages' | head -1)"
+[[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
 iso="$(find "$out/image" -name '*.iso' | head -1)"
 [[ -n "$iso" ]] || { echo "kiwi produced no ISO" >&2; exit 1; }
 size=$(stat -c %s "$iso")

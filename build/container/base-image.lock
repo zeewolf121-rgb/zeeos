@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Digest-pinned base image. Refresh with: make pin-container (needs skopeo + network).
+# Empty until first pinned: build/container/run.sh then falls back to the tag and warns.
+BASE_IMAGE_REF=registry.fedoraproject.org/fedora
+BASE_IMAGE_TAG=44
+BASE_IMAGE_DIGEST=
