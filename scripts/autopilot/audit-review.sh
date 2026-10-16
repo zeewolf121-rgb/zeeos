@@ -28,9 +28,9 @@ while IFS=$'\t' read -r issue created title; do
   if gh api --paginate "repos/$REPO/issues/$issue/comments" --jq '.[].body' | grep -qF "$ESCALATED"; then
     continue  # already handed to the owner
   fi
-  if ! out="$("$here/gates.sh" owner-gate "$pr" 2>/dev/null)"; then
-    escalate "$issue" "#$pr is an owner stop: $out"; continue
-  fi
+  # A hard-stop PR merged with a gate red always goes to the owner, approved or not.
+  out="$("$here/gates.sh" hard-stop "$pr" 2>/dev/null)" || out="couldn't check hard stops"
+  if [[ -n "$out" ]]; then escalate "$issue" "#$pr is an owner stop ($out)"; continue; fi
   if ! out="$("$here/gates.sh" cross-review "$pr" 2>/dev/null)"; then
     if [[ "$out" != waiting* ]]; then escalate "$issue" "#$pr review: $out"; continue; fi
     "$here/gates.sh" request-review "$pr" || true

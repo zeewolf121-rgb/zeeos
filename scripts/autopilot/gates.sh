@@ -8,6 +8,7 @@
 #   request-review  ask the other model to review the head commit (once per commit)
 #   merge           merge if every gate passes; hard-stop PRs are left for the owner
 #   checks          the required CI checks are green on the head commit (latest runs)
+#   hard-stop       print why the PR is a hard stop (§7), empty if it isn't; ignores approval
 #   review-model    model id for a Claude review: Opus for installer-disk work (PR or linked issue)
 # Env: see lib.sh; CODEX_TOKEN (owner token for "@codex review" comments);
 #      MERGE_TOKEN (optional, can merge PRs that change .github/workflows/).
@@ -198,7 +199,7 @@ merge() {
   log "#$pr merged at ${sha:0:7}"
 }
 
-cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|checks|review-model> <pr>}"; pr="${2:?pr}"
+cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|checks|hard-stop|review-model> <pr>}"; pr="${2:?pr}"
 case "$cmd" in
   cross-review) cross_review "$pr" ;;
   owner-gate) owner_gate "$pr" ;;
@@ -206,6 +207,7 @@ case "$cmd" in
   request-review) request_review "$pr" ;;
   merge) merge "$pr" ;;
   checks) checks_green "$pr" "$(pr_head "$pr")" ;;
+  hard-stop) hard_stop_reasons "$pr" ;;
   review-model)
     if [[ "$(hard_stop_reasons "$pr")" == *label:installer-disk* ]]; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
   *) echo "unknown command: $cmd" >&2; exit 2 ;;

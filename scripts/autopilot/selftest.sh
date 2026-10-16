@@ -125,6 +125,12 @@ echo '{"labels":[{"name":"installer-disk"}]}' | fx issue_view_5
 audit
 ok "audit: installer-disk merge -> needs-human, not closed" 'grep -q "CALL issue edit 40 .*needs-human" "$CALLS" && ! grep -q "issue close" "$CALLS"'
 reset; claude_pr; codex_done; audit_issue "$recent"
+echo '[{"filename":"security/keys/ci.pem"}]' | fx pulls_5_files
+echo '{"labels":[{"name":"owner-approved"}]}' | fx issue_view_5
+echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
+audit
+ok "audit: owner-approved signing merge still -> needs-human" 'grep -q "CALL issue edit 40 .*needs-human" "$CALLS" && ! grep -q "issue close" "$CALLS"'
+reset; claude_pr; codex_done; audit_issue "$recent"
 echo '[{"body":"<!-- audit-review escalated -->@o ..."}]' | fx issues_40_comments
 audit
 ok "audit: already escalated -> left alone" '! grep -qE "issue (close|edit|comment) 40" "$CALLS"'
