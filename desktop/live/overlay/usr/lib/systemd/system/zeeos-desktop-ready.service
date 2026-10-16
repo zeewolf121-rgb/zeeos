@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=ZeeOS desktop-ready marker (serial console)
+After=display-manager.service
+Wants=display-manager.service
+ConditionKernelCommandLine=rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zeeos-desktop-ready
+TimeoutStartSec=900
+
+[Install]
+WantedBy=graphical.target
