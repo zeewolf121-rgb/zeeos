@@ -15,9 +15,6 @@ on:
     types: [completed]
   issues:
     types: [closed]
-concurrency:
-  group: autopilot
-  cancel-in-progress: false
 permissions:
   contents: write       # release-candidate tags
   issues: write
@@ -31,6 +28,10 @@ jobs:
     if: >-
       vars.AUTOPILOT == 'on' &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped')
+    # Job-level, so runs whose `if` skips them never take (or bump) the queued slot.
+    concurrency:
+      group: autopilot
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -94,7 +95,7 @@ jobs:
             Post it with `gh issue comment ${{ steps.det.outputs.log_issue }} --body-file -`, starting with
             "Run ${{ github.run_id }}". Facts from the files only.
           claude_args: >-
-            --model claude-haiku-5-5 --max-turns 5
+            --model claude-haiku-5-5 --max-turns 8
             --allowedTools "Read,Bash(gh issue comment ${{ steps.det.outputs.log_issue }}:*)"
       - name: Raw log if the summary failed
         if: failure() && steps.det.outputs.log_issue != ''
