@@ -22,19 +22,26 @@ if [[ -z "$pr" ]]; then
   problems+=("pushed straight to main, not through a pull request")
   title="Unguarded change on main: direct push ${sha:0:7}"
 else
-  head="$(gh api "repos/$repo/pulls/$pr" --jq .head.sha)"
-  merged_by="$(gh api "repos/$repo/pulls/$pr" --jq .merged_by.login)"
+  read -r head merged_by merged_at < <(gh api "repos/$repo/pulls/$pr" \
+    --jq '"\(.head.sha) \(.merged_by.login) \(.merged_at)"')
+  # Judge every gate as it stood at merge time: anything that finished after merged_at
+  # (e.g. a check that went green while this audit waited for a runner) doesn't count.
+  # ISO-8601 UTC timestamps compare correctly as strings.
   runs="$(gh api --paginate "repos/$repo/commits/$head/check-runs?per_page=100" \
-    --jq '.check_runs[] | "\(.completed_at // "~")\t\(.name)\t\(.conclusion // "pending")"' | sort)"
+    --jq ".check_runs[] | select(.completed_at != null and .completed_at <= \"$merged_at\")
+          | \"\(.completed_at)\t\(.name)\t\(.conclusion)\"" | sort)"
   for name in $required_checks; do
     c="$(awk -F'\t' -v n="$name" '$2 == n {c = $3} END {print c}' <<<"$runs")"
-    [[ "$c" == success ]] || problems+=("check \`$name\` was ${c:-missing}")
+    [[ "$c" == success ]] || problems+=("check \`$name\` was ${c:-not finished} at merge time")
   done
-  statuses="$(gh api "repos/$repo/commits/$head/status" --jq '.statuses[] | "\(.context)\t\(.state)\t\(.description)"')"
+  # The statuses list is newest first and keeps history, so take the newest one per
+  # context that existed when the PR merged.
+  statuses="$(gh api --paginate "repos/$repo/commits/$head/statuses?per_page=100" \
+    --jq ".[] | select(.created_at <= \"$merged_at\") | \"\(.context)\t\(.state)\t\(.description)\"")"
   for ctx in $required_statuses; do
     line="$(awk -F'\t' -v n="$ctx" '$1 == n {print; exit}' <<<"$statuses")"
     state="$(cut -f2 <<<"$line")"
-    [[ "$state" == success ]] || problems+=("gate \`$ctx\` was ${state:-missing}${line:+: $(cut -f3 <<<"$line")}")
+    [[ "$state" == success ]] || problems+=("gate \`$ctx\` was ${state:-missing} at merge time${line:+: $(cut -f3 <<<"$line")}")
   done
   title="Unguarded merge on main: #$pr"
 fi
