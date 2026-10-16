@@ -7,6 +7,7 @@
   <package name="bash"/>
   <package name="coreutils"/>
   <package name="dnf5"/>
+  <package name="dracut-kiwi-live"/>
   <package name="dracut-live"/>
   <package name="dracut-config-generic"/>
   <package name="fedora-release-identity-basic"/>
