@@ -20,7 +20,7 @@ The code that decides what happens lives in `scripts/autopilot/` and runs from `
 | `claude.yml` | `@claude` comments **by the owner** | Interactive Claude (from the GitHub app install, restricted to the owner) |
 | `build-iso.yml` / `boot-test.yml` | every PR, called by nightly + release | CI. Required checks `build-iso` and `boot-test` always report |
 
-`orchestrator.yml` and `resume.yml` share the concurrency group `autopilot`, so runs never overlap.
+`orchestrator.yml` and `resume.yml` share the job-level concurrency group `autopilot` (job-level, so skipped runs never bump a queued one), so runs never overlap.
 
 ## 1. Orchestrator run
 
@@ -35,7 +35,7 @@ The code that decides what happens lives in `scripts/autopilot/` and runs from `
    - issues in the current phase lack `model:` / `agent:` labels.
 
    It opens the phase's issues from `docs/phases/phase-N.md` and then runs `phase.sh mark-opened N`. If that file doesn't exist, it opens one `phase-plan` issue for the architect. It cannot merge, close, or touch owner-only labels; its tools are limited to issue commands and `phase.sh`.
-3. **Haiku** (`claude-haiku-5-5`, max 5 turns) posts one summary comment on the pinned **Autopilot log** issue. The log issue is created and pinned on the first run. If the summary step fails, the raw log is posted instead.
+3. **Haiku** (`claude-haiku-5-5`, max 8 turns) posts one summary comment on the pinned **Autopilot log** issue. The log issue is created and pinned on the first run. If the summary step fails, the raw log is posted instead.
 
 **Phases** follow the milestones `Phase N: …`. A phase is complete when its milestone description contains `[opened]`, it has issues (`phase-plan` issues don't count), and none of them are open. The current phase is the lowest incomplete one. Opening phase N+1 also requires the latest `nightly-health` run on `main` to be green.
 
@@ -119,7 +119,7 @@ The final `v1.0.0` is tagged by the owner.
   | Run | Cap |
   |---|---|
   | Orchestrator, Sonnet step | 40 |
-  | Summary (Haiku) | 5 |
+  | Summary (Haiku) | 8 |
   | Implement | the issue's budget: small 15 / medium 40 / large 80 |
   | Fix | 25 |
   | Review | 20 |
