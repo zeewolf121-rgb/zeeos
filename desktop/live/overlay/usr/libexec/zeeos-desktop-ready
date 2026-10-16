@@ -1,0 +1,27 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Print ZEEOS_DESKTOP_READY to the serial console once plasmashell runs on Wayland.
+# Runs as a root system unit: a user unit cannot open the serial tty.
+set -u
+MARKER=${MARKER:-ZEEOS_DESKTOP_READY}
+USER_NAME=${LIVE_USER:-liveuser}
+DRY_RUN=${DRY_RUN:-0}
+TIMEOUT=${TIMEOUT:-840}
+
+uid=$(id -u "$USER_NAME" 2>/dev/null) || { echo "no user $USER_NAME" >&2; exit 1; }
+up=0
+for ((i = 0; i < TIMEOUT; i++)); do
+    if pgrep -u "$uid" -x plasmashell >/dev/null && [ -S "/run/user/$uid/wayland-0" ] \
+        && ! pgrep -x Xorg >/dev/null; then
+        up=1
+        break
+    fi
+    sleep 1
+done
+[ "$up" = 1 ] || { echo "plasmashell not up after ${TIMEOUT}s" >&2; exit 1; }
+
+if [ "$DRY_RUN" = 1 ]; then echo "$MARKER (dry run)"; exit 0; fi
+for tty in /dev/ttyS0 /dev/ttyAMA0 /dev/console; do
+    if [ -w "$tty" ]; then echo "$MARKER" >"$tty"; fi
+done
+echo "$MARKER"
