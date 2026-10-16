@@ -135,6 +135,15 @@ printf '%s\n' '{"labels":[{"name":"model:codex"},{"name":"agent:security-hardene
 out="$(cd "$here/../.." && "$here/route.sh" 9 2>/dev/null)" || out="exit $?"
 ok "route works for a Codex agent without a .claude/agents file" '[[ "$out" == *model=codex* && "$out" == *agent=security-hardener* ]]'
 
+reset
+echo '[{"number":7,"createdAt":"2026-01-05","labels":[{"name":"paused"},{"name":"in-progress"}]}]' | fx issue_list_paused
+echo '[{"number":14,"createdAt":"2026-01-01","labels":[{"name":"ready"}]}]' | fx issue_list_ready
+echo '[{"labels":[{"name":"model:claude"}]}]' | fx issue_list_in-progress
+echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"paused"},{"name":"in-progress"}]}' | fx issue_view_7
+echo '{"labels":[{"name":"model:claude"},{"name":"agent:desktop-shell"},{"name":"ready"}]}' | fx issue_view_14
+"$here/dispatch.sh" 2>/dev/null
+ok "paused issue gets the last slot before a ready one" 'grep -q "issue=7" "$CALLS" && ! grep -q "issue=14" "$CALLS"'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones

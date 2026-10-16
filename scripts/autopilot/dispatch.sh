@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Dispatch `ready` issues (priority:high first, then oldest) within the model caps,
-# or with --resume re-dispatch `paused` issues oldest-first (docs/AUTOPILOT.md §1, §6).
+# Dispatch within the model caps (docs/AUTOPILOT.md §1, §6): first `paused` issues
+# oldest-first (they are further along), then `ready` issues (priority:high first, then
+# oldest). With --resume only paused issues (resume.yml).
 # Claude starts are staggered AUTOPILOT_STAGGER seconds apart (default 300, MISSION §11).
 # Usage: scripts/autopilot/dispatch.sh [--resume]
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
 . "$here/lib.sh"
 
-from=ready; [[ "${1:-}" == --resume ]] && from=paused
+sources="paused ready"; [[ "${1:-}" == --resume ]] && sources=paused
 stagger="${AUTOPILOT_STAGGER:-300}"
 
 inflight() { # running agents of a model; paused / needs-human issues hold no slot
@@ -24,6 +25,7 @@ deps_closed() {
 }
 
 used_claude="$(inflight claude)"; used_codex="$(inflight codex)"; started_claude=0
+for from in $sources; do
 for n in $(gh issue list --repo "$REPO" --state open --label "$from" --limit 100 --json number,createdAt,labels \
     --jq 'map(select(all(.labels[]; .name != "needs-human")))
           | sort_by((if any(.labels[]; .name == "priority:high") then 0 else 1 end), .createdAt) | .[].number'); do
@@ -44,4 +46,5 @@ for n in $(gh issue list --repo "$REPO" --state open --label "$from" --limit 100
   fi
   log "dispatched #$n ($agent, $model)${from/ready/}"
   if [[ "$model" == claude ]]; then used_claude=$((used_claude + 1)); started_claude=$((started_claude + 1)); else used_codex=$((used_codex + 1)); fi
+done
 done
