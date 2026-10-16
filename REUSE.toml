@@ -9,3 +9,11 @@ SPDX-License-Identifier = "CC-BY-SA-4.0"
 path = ["Makefile", "scripts/**", ".github/**/*.yml", ".github/CODEOWNERS"]
 SPDX-FileCopyrightText = "2026 ZeeOS contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# Code files carry their own SPDX-License-Identifier; this adds the copyright notice
+# (agents keep forgetting SPDX-FileCopyrightText). Artwork in /branding is not covered.
+[[annotations]]
+path = ["build/**", "vm/**", "tests/**", "installer/**", "desktop/**", "security/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 ZeeOS contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
