@@ -41,6 +41,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Autopilot starts these runs as github-actions (workflow_dispatch / schedule).
+          allowed_bots: github-actions
           prompt: |
             You are the ZeeOS autopilot orchestrator. Read ${{ runner.temp }}/state.md first; it is the
             whole board state. Current phase: ${{ steps.det.outputs.current }}. Do only these jobs:
@@ -67,6 +69,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Autopilot starts these runs as github-actions (workflow_dispatch / schedule).
+          allowed_bots: github-actions
           prompt: |
             Summarise this autopilot run for the owner in at most 12 lines of Markdown: merges, dispatches,
             retries, blocked items, and anything waiting for the owner (hard stops, needs-human) first.
