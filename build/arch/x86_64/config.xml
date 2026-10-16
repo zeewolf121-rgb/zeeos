@@ -35,6 +35,9 @@
     <package name="grub2-efi-x64"/>
     <package name="grub2-efi-x64-cdboot"/>
     <package name="grub2-tools"/>
+    <!-- Legacy BIOS boot of the hybrid ISO (ADR-0004: optional on x86_64); kiwi needs i386-pc. -->
+    <package name="grub2-pc"/>
+    <package name="grub2-pc-modules"/>
     <package name="efibootmgr"/>
   </packages>
   <packages type="bootstrap">

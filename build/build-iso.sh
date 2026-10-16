@@ -43,6 +43,9 @@ size=$(stat -c %s "$iso")
 echo "ISO: $iso ($size bytes)"
 (( size < 4 * 1024 * 1024 * 1024 )) || { echo "ISO exceeds 4 GB" >&2; exit 1; }
 xorriso -indev "$iso" -report_el_torito as_mkisofs | tee "$out/eltorito.txt"
-grep -qi 'efi' "$out/eltorito.txt" || { echo "no El Torito EFI entry" >&2; exit 1; }
+# as_mkisofs lists the EFI boot image as an `-e` entry (platform 0xEF); the appended ESP
+# partition shows up by its GPT type GUID, not by the word "efi".
+grep -qiE '^-e |efi|28732ac11ff8d211ba4b00a0c93ec93b' "$out/eltorito.txt" \
+  || { echo "no El Torito EFI entry" >&2; exit 1; }
 grep -q 'isohybrid\|partition_offset\|appended_part_as_gpt' "$out/eltorito.txt" \
   || echo "WARNING: isohybrid markers not found in report" >&2
