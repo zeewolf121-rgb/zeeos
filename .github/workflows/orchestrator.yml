@@ -15,6 +15,7 @@ permissions:
   issues: write
   pull-requests: write
   statuses: write
+  checks: read          # gates.sh reads check runs (lint, build-iso, boot-test)
   actions: write        # workflow_dispatch of agent-dispatch / release
   id-token: write       # claude-code-action
 jobs:
