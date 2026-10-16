@@ -18,10 +18,12 @@ required="$(gh api "repos/$repo/branches/main" --jq '.protection.required_status
 # Fallback (no protection, or the API failed): the full gates.sh list, so an error can
 # never weaken the audit.
 [[ -n "$required" ]] || required=$'lint\nbuild-iso\nboot-test\ncross-review\nowner-gate'
-required_checks=""; required_statuses=""
-for ctx in $required; do
-  if [[ "$status_gates" == *" $ctx "* ]]; then required_statuses+="$ctx "; else required_checks+="$ctx "; fi
-done
+# One context per line; read whole lines so a name like "integration tests" stays one gate.
+required_checks=(); required_statuses=()
+while IFS= read -r ctx; do
+  [[ -n "$ctx" ]] || continue
+  if [[ "$status_gates" == *" $ctx "* ]]; then required_statuses+=("$ctx"); else required_checks+=("$ctx"); fi
+done <<<"$required"
 
 problems=()
 # Right after a merge, GitHub's commit -> PR lookup can briefly come back empty (seen with
@@ -48,7 +50,7 @@ else
   runs="$(gh api --paginate "repos/$repo/commits/$head/check-runs?per_page=100&filter=all" \
     --jq ".check_runs[] | select(.completed_at != null and .completed_at <= \"$merged_at\")
           | \"\(.completed_at)\t\(.name)\t\(.conclusion)\"" | sort)"
-  for name in $required_checks; do
+  for name in "${required_checks[@]}"; do
     c="$(awk -F'\t' -v n="$name" '$2 == n {c = $3} END {print c}' <<<"$runs")"
     [[ "$c" == success ]] || problems+=("check \`$name\` was ${c:-not finished} at merge time")
   done
@@ -56,7 +58,7 @@ else
   # context that existed when the PR merged.
   statuses="$(gh api --paginate "repos/$repo/commits/$head/statuses?per_page=100" \
     --jq ".[] | select(.created_at <= \"$merged_at\") | \"\(.context)\t\(.state)\t\(.description)\"")"
-  for ctx in $required_statuses; do
+  for ctx in "${required_statuses[@]}"; do
     line="$(awk -F'\t' -v n="$ctx" '$1 == n {print; exit}' <<<"$statuses")"
     state="$(cut -f2 <<<"$line")"
     [[ "$state" == success ]] || problems+=("gate \`$ctx\` was ${state:-missing} at merge time${line:+: $(cut -f3 <<<"$line")}")
