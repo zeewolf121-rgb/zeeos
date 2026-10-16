@@ -11,12 +11,27 @@ set -euo pipefail
 
 sha="${1:?usage: merge-audit.sh <sha>}"
 repo="${GITHUB_REPOSITORY:?}"
-required_checks='lint build-iso boot-test'   # same list as scripts/autopilot/gates.sh
-required_statuses='cross-review owner-gate'
+# Required gates come from main's branch protection (the source of truth; readable without
+# admin rights). Commit statuses posted by gates.sh are judged as statuses, the rest as check runs.
+status_gates=' cross-review owner-gate '
+required="$(gh api "repos/$repo/branches/main" --jq '.protection.required_status_checks.contexts // [] | .[]' 2>/dev/null || true)"
+[[ -n "$required" ]] || required=$'lint\nbuild-iso\ncross-review\nowner-gate'
+required_checks=""; required_statuses=""
+for ctx in $required; do
+  if [[ "$status_gates" == *" $ctx "* ]]; then required_statuses+="$ctx "; else required_checks+="$ctx "; fi
+done
 
 problems=()
-pr="$(gh api "repos/$repo/commits/$sha/pulls" \
-  --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].number // empty')"
+# Right after a merge, GitHub's commit -> PR lookup can briefly come back empty (seen with
+# #43 -> #47), so retry before concluding it was a direct push. Never trust the commit
+# message ("Merge pull request #N"): a direct push can claim anything.
+pr=""
+for attempt in 1 2 3 4 5 6; do
+  pr="$(gh api "repos/$repo/commits/$sha/pulls" \
+    --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].number // empty')"
+  [[ -n "$pr" ]] && break
+  sleep "${AUDIT_RETRY_SECONDS:-15}"
+done
 
 if [[ -z "$pr" ]]; then
   problems+=("pushed straight to main, not through a pull request")
