@@ -81,7 +81,8 @@ ok "removed installer-disk label still counts" '! gates owner-gate 5 >/dev/null'
 ok "hard stop is never merged, owner pinged" '! gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS"'
 
 reset; claude_pr; codex_done
-echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files
+echo '[{"filename":"security/keys/ci.pem"}]' | fx pulls_5_files
+ok "signing material is still an owner stop" '! gates owner-gate 5 >/dev/null'
 echo '{"labels":[{"name":"owner-approved"}]}' | fx issue_view_5
 echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"github-actions[bot]"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
 ok "owner-approved by a bot doesn't count" '! gates owner-gate 5 >/dev/null'
@@ -93,6 +94,40 @@ ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
 ok "installer-disk once on the linked issue still counts" '! gates owner-gate 5 >/dev/null'
+
+# Owner decision 2026-10-16: ADRs, gate code, workflows and decision PRs merge on CI + review.
+reset; claude_pr; codex_done
+echo '[{"filename":"docs/adr/0008-x.md"},{"filename":"scripts/autopilot/gates.sh"}]' | fx pulls_5_files
+echo '{"labels":[{"name":"decision"}]}' | fx issue_view_5
+ok "ADR + gate code + decision label merge without the owner" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+reset; claude_pr; codex_done
+echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files
+ok "workflow PR without MERGE_TOKEN: not merged, owner pinged" '! gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "AUTOPILOT_MERGE_TOKEN" "$CALLS"'
+: >"$CALLS"
+ok "workflow PR with MERGE_TOKEN merges" 'MERGE_TOKEN=t gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+
+# audit-review: issue #40 "Unguarded merge on main: #5".
+audit_issue() { echo "[{\"number\":40,\"createdAt\":\"$1\",\"title\":\"Unguarded merge on main: #5\"}]" | fx issue_list; }
+recent="$(date -u +%FT%TZ)"
+audit() { CODEX_TOKEN=c "$here/audit-review.sh" 2>/dev/null; }
+reset; claude_pr; codex_done; audit_issue "$recent"; audit
+ok "audit: reviewed after merge + CI green -> closed" 'grep -q "CALL issue close 40" "$CALLS" && ! grep -q needs-human "$CALLS"'
+reset; claude_pr; audit_issue "$recent"; audit
+ok "audit: no review yet -> Codex asked, issue left open" 'grep -q "CALL pr comment 5 .*@codex review" "$CALLS" && ! grep -qE "issue (close|edit) 40" "$CALLS"'
+reset; claude_pr; audit_issue 2026-01-01T00:00:00Z; audit
+ok "audit: nothing clean after 24 h -> needs-human" 'grep -q "CALL issue edit 40 .*needs-human" "$CALLS"'
+reset; claude_pr; codex_done; audit_issue "$recent"
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange)"}]}}]}}}}}' | fx graphql
+audit
+ok "audit: blocking Codex finding -> needs-human, not closed" 'grep -q "CALL issue edit 40 .*needs-human" "$CALLS" && ! grep -q "issue close" "$CALLS"'
+reset; claude_pr; codex_done; audit_issue "$recent"
+echo '{"labels":[{"name":"installer-disk"}]}' | fx issue_view_5
+audit
+ok "audit: installer-disk merge -> needs-human, not closed" 'grep -q "CALL issue edit 40 .*needs-human" "$CALLS" && ! grep -q "issue close" "$CALLS"'
+reset; claude_pr; codex_done; audit_issue "$recent"
+echo '[{"body":"<!-- audit-review escalated -->@o ..."}]' | fx issues_40_comments
+audit
+ok "audit: already escalated -> left alone" '! grep -qE "issue (close|edit|comment) 40" "$CALLS"'
 
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr

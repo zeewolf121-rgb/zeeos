@@ -40,13 +40,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+          MERGE_TOKEN: ${{ secrets.AUTOPILOT_MERGE_TOKEN }}   # optional: merges workflow-changing PRs
           AUTOPILOT_LOG: ${{ runner.temp }}/autopilot.log
         run: |
           : >"$AUTOPILOT_LOG"
           scripts/autopilot/orchestrate.sh "$RUNNER_TEMP/state.md" | tee -a "$GITHUB_OUTPUT"
           echo "log_issue=$(scripts/autopilot/report.sh log-issue)" >>"$GITHUB_OUTPUT"
           # Summarise only runs that changed something (event-triggered runs are frequent).
-          if grep -qE 'dispatched|merged|ready$|retry|needs-human|tagged|opened|left (ready|paused)' "$AUTOPILOT_LOG"; then
+          if grep -qE 'dispatched|merged|ready$|retry|needs-human|tagged|opened|left (ready|paused)|^- audit #' "$AUTOPILOT_LOG"; then
             echo acted=true; else echo acted=false; fi >>"$GITHUB_OUTPUT"
       - name: Open the next phase / triage (Sonnet, max 40 turns)
         if: steps.det.outputs.needs_llm == 'true'

@@ -7,8 +7,10 @@
 #   status          post both results as commit statuses on the head commit
 #   request-review  ask the other model to review the head commit (once per commit)
 #   merge           merge if every gate passes; hard-stop PRs are left for the owner
+#   checks          the required CI checks are green on the head commit (latest runs)
 #   review-model    model id for a Claude review: Opus for installer-disk work (PR or linked issue)
-# Env: see lib.sh; CODEX_TOKEN (owner token for "@codex review" comments).
+# Env: see lib.sh; CODEX_TOKEN (owner token for "@codex review" comments);
+#      MERGE_TOKEN (optional, can merge PRs that change .github/workflows/).
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
 . "$here/lib.sh"
@@ -181,18 +183,29 @@ merge() {
     echo "#$pr hard stop, left for the owner ($reasons)"; return 1
   fi
   out="$(owner_gate "$pr")" || { echo "#$pr owner-gate: $out"; return 1; }
-  if protected; then w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
-  else w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi
+  local token="${GH_TOKEN:-}"
+  if gh api --paginate "repos/$REPO/pulls/$pr/files" --jq '.[].filename' | grep -qE "$WORKFLOW_PATHS"; then
+    if [[ -z "${MERGE_TOKEN:-}" ]]; then
+      if ! gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' | grep -qF "<!-- autopilot-owner-merge sha=$sha -->"; then
+        w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-owner-merge sha=$sha -->@$OWNER all gates pass at ${sha:0:7}, but this PR changes workflows and GITHUB_TOKEN can't merge that. Merge it yourself, or set the AUTOPILOT_MERGE_TOKEN secret (docs/AUTOPILOT.md §3)." >/dev/null
+      fi
+      echo "#$pr changes workflows and no MERGE_TOKEN is set; left for the owner"; return 1
+    fi
+    token="$MERGE_TOKEN"
+  fi
+  if protected; then GH_TOKEN="$token" w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
+  else GH_TOKEN="$token" w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi
   log "#$pr merged at ${sha:0:7}"
 }
 
-cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|review-model> <pr>}"; pr="${2:?pr}"
+cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|checks|review-model> <pr>}"; pr="${2:?pr}"
 case "$cmd" in
   cross-review) cross_review "$pr" ;;
   owner-gate) owner_gate "$pr" ;;
   status) status "$pr" ;;
   request-review) request_review "$pr" ;;
   merge) merge "$pr" ;;
+  checks) checks_green "$pr" "$(pr_head "$pr")" ;;
   review-model)
     if [[ "$(hard_stop_reasons "$pr")" == *label:installer-disk* ]]; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
   *) echo "unknown command: $cmd" >&2; exit 2 ;;

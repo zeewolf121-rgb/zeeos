@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # The deterministic half of one orchestrator run (docs/AUTOPILOT.md §1). Zero LLM tokens:
-#   1. every open, non-draft PR: post gate statuses, merge it if all gates pass
+#   1. every open, non-draft PR: post gate statuses, merge it if all gates pass;
+#      clear or escalate merge-audit issues (audit-review.sh)
 #   2. label `ready` the current phase's startable issues; dispatch within the caps
 #   3. phase 6 complete -> release candidate + manual gate
 #   4. write a compact state report for the LLM step and key=value outputs
@@ -18,6 +19,7 @@ for pr in $(gh pr list --repo "$REPO" --state open --limit 100 --json number,isD
   "$here/gates.sh" status "$pr" || log "#$pr: status failed"
   out="$("$here/gates.sh" merge "$pr" 2>/dev/null)" || log "${out:-#$pr not merged}"
 done
+"$here/audit-review.sh" || log "audit-review failed"
 
 "$here/phase.sh" mark-ready
 "$here/dispatch.sh"   # paused issues first, then ready ones, one shared cap

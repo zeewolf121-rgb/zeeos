@@ -3,9 +3,11 @@
 # SPDX-FileCopyrightText: 2026 ZeeOS contributors
 # Audits a commit that landed on main. Branch protection isn't available on this
 # GitHub plan, so nothing *stops* an unguarded merge; this makes sure one never goes
-# unnoticed. Opens a needs-human issue when the commit came from:
-#   - a direct push (no merged PR), or
-#   - a PR whose head commit didn't have every gate green at merge time.
+# unnoticed. Opens an issue when the commit came from:
+#   - a direct push (no merged PR): labeled needs-human, the owner looks at it, or
+#   - a PR whose head commit didn't have every gate green at merge time: labeled
+#     merge-audit; autopilot gets the other model to review it after the fact and
+#     closes the issue if that's clean (scripts/autopilot/audit-review.sh).
 # Usage: scripts/merge-audit.sh <sha>     Env: GITHUB_REPOSITORY, GH_TOKEN, DRY_RUN
 set -euo pipefail
 
@@ -56,11 +58,20 @@ fi
 body="$(printf 'Commit %s landed on `main` without passing every merge gate.\n\n' "$sha"
   if [[ -n "$pr" ]]; then printf -- '- PR: #%s (head %s), merged by @%s\n' "$pr" "${head:0:7}" "$merged_by"; fi
   printf -- '- %s\n' "${problems[@]}"
-  printf '\nIf you merged this on purpose, close this issue. Otherwise revert it, and check which session or token merged it.\n')"
+  if [[ -n "$pr" ]]; then
+    printf '\nAutopilot asks the other model to review #%s after the fact and closes this issue if that review is clean and CI is green. Blocking findings, owner stops, or nothing clean within 24 h hand it to the owner (needs-human).\n' "$pr"
+  else
+    printf '\nIf you pushed this on purpose, close this issue. Otherwise revert it, and check which session or token pushed it.\n'
+  fi)"
+
+label=needs-human
+if [[ -n "$pr" ]]; then label=merge-audit; fi
 
 echo "$title"; echo "$body"
 if gh issue list --repo "$repo" --state open --search "\"$title\" in:title" --json number --jq '.[].number' | grep -q .; then
   echo "issue already open"; exit 0
 fi
-if [[ -n "${DRY_RUN:-}" ]]; then echo "DRY: would open issue"; exit 0; fi
-gh issue create --repo "$repo" --title "$title" --label needs-human --body "$body"
+if [[ -n "${DRY_RUN:-}" ]]; then echo "DRY: would open issue ($label)"; exit 0; fi
+gh label create merge-audit --repo "$repo" --color fbca04 --force \
+  --description "Unguarded merge; autopilot clears it with a post-merge review" >/dev/null
+gh issue create --repo "$repo" --title "$title" --label "$label" --body "$body"

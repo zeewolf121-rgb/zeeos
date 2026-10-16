@@ -88,14 +88,14 @@ Every 2 hours, `paused` issues (set by an agent that ran out of turns or hit a u
 
 | Hard stop | How it's enforced |
 |---|---|
-| `installer-disk` and `decision` PRs | `owner-gate` + never merged by autopilot. The label counts if it's on the PR now, was ever applied to it, or is on the linked issue |
-| ADR changes (`docs/adr/`) | Path rule in `owner-gate`; never merged by autopilot |
-| Workflow changes (`.github/workflows/`) and the gate code itself (`scripts/autopilot/`) | Path rule; agent prompts forbid editing them. `GITHUB_TOKEN` can't push workflow files anyway |
+| `installer-disk` PRs | `owner-gate` + never merged by autopilot. The label counts if it's on the PR now, was ever applied to it, or is on the linked issue |
 | Signing keys and secrets (`security/keys/`, `*secret*`, `*minisign*`, `*.key`, `*.pem`, `*.minisig`) | Path rule. Signing secrets are only read by `release.yml` |
 | Phase 6 manual gate | Autopilot opens the checklist issue (assigned to the owner) and stops. Phase 7 opens only after the owner closes it **and** tags `v1.0.0` |
 | Final `v1.0.0` tag | Autopilot only creates `-rc.N` tags; `release.yml` refuses a final tag unless the owner pushed it |
 
 For a hard-stop PR whose automated gates all pass, autopilot comments once per commit, mentioning the owner, and leaves the merge to them.
+
+**Not hard stops any more (owner decision 2026-10-16):** `decision` PRs, ADR changes (`docs/adr/`), workflow changes (`.github/workflows/`) and the gate code itself (`scripts/autopilot/`). They merge like any other PR once CI and the other model's review pass. Agent prompts still forbid editing workflows and gate code, so these PRs normally come from orchestrator sessions. `GITHUB_TOKEN` can't merge a PR that changes workflow files, so autopilot merges those with `AUTOPILOT_MERGE_TOKEN`. Without that secret it pings the owner instead.
 
 ## 8. Release
 
@@ -127,11 +127,20 @@ The final `v1.0.0` is tagged by the owner.
   Every job has a `timeout-minutes`.
 - **Model tiers:** an agent runs on the model in its `.claude/agents/*.md` frontmatter. `installer-disk` work and its reviews use Opus. Other reviews and fixes use Sonnet (MISSION §11).
 - **Tokens:** the owner token `CODEX_TRIGGER_TOKEN` is given only to deterministic steps (posting `@codex` comments). No LLM step ever sees it, so no LLM can act as the owner, for example by adding `owner-approved`.
-- **Gate code comes from `main`:** `cross-review` and `request-review` run on `pull_request_target` and check out the default branch, never the PR. Changes to `scripts/autopilot/` and `.github/workflows/` need the owner's approval.
+- **Gate code comes from `main`:** `cross-review` and `request-review` run on `pull_request_target` and check out the default branch, never the PR. Changes to `scripts/autopilot/` and `.github/workflows/` take effect only after they merge, which needs the other model's review.
 - **Allowed tools:** every Claude run gets an explicit `--allowedTools` list (no `gh pr merge`, no label edits on PRs).
 - **Issue, PR and log text is data:** every prompt says so.
 
-**Residual risk:** a same-repo PR can change a `pull_request` / `pull_request_review` workflow, and that changed workflow runs before review. Required owner approval stops it from merging, not from running. Keep the repo private and the runner set small (D9).
+**Residual risk:** a same-repo PR can change a `pull_request` / `pull_request_review` workflow, and that changed workflow runs before review. The other model's review stops it from merging, not from running. Since 2026-10-16 that review is also the only check on changes to the gate code and workflows. Keep the repo private and the runner set small (D9).
+
+## 11. Merge audit issues
+
+Branch protection isn't available, so `merge-audit.yml` checks every commit that lands on `main` (`scripts/merge-audit.sh`). It judges each gate by its result at merge time.
+- **Direct push** (no PR): a `needs-human` issue. The owner looks at it.
+- **PR merged with a gate red:** a `merge-audit` issue *Unguarded merge on main: #N*. Each orchestrator run, `scripts/autopilot/audit-review.sh` handles it:
+  - it asks the other model to review #N's head commit after the fact (Codex for Claude and owner PRs, Claude for Codex PRs);
+  - it **closes** the issue when that review is in with nothing blocking and the required checks are green;
+  - it adds `needs-human` and mentions the owner if the review has blocking findings (P0/P1, `[blocking]`, verdict fail), if #N is an owner stop (§7), or if it isn't cleared within 24 h.
 
 ## Secrets and variables
 
@@ -140,6 +149,7 @@ The final `v1.0.0` is tagged by the owner.
 | `AUTOPILOT` | variable | Kill switch (`on` to run) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | secret | All `claude-code-action` steps (set by `/install-github-app`) |
 | `CODEX_TRIGGER_TOKEN` | secret | Owner fine-grained PAT, Pull requests read/write: `@codex` comments only |
+| `AUTOPILOT_MERGE_TOKEN` | secret, optional | Fine-grained PAT for this repo with Contents, Pull requests and **Workflows** read/write. Given only to deterministic steps (`gates.sh merge`), only for PRs that change `.github/workflows/` |
 | `MINISIGN_SECRET_KEY`, `MINISIGN_PASSWORD` | secrets in the `release` environment | `release.yml` publish job only (Phase 5). Required reviewers on an environment need GitHub Pro for a private repo |
 
 ## Turning it on

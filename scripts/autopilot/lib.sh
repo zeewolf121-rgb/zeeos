@@ -13,8 +13,12 @@ CODEX_BOT='chatgpt-codex-connector'      # login prefix (REST adds "[bot]")
 CLAUDE_BOT='claude'
 
 # Hard stops (docs/AUTOPILOT.md §7): autopilot never merges these; the owner does.
-HARD_STOP_LABELS='installer-disk decision'
-HARD_STOP_PATHS='^(\.github/workflows/|scripts/autopilot/|docs/adr/|security/keys/)|(^|/)[^/]*(secret|minisign)[^/]*$|\.(key|pem|minisig)$'
+# Owner decision 2026-10-16: everything else (ADRs, workflows, gate code, `decision` PRs)
+# merges once CI and the other model's review pass. Disk writes and signing stay manual.
+HARD_STOP_LABELS='installer-disk'
+HARD_STOP_PATHS='^security/keys/|(^|/)[^/]*(secret|minisign)[^/]*$|\.(key|pem|minisig)$'
+# GITHUB_TOKEN can't merge a PR that changes these; autopilot needs MERGE_TOKEN for them.
+WORKFLOW_PATHS='^\.github/workflows/'
 
 log() {
   printf '%s\n' "$*" >&2

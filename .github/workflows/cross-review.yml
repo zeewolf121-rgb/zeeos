@@ -31,6 +31,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+      MERGE_TOKEN: ${{ secrets.AUTOPILOT_MERGE_TOKEN }}   # optional: merges workflow-changing PRs
       PR: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
       - uses: actions/checkout@v5

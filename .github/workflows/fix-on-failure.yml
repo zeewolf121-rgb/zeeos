@@ -26,6 +26,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
+      MERGE_TOKEN: ${{ secrets.AUTOPILOT_MERGE_TOKEN }}   # optional: merges workflow-changing PRs
       BRANCH: ${{ github.event.workflow_run.head_branch }}
       SHA: ${{ github.event.workflow_run.head_sha }}
       RUN: ${{ github.event.workflow_run.id }}
