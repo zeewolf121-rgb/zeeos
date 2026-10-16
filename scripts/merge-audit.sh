@@ -26,7 +26,7 @@ problems=()
 # #43 -> #47), so retry before concluding it was a direct push. Never trust the commit
 # message ("Merge pull request #N"): a direct push can claim anything.
 pr=""
-for attempt in 1 2 3 4 5 6; do
+for _ in 1 2 3 4 5 6; do
   pr="$(gh api "repos/$repo/commits/$sha/pulls" \
     --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].number // empty')"
   [[ -n "$pr" ]] && break
