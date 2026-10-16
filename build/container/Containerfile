@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ZeeOS build container: Fedora 44 + kiwi-ng. BASE_IMAGE should be digest-pinned (build/container/base-image.lock).
+ARG BASE_IMAGE=registry.fedoraproject.org/fedora:44
+FROM ${BASE_IMAGE}
+RUN dnf -y install --setopt=install_weak_deps=False \
+      kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-bootloaders \
+      xorriso squashfs-tools dosfstools mtools git sudo \
+    && dnf clean all
+WORKDIR /work
