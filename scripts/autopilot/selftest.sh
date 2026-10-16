@@ -52,7 +52,7 @@ sha=abcdef1234567890
 
 # A Claude PR (#5 from agent/image-builder/6-x, issue #6 model:claude) at $sha.
 claude_pr() {
-  echo "{\"headRefName\":\"agent/image-builder/6-kiwi\",\"headRefOid\":\"$sha\",\"body\":\"Closes #6\",\"labels\":[],\"isDraft\":false,\"mergeable\":\"MERGEABLE\",\"state\":\"OPEN\"}" | fx pr_view_5
+  echo "{\"isCrossRepository\":false,\"headRefName\":\"agent/image-builder/6-kiwi\",\"headRefOid\":\"$sha\",\"body\":\"Closes #6\",\"labels\":[],\"isDraft\":false,\"mergeable\":\"MERGEABLE\",\"state\":\"OPEN\"}" | fx pr_view_5
   echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"}]}' | fx issue_view_6
   echo '{"labels":[]}' | fx issue_view_5
   echo '{"commit":{"committer":{"date":"2026-10-16T10:00:00Z"}}}' | fx "commits_$sha"
@@ -93,6 +93,13 @@ ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
 ok "installer-disk once on the linked issue still counts" '! gates owner-gate 5 >/dev/null'
+
+# Fork PR: even with a trusted-looking branch name, "Closes #6" and every gate green,
+# autopilot never merges it (the repo is public; anyone can open one).
+reset; claude_pr; codex_done
+jq '.isCrossRepository = true | .headRefName = "agent/orchestrator/evil"' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
+ok "fork PR fails cross-review" '! gates cross-review 5 >/dev/null'
+ok "fork PR is never merged" '! gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS"'
 
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr

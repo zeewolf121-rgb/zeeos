@@ -77,6 +77,7 @@ cross_review() {
       if grep -qE "^(${CODEX_BOT}[^ ]* .*badge/P[01]-|${CLAUDE_BOT}[^ ]* [* ]*\[blocking\])" <<<"$threads"; then
         echo "unresolved blocking comments"; return 1
       fi ;;
+    fork) echo "PR from a fork: autopilot never reviews or merges it; the owner does"; return 1 ;;
     *) echo "can't tell which model wrote this PR; label the linked issue model:claude|codex"; return 1 ;;
   esac
   echo "reviewed by the other model at ${sha:0:7}, nothing blocking"
