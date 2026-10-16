@@ -16,6 +16,7 @@ permissions:
   pull-requests: write
   issues: write
   statuses: write
+  checks: read          # gates.sh reads check runs (lint, build-iso, boot-test)
   actions: write
 jobs:
   gates:
