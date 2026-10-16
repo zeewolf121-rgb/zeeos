@@ -17,13 +17,22 @@ else
   tag="zeeos-build:$BASE_IMAGE_TAG-unpinned"
   echo "::warning::build container base image is NOT digest-pinned; run 'make pin-container'" >&2
 fi
-engine="$(command -v podman || command -v docker)" || { echo "need podman or docker" >&2; exit 2; }
-"$engine" build --build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile" "$dir"
+engine_bin="$(command -v podman || command -v docker)" || { echo "need podman or docker" >&2; exit 2; }
+engine=("$engine_bin")
+# On Linux hosts without SELinux (e.g. GitHub's Ubuntu runners), kiwi's SELinux relabel
+# (setfiles) can only store security.selinux labels with real CAP_SYS_ADMIN on the host.
+# A rootless container lacks that even with --privileged, so run the engine as root.
+# Build and run must use the same (root) image store. Hand out/ back to the caller after.
+if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
+  engine=(sudo "$engine_bin")
+  trap 'sudo chown -R "$(id -u):$(id -g)" "$root/out" 2>/dev/null || true' EXIT
+fi
+"${engine[@]}" build --build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile" "$dir"
 epoch="${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}"
 args=("$arch")
 [[ -n "$out" ]] && args+=("$out")
 # Inside the container we are root, so build-iso.sh skips sudo (ZEEOS_IN_CONTAINER).
-"$engine" run --rm --privileged \
+"${engine[@]}" run --rm --privileged \
   -v "$root:/work" -w /work \
   -e SOURCE_DATE_EPOCH="$epoch" -e DRY_RUN="${DRY_RUN:-0}" -e ZEEOS_IN_CONTAINER=1 \
   -e ZEEOS_SNAPSHOT_URL="${ZEEOS_SNAPSHOT_URL:-}" \
