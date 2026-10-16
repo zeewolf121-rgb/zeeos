@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- Shared minimal package set (no desktop yet). Arch packages live in build/arch/<arch>/. -->
+<image>
 <packages type="image">
   <package name="basesystem"/>
   <package name="bash"/>
   <package name="coreutils"/>
   <package name="dnf5"/>
+  <package name="dracut-kiwi-live"/>
   <package name="dracut-live"/>
   <package name="dracut-config-generic"/>
   <package name="fedora-release-identity-basic"/>
@@ -23,3 +25,4 @@
   <package name="util-linux"/>
   <package name="vim-minimal"/>
 </packages>
+</image>

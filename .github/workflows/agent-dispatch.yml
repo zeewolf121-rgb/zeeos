@@ -195,7 +195,7 @@ jobs:
   request-review:
     if: >-
       vars.AUTOPILOT == 'on' && github.event_name == 'pull_request_target' &&
-      !github.event.pull_request.draft
+      !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:

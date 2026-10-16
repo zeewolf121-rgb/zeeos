@@ -17,6 +17,7 @@ jobs:
   follow-up:
     if: >-
       vars.AUTOPILOT == 'on' && github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
       contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
     runs-on: ubuntu-24.04
     timeout-minutes: 10

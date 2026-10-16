@@ -39,10 +39,15 @@ linked_issue() {
   if [[ "$s" =~ ^agent/[^/]+/([0-9]+)- || "$s" =~ [Cc]loses\ \#([0-9]+) ]]; then echo "${BASH_REMATCH[1]}"; fi
 }
 
-# Which model wrote a PR: claude | codex | human | unknown.
+# Which model wrote a PR: claude | codex | human | fork | unknown.
+# "fork" = the head branch lives in another repository. The repo is public, so anyone can
+# open one and name the branch agent/orchestrator/* or write "Closes #N"; autopilot never
+# reviews, dispatches for, or merges those. The owner handles them by hand.
 pr_model() {
-  local pr="$1" ref num m=""
-  ref="$(gh pr view "$pr" --repo "$REPO" --json headRefName --jq .headRefName)"
+  local pr="$1" cross ref num m=""
+  read -r cross ref < <(gh pr view "$pr" --repo "$REPO" --json isCrossRepository,headRefName \
+    --jq '"\(.isCrossRepository) \(.headRefName)"')
+  if [[ "$cross" != false ]]; then echo fork; return; fi
   case "$ref" in
     agent/orchestrator/*) echo claude; return ;;
     codex/*) echo codex; return ;;
