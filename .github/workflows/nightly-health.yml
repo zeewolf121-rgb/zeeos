@@ -17,7 +17,7 @@ jobs:
     outputs:
       buildable: ${{ steps.b.outputs.buildable }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: b
         run: |
           if grep -q 'not implemented yet' Makefile; then echo buildable=false; else echo buildable=true; fi >>"$GITHUB_OUTPUT"
@@ -32,7 +32,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: scripts/autopilot/report.sh nightly "${{ github.run_id }}"
   health:
     needs: [gate, ci]
