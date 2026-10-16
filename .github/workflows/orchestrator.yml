@@ -3,10 +3,18 @@
 # issues need triage; Haiku writes the run summary on the pinned "Autopilot log" issue.
 # The owner token (CODEX_TRIGGER_TOKEN) is only ever given to the deterministic step.
 name: orchestrator
+# Event-driven: GitHub's cron proved unreliable (runs hours late or dropped), so it also runs
+# when an agent run finishes or an issue closes. The concurrency group folds bursts into one
+# queued run; cron stays as the fallback heartbeat.
 on:
   schedule:
     - cron: "23 */3 * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows: [agent-dispatch]
+    types: [completed]
+  issues:
+    types: [closed]
 concurrency:
   group: autopilot
   cancel-in-progress: false
@@ -20,7 +28,9 @@ permissions:
   id-token: write       # claude-code-action
 jobs:
   run:
-    if: vars.AUTOPILOT == 'on'
+    if: >-
+      vars.AUTOPILOT == 'on' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -35,6 +45,9 @@ jobs:
           : >"$AUTOPILOT_LOG"
           scripts/autopilot/orchestrate.sh "$RUNNER_TEMP/state.md" | tee -a "$GITHUB_OUTPUT"
           echo "log_issue=$(scripts/autopilot/report.sh log-issue)" >>"$GITHUB_OUTPUT"
+          # Summarise only runs that changed something (event-triggered runs are frequent).
+          if grep -qE 'dispatched|merged|ready$|retry|needs-human|tagged|opened|left (ready|paused)' "$AUTOPILOT_LOG"; then
+            echo acted=true; else echo acted=false; fi >>"$GITHUB_OUTPUT"
       - name: Open the next phase / triage (Sonnet, max 40 turns)
         if: steps.det.outputs.needs_llm == 'true'
         uses: anthropics/claude-code-action@v1
@@ -64,7 +77,9 @@ jobs:
             --model claude-sonnet-5-5 --max-turns 40
             --allowedTools "Read,Glob,Grep,Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue create:*),Bash(gh issue edit:*),Bash(scripts/autopilot/phase.sh:*)"
       - name: Run summary (Haiku)
-        if: always() && steps.det.outputs.log_issue != ''
+        if: >-
+          always() && steps.det.outputs.log_issue != '' &&
+          (steps.det.outputs.acted == 'true' || steps.det.outputs.needs_llm == 'true')
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ github.token }}

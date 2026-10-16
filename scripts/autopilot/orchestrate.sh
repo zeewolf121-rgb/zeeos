@@ -20,7 +20,7 @@ for pr in $(gh pr list --repo "$REPO" --state open --limit 100 --json number,isD
 done
 
 "$here/phase.sh" mark-ready
-"$here/dispatch.sh"
+"$here/dispatch.sh"   # paused issues first, then ready ones, one shared cap
 
 status="$("$here/phase.sh" status)"
 if grep -qx 'release_due=true' <<<"$status"; then "$here/report.sh" release-rc; fi
