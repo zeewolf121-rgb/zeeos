@@ -23,10 +23,17 @@ engine=("$engine_bin")
 # On Linux hosts without SELinux (e.g. GitHub's Ubuntu runners), kiwi's SELinux relabel
 # (setfiles) can only store security.selinux labels with real CAP_SYS_ADMIN on the host.
 # A rootless container lacks that even with --privileged, so run the engine as root.
-# Build and run must use the same (root) image store. Hand out/ back to the caller after.
+# Build and run must use the same (root) image store. Afterwards, hand back only what the
+# build created: root-owned entries newer than this run's start, never pre-existing files.
 if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
   engine=(sudo "$engine_bin")
-  trap 'sudo chown -R "$(id -u):$(id -g)" "$root/out" ${out:+"$out"} 2>/dev/null || true' EXIT
+  stamp="$(mktemp)"
+  hand_back() {
+    sudo find "$root/out" ${out:+"$out"} -user 0 -newer "$stamp" \
+      -exec chown -h "$(id -u):$(id -g)" {} + 2>/dev/null || true
+    rm -f "$stamp"
+  }
+  trap hand_back EXIT
 fi
 "${engine[@]}" build --build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile" "$dir"
 epoch="${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}"
