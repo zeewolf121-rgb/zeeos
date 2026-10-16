@@ -3,6 +3,8 @@
 # Checks the macOS ARM64 runner: rootful podman, aarch64 Fedora 44 container,
 # loop devices, QEMU with HVF. Prints a markdown table to $GITHUB_STEP_SUMMARY
 # when set. Exits non-zero if any check fails.
+# The check functions are invoked indirectly through check().
+# shellcheck disable=SC2317
 set -uo pipefail
 fail=0
 rows=""
