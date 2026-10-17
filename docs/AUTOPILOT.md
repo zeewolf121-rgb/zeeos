@@ -51,6 +51,8 @@ The status passes only if **the other model reviewed the PR's head commit** and 
 
 The authoring model comes from the branch name, or from the linked issue's `model:` label. If it can't be determined, the status fails. The `needs-decision` label (models disagree, CONVENTIONS) also fails it until the owner decides.
 
+"Reviewed" for Codex means its `codex-review-state` block names the head commit as `completed`. If that block reports findings, Codex's review object for the head must also exist, because the "Completed" summary can arrive before its P1 threads (#65). Threads that are *outdated* (their lines changed since) don't block a head the reviewer has re-reviewed. When the gate merges, it resolves the reviewer's outdated threads itself; the fixer never resolves its reviewer's threads.
+
 Reviews are requested once per commit: when a PR is opened or marked ready, and again after CI goes green on a new commit. That saves Codex quota compared with reviewing every push. Turn off Codex's own automatic reviews in Codex settings, or each Claude PR gets reviewed twice.
 
 ## 3. Merging, branch protection, owner approval
@@ -62,6 +64,11 @@ A PR merges (squash, branch deleted) only when **all** of these hold for its hea
 - the PR is open, not a draft, and mergeable.
 
 `cross-review.yml` and `fix-on-failure.yml` merge as soon as that's true; the orchestrator catches anything they missed.
+
+**Push workflows after an autopilot merge.** Autopilot merges with `GITHUB_TOKEN`, and GitHub starts no workflow runs for events that token causes, so the merge commit gets no `lint` or `merge-audit` push run (#48 → `a3c177a` had none). `GITHUB_TOKEN` may still dispatch workflows, so `gates.sh` does that: it runs `lint.yml` and `merge-audit.yml` on `main` with `-f sha=<merge commit>`. Both workflows take a `sha` input (`lint` checks it out; `merge-audit` audits `inputs.sha || github.sha`), and a merge-audit run is named `merge-audit <sha>`.
+- `gates.sh merge` dispatches right away if the PR is already merged after `gh pr merge`.
+- With branch protection the merge is `--auto` and usually lands later, in no run of ours. Every orchestrator run calls `gates.sh push-workflows`, which goes through the last 20 PRs merged by `github-actions` and dispatches for any merge commit that has no `merge-audit <sha>` run. The merge's own issue close doesn't start the orchestrator (same token), so the gap can be one orchestrator interval (up to 3 h).
+- A dispatched run belongs to `main`'s tip at dispatch time, so in the Actions list it can show a later commit. The run name and the `sha` input give the audited commit.
 
 **`owner-gate`** fails for any PR that is a hard stop (§7) until the owner approves the head commit. Approval means either the owner's GitHub review approval on that commit, or the label `owner-approved` applied **by the owner** after that commit was pushed. Any new push removes the label.
 

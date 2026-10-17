@@ -37,6 +37,7 @@ case "$1 $2" in
   *) write=1 ;;
 esac
 if [[ "$1 $2" == "workflow run" && -n "${FAIL_WORKFLOW_RUN:-}" ]]; then echo "CALL $*" >>"$CALLS"; exit 1; fi
+[[ "$*" == *mutation* ]] && write=1
 if [[ -n "$write" ]]; then echo "CALL $*" >>"$CALLS"; [[ "$1 $2" == "issue create" ]] && echo "https://x/issues/99"; exit 0; fi
 f="$FIX/$key.json"
 [[ -f "$f" ]] || { [[ "$key" == *protection* ]] && exit 1; echo "[]" >"$f"; }
@@ -74,6 +75,30 @@ echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolv
 ok "unresolved Codex P2 does not block" 'gates cross-review 5 >/dev/null'
 ok "plain PR needs no owner approval" 'gates owner-gate 5 >/dev/null'
 ok "merge goes through when all gates pass" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+
+# Autopilot merges push with GITHUB_TOKEN, which starts no workflows: gates.sh dispatches
+# main's lint + merge-audit for the merge commit itself.
+msha=1111111111111111111111111111111111111111
+ok "an unmerged (queued --auto) PR dispatches nothing yet" '! grep -q "workflow run" "$CALLS"'
+: >"$CALLS"; echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
+ok "merged PR dispatches lint + merge-audit for its merge commit" 'gates merge 5 >/dev/null || true
+  grep -q "CALL workflow run lint.yml --repo o/r --ref main -f sha=$msha" "$CALLS" &&
+  grep -q "CALL workflow run merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS"'
+: >"$CALLS"
+ok "a failed dispatch doesn't fail the merge" 'FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null && grep -q "pr merge 5" "$CALLS"'
+reset
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list
+ok "sweep dispatches for an autopilot merge with no audit run, not for owner merges" 'gates push-workflows >/dev/null
+  grep -q "merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS" && ! grep -q "sha=2222" "$CALLS"'
+: >"$CALLS"; echo "[{\"displayTitle\":\"merge-audit $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs
+ok "sweep skips a merge that already has its merge-audit run" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
+reset; claude_pr; codex_done
+echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list
+export AUTOPILOT_LOG="$tmp/autopilot.log"; : >"$AUTOPILOT_LOG"
+gates merge 5 >/dev/null || true; gates push-workflows >/dev/null || true
+unset AUTOPILOT_LOG
+ok "merge + sweep in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
@@ -121,6 +146,39 @@ jq --arg m "<!-- autopilot-review-fix sha=$sha n=1 -->" '. + [{"user":{"login":"
 ok "at most one review fix per commit (cross-review still blocked by the P1)" '! grep -q "mode=fix" "$CALLS" && [[ "$(gates cross-review 5)" == unresolved* ]]'
 ok "blocking prints the comment for the fix prompt" '[[ "$(gates blocking 5)" == *"fix x"* ]]'
 
+# Codex review state (race behind #65): "completed" with findings needs the review object.
+cstate() { echo "[{\"user\":{\"login\":\"chatgpt-codex-connector[bot]\"},\"body\":\"<!-- codex-review-state:v1 {\\\"code_review\\\":{\\\"commit_sha\\\":\\\"$1\\\",\\\"has_any_findings\\\":$2,\\\"status\\\":\\\"completed\\\"}} --> | 📝 **Code Review** | ✅ **Completed** x | \`${1:0:7}\` | Manual |\"}]"; }
+reset; claude_pr
+cstate "$sha" true | fx issues_5_comments
+ok "findings reported but review not posted yet -> still waiting" '[[ "$(gates cross-review 5)" == waiting* ]]'
+echo "[{\"user\":{\"login\":\"chatgpt-codex-connector[bot]\"},\"commit_id\":\"$sha\"}]" | fx pulls_5_reviews
+ok "review object on head -> reviewed (threads decide)" 'gates cross-review 5 >/dev/null'
+cstate deadbeef false | fx issues_5_comments; rm -f "$FIX/pulls_5_reviews.json"
+ok "state for another commit -> waiting" '[[ "$(gates cross-review 5)" == waiting* ]]'
+cstate "$sha" false | fx issues_5_comments
+ok "clean state on head -> reviewed" 'gates cross-review 5 >/dev/null'
+
+# Outdated blocking threads don't block a re-reviewed head; the gate resolves them on merge.
+reset; claude_pr; codex_done
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) old"}]}}]}}}}}' | fx graphql
+ok "outdated P1 thread doesn't block" 'gates cross-review 5 >/dev/null'
+gates merge 5 >/dev/null || true
+ok "merge resolves the superseded thread" 'grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T1" "$CALLS"'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) live"}]}}]}}}}}' | fx graphql
+ok "a P1 thread that still applies keeps blocking" '! gates cross-review 5 >/dev/null'
+
+# The review-fix marker is written only after the dispatch succeeded.
+: >"$CALLS"; FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null || true
+ok "failed review-fix dispatch leaves no marker (retried next run)" 'grep -q "mode=fix" "$CALLS" && ! grep -q "autopilot-review-fix" "$CALLS"'
+
+# Owner (human/*) PR: only the model that reviewed the head gets the outdated-thread exemption.
+reset; claude_pr; codex_done
+jq '.headRefName = "human/z/fix" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"C1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"claude"},"body":"[blocking] old claude"}]}}]}}}}}' | fx graphql
+ok "human PR: outdated Claude [blocking] still blocks when only Codex re-reviewed" '! gates cross-review 5 >/dev/null'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"X1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) old codex"}]}}]}}}}}' | fx graphql
+ok "human PR: outdated Codex P1 is exempt once Codex re-reviewed" 'gates cross-review 5 >/dev/null'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
@@ -130,6 +188,17 @@ ok "forged Claude verdict (wrong workflow) rejected" '! gates cross-review 5 >/d
 echo '{"path":".github/workflows/agent-dispatch.yml","head_branch":"main"}' | fx actions_runs_77
 echo '{"jobs":[{"name":"claude-review"}]}' | fx actions_runs_77_jobs
 ok "verified Claude verdict passes" 'gates cross-review 5 >/dev/null'
+sed -i.bak 's/verdict=pass/verdict=fail/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
+: >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
+ok "Claude fail verdict on a Codex PR -> review fix sent to Codex, marker in the same comment" 'grep -q "autopilot-review-fix sha=$sha n=1 -->@codex address" "$CALLS"'
+# An unfinished Claude review (verdict=error) is re-requested once, never "fixed".
+sed -i.bak 's/verdict=fail/verdict=error/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
+: >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
+ok "error verdict: no fixer, Claude review re-requested" '! grep -q "autopilot-review-fix" "$CALLS" && grep -q "mode=review" "$CALLS"'
+jq --arg m "<!-- claude-review-requested sha=$sha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m},{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"; gates request-review 5 >/dev/null || true
+ok "error verdict: at most one extra request" '! grep -q "mode=review" "$CALLS"'
+ok "error verdict twice: needs-human + owner ping" 'grep -q "issue edit 5 --repo o/r --add-label needs-human" "$CALLS" && grep -q "did not finish twice" "$CALLS"'
 
 # Dispatch: caps, priority, labels.
 reset
