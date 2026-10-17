@@ -77,6 +77,8 @@ if [ -n "$DISK" ]; then
 fi
 if [ "$DRY_RUN" = 1 ]; then echo "$qemu ${args[*]}"; exit 0; fi
 
+# Per-run artifacts: a reused OUT must not leak an earlier run's screenshots into this diff/report.
+rm -f "$OUT"/screenshot*.ppm
 : > "$OUT/serial.log"
 "$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
 qpid=$!
