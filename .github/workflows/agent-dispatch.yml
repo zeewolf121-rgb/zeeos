@@ -86,11 +86,11 @@ jobs:
                if it exists. Read only what the issue needs (MISSION §11).
             2. Branch `agent/${{ needs.route.outputs.agent }}/${{ needs.route.outputs.issue }}-<slug>`; reuse it if
                it already exists on origin. Write only inside your directories (docs/agents.md). Never edit
-               .github/workflows/, scripts/autopilot/, docs/adr/, security/keys/ or anything holding secrets:
+               .github/workflows/, scripts/autopilot/, scripts/merge-audit.sh, .claude/, security/keys/
+               or anything holding secrets:
                open an issue for that instead. Agent runs cannot push workflow files: if the issue's deliverable
                is a .github/workflows/ change, comment the exact change (a diff) on the issue, add the label
-               `needs-human`, and stop on this first run; do not pause. Otherwise, for the paths above,
-               open an issue for that instead.
+               `needs-human`, and stop on this first run; do not pause.
             3. Conventional Commits. Push at every green checkpoint; update the handoff file (max 20 lines)
                before each push.
             4. Open a PR with the template filled in and `Closes #${{ needs.route.outputs.issue }}`; test evidence
