@@ -36,7 +36,7 @@ Visual pixel-diff baselines are **report-only** in this phase. They become gatin
 
 ## Orchestrator tasks (interactive session, not opened by autopilot)
 
-- **P2-6** `boot-test.yml`: upload both screenshots, put boot time and idle RAM in the step summary. After P2-5. `agent-dispatch` forbids workflow edits, so this isn't in the issue table.
+- **P2-6 = #90** `boot-test.yml`: upload both screenshots, put boot time and idle RAM in the step summary. After P2-5. `agent-dispatch` forbids workflow edits, so it isn't in the autopilot issue table. The orchestrator opened #90 by hand in the Phase 2 milestone with `needs-human`. The phase can't complete until it's closed, and autopilot never dispatches it.
 - **Lock refresh for P2-1**, when `build/arch/*/packages.lock` exists on `main`: dispatch `pin-packages` with `branch=<P2-1 branch>`. Agents can't dispatch workflows. It commits the refreshed locks to that branch.
 
 ## Carried over from Phase 1
