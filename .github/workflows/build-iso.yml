@@ -1,7 +1,8 @@
 # Builds the ISOs and boot-tests them. Runs on every PR so `build-iso` and `boot-test` always
 # report (they're required checks): the matrix only runs when ISO inputs changed, and the two
 # summary jobs pass as "not affected" otherwise. Also called by nightly-health and release.
-# P1-3 adds caching, artifact upload (iso-<arch>) and widens the paths; P1-8 adds SB on/off.
+# Uploads iso-<arch> (release.yml) and build-log-<arch>; size check < 4 GB. Container caching needs
+# build/container/run.sh support (image-builder follow-up). P1-8 adds SB on/off.
 name: build-iso
 on:
   pull_request:
@@ -42,11 +43,47 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v5
-      - run: make iso ARCH=${{ matrix.arch }}
-      - if: failure()
-        run: echo "Summarise with scripts/ci-summary.sh ${{ github.run_id }}"
+      - name: Build the ISO
+        run: |
+          mkdir -p out
+          set -o pipefail
+          make iso ARCH="$ARCH" 2>&1 | tee "out/build-$ARCH.log"
+      - name: Size check (hybrid ISO must stay under 4 GB, MISSION §3)
+        run: |
+          iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
+          [[ -n "$iso" ]] || { echo "::error::no ISO under out/$ARCH/image"; exit 1; }
+          size="$(stat -c %s "$iso")"
+          echo "$(basename "$iso"): $size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          (( size < 4000000000 )) || { echo "::error::$iso is $size bytes (limit 4000000000)"; exit 1; }
+      - name: Upload ISO (release.yml downloads iso-*)
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-${{ matrix.arch }}
+          path: out/${{ matrix.arch }}/image/*.iso
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'pull_request' && 3 || 14 }}
+          compression-level: 0
+      - name: Upload build log and manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.arch }}
+          path: |
+            out/build-${{ matrix.arch }}.log
+            out/${{ matrix.arch }}/packages.list
+            out/${{ matrix.arch }}/eltorito.txt
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Failure summary for agents (MISSION §11)
+        if: failure()
+        run: |
+          { echo "### build-iso $ARCH failed"; echo '```'; tail -n 40 "out/build-$ARCH.log" 2>/dev/null; echo '```'
+            echo "Full summary: scripts/ci-summary.sh ${{ github.run_id }}"; } >>"$GITHUB_STEP_SUMMARY"
   boot:
     needs: build
     uses: ./.github/workflows/boot-test.yml
