@@ -39,10 +39,26 @@ if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
   }
   trap hand_back EXIT
 fi
-"${engine[@]}" build --build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile" "$dir"
+# Opt-in cache hooks for CI (the tag pins only the base image, not the Containerfile, so
+# reuse is never the default):
+#   ZEEOS_REUSE_BUILD_IMAGE=1  skip the build if $tag already exists (e.g. after docker load)
+#   ZEEOS_BUILD_CACHE_FROM=ref pass --cache-from ref to the build
+if [[ "${ZEEOS_REUSE_BUILD_IMAGE:-0}" == 1 ]] && "${engine[@]}" image inspect "$tag" >/dev/null 2>&1; then
+  echo "build container $tag already present; skipping container build (ZEEOS_REUSE_BUILD_IMAGE=1)"
+else
+  build_args=(--build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile")
+  [[ -z "${ZEEOS_BUILD_CACHE_FROM:-}" ]] || build_args+=(--cache-from "$ZEEOS_BUILD_CACHE_FROM")
+  "${engine[@]}" build "${build_args[@]}" "$dir"
+fi
 epoch="${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}"
 args=("$arch")
 mounts=(-v "$root:/work")
+# ZEEOS_KIWI_CACHE: absolute host dir kept between runs as kiwi's package cache.
+if [[ -n "${ZEEOS_KIWI_CACHE:-}" ]]; then
+  [[ "$ZEEOS_KIWI_CACHE" == /* ]] || { echo "ZEEOS_KIWI_CACHE must be an absolute path" >&2; exit 2; }
+  mkdir -p "$ZEEOS_KIWI_CACHE"
+  mounts+=(-v "$ZEEOS_KIWI_CACHE:/var/cache/kiwi")
+fi
 # A custom out dir outside the checkout must be mounted too, at the same absolute path,
 # or build-iso.sh writes into the container's own filesystem and --rm discards it.
 if [[ -n "$out" ]]; then
