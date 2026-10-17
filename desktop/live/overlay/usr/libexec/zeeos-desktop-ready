@@ -46,7 +46,10 @@ diagnostics() {
 uid=$(id -u "$USER_NAME" 2>/dev/null) || { echo "no user $USER_NAME" | serial; exit 1; }
 up=0
 for ((i = 0; i < TIMEOUT; i++)); do
-    if running plasmashell "$uid" && [ -S "/run/user/$uid/wayland-0" ] && ! running Xorg; then
+    # Ready = plasmashell on Wayland and the startup splash gone (ksplashqml exits when Plasma
+    # finishes starting), so the screenshot taken at the marker shows the desktop, not the splash.
+    if running plasmashell "$uid" && [ -S "/run/user/$uid/wayland-0" ] && ! running Xorg \
+        && ! running ksplashqml; then
         up=1
         break
     fi
@@ -56,6 +59,7 @@ done
 [ "$up" = 1 ] || { echo "plasmashell not up after ${TIMEOUT}s" | serial; exit 1; }
 
 if [ "$DRY_RUN" = 1 ]; then echo "$MARKER (dry run)"; exit 0; fi
+sleep "${SETTLE:-5}"   # let the panel and wallpaper paint before the harness screenshots
 for tty in /dev/ttyS0 /dev/ttyAMA0 /dev/console; do
     if [ -w "$tty" ]; then echo "$MARKER" >"$tty"; fi
 done
