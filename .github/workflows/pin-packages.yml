@@ -139,6 +139,7 @@ jobs:
           if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
           shown="$(head -n 300 <<<"$changes")"
           (( $(wc -l <<<"$changes") > 300 )) && shown+=$'\n'"… $(( $(wc -l <<<"$changes") - 300 )) more lines (full diff in the commit)"
+          # shellcheck disable=SC2016  # the backticks are literal Markdown fences
           body="$(printf 'Automated lock refresh from run %s (ADR-0008).%s\n\n### Security advisories (Bodhi)\n%s\n\n<details><summary>Package changes</summary>\n\n```diff\n%s\n```\n</details>\n' \
             "${{ github.run_id }}" "$([[ $boot_chain == true ]] && echo ' **Boot chain changed: boot-test SECUREBOOT=on must pass on both arches.**')" \
             "${advisories:-none found}" "$shown")"
