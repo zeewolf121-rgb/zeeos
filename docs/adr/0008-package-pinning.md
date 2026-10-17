@@ -66,7 +66,7 @@ Constraints:
 
 ### Refresh and security-update flow
 
-- A scheduled **daily** job runs the resolver against Fedora metadata on both arches, which is cheap. If either lock or the tools image changes, the job publishes the new artifacts and opens or updates a **single rolling PR**.
+- A scheduled **daily** job runs the resolver against Fedora metadata on both arches, which is cheap. Change detection compares only semantic content: the package lines (name, EVR, arch, sha256) and the tools `rpm -qa` manifest, never the header's resolution timestamp. If nothing semantic changed, the job keeps the existing lock (timestamp included), publishes nothing and leaves the PR alone. Otherwise it publishes the new artifacts and opens or updates a **single rolling PR**.
 - The PR body lists the NEVRA diff and any Bodhi security advisories.
 - A PR that bumps `shim-*`, `grub2-efi-*` or `kernel` on either arch gets a boot-chain label. It must pass `boot-test SECUREBOOT=on` on **both** arches before merge. Stale shim or GRUB pins risk SBAT/dbx revocation on updated firmware, so these PRs take priority.
 - Owner and cross-review rules stay as they are (CONVENTIONS). No auto-merge.
