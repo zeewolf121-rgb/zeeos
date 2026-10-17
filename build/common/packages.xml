@@ -35,5 +35,17 @@
   <package name="dbus-tools"/>
   <package name="mesa-dri-drivers"/>
   <package name="sddm-breeze"/>
+  <!-- P2-1: no Fedora branding. generic-logos replaces fedora-logos (and its 01-breeze-fedora SDDM theme);
+       adw-gtk3 themes GTK3 and the xdg portals carry libadwaita colour-scheme/accent. -->
+  <package name="generic-logos"/>
+  <package name="adw-gtk3-theme"/>
+  <package name="xdg-desktop-portal"/>
+  <package name="xdg-desktop-portal-kde"/>
+  <package name="xdg-desktop-portal-gtk"/>
+</packages>
+<packages type="uninstall">
+  <package name="fedora-logos"/>
+  <package name="fedora-logos-classic"/>
+  <package name="plasma-lookandfeel-fedora"/>
 </packages>
 </image>
