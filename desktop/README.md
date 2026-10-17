@@ -20,5 +20,12 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - `scripts/gen-wallpaper.sh <root> [light|dark]`: generates the placeholder gradient wallpaper (no committed art).
   Needs from image-builder: run it against the image root at build time. Pointing Plasma at it is left to a follow-up.
 
+## GTK consistency (issue #95, P2-3)
+
+- `etc/gtk-3.0/settings.ini`, `etc/gtk-4.0/settings.ini`: `adw-gtk3` theme (GTK3), Breeze icons/cursor, Noto Sans.
+- `etc/xdg/xdg-desktop-portal/plasma-portals.conf`: KDE portal first, so libadwaita gets colour-scheme and accent
+  from `kdeglobals` (`ColorScheme`, `AccentColor`). Switching Plasma to ZeeOS Dark flips GTK apps too.
+- Not verified in a guest yet; `zeeos-theme-check` (P2-4) will cover it.
+
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
