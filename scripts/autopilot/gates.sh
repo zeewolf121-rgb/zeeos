@@ -8,6 +8,7 @@
 #   request-review  ask the other model to review the head commit (once per commit)
 #   merge           merge if every gate passes; hard-stop PRs are left for the owner
 #   review-model    model id for a Claude review: Opus for installer-disk work (PR or linked issue)
+#   push-workflows  dispatch lint + merge-audit for recent autopilot merges that have no audit run
 #   blocking        print the unresolved blocking review comments (input for a review fix)
 # Env: see lib.sh; CODEX_TOKEN (owner token for "@codex review" comments).
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -167,8 +168,37 @@ request_review() {
 
 protected() { gh api "repos/$REPO/branches/main/protection" >/dev/null 2>&1; }
 
+# A merge made with GITHUB_TOKEN starts no push workflows, so main's lint and merge-audit
+# never run on it (#48 -> a3c177a). Dispatch them by hand, once per merge commit. A
+# dispatched run's head is main's tip at dispatch time, so dedupe on merge-audit's run-name
+# (which carries the audited sha), not on the run's commit.
+push_workflows() { # merge-sha
+  local sha="$1" wf
+  # A run that was just dispatched takes a few seconds to show up in `gh run list`, so also
+  # skip what an earlier gates.sh call in this orchestrator run dispatched (shared log).
+  if [[ -n "${AUTOPILOT_LOG:-}" ]] && grep -qF "dispatched merge-audit.yml for $sha" "$AUTOPILOT_LOG" 2>/dev/null; then
+    return 0
+  fi
+  if gh run list --repo "$REPO" --workflow merge-audit.yml --limit 200 --json displayTitle,headSha,event \
+      --jq '.[] | .displayTitle, (select(.event == "push") | .headSha)' | grep -qF "$sha"; then
+    return 0
+  fi
+  for wf in lint.yml merge-audit.yml; do
+    if w gh workflow run "$wf" --repo "$REPO" --ref main -f sha="$sha"; then log "dispatched $wf for $sha on main"
+    else log "couldn't dispatch $wf for ${sha:0:7}"; fi
+  done
+}
+# Sweep: --auto merges land later, in no run of ours. Owner merges start push runs themselves.
+push_workflows_recent() {
+  local sha
+  for sha in $(gh pr list --repo "$REPO" --state merged --base main --limit 20 --json mergedBy,mergeCommit \
+      --jq '.[] | select(.mergedBy.login // "" | test("^(app/)?github-actions")) | .mergeCommit.oid // empty'); do
+    push_workflows "$sha"
+  done
+}
+
 merge() {
-  local pr="$1" sha info out reasons
+  local pr="$1" sha info out reasons msha
   info="$(gh pr view "$pr" --repo "$REPO" --json isDraft,mergeable,state --jq '"\(.state) \(.isDraft) \(.mergeable)"')"
   [[ "$info" == "OPEN false MERGEABLE" ]] || { echo "#$pr not mergeable ($info)"; return 1; }
   sha="$(pr_head "$pr")"
@@ -191,9 +221,15 @@ merge() {
   if protected; then w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
   else w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi
   log "#$pr merged at ${sha:0:7}"
+  # --auto may merge now or later; if later, the orchestrator's push-workflows sweep catches it.
+  # An open PR has a merge_commit_sha too (the test merge), so check .merged first.
+  msha="$(gh api "repos/$REPO/pulls/$pr" --jq 'select(.merged == true) | .merge_commit_sha // empty' 2>/dev/null || true)"
+  if [[ -n "$msha" ]]; then push_workflows "$msha" || true; fi
 }
 
-cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|review-model|blocking> <pr>}"; pr="${2:?pr}"
+cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|review-model|blocking> <pr> | push-workflows}"
+if [[ "$cmd" == push-workflows ]]; then push_workflows_recent; exit 0; fi
+pr="${2:?pr}"
 case "$cmd" in
   cross-review) cross_review "$pr" ;;
   owner-gate) owner_gate "$pr" ;;

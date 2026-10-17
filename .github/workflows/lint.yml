@@ -3,6 +3,12 @@ on:
   pull_request:
   push:
     branches: [main]
+  # gates.sh dispatches this for autopilot merges: their GITHUB_TOKEN push starts no runs.
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: main commit to lint (default is the branch tip)
+        required: false
 permissions:
   contents: read
 jobs:
@@ -10,5 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha }}   # empty outside workflow_dispatch: the event's own commit
       - run: sudo apt-get update -q && sudo apt-get install -yq shellcheck yamllint && pipx install reuse && pipx install actionlint-py
       - run: make lint

@@ -154,6 +154,6 @@ Agents prepare the checklist; I run it or approve it.
 
 ## 16. RULES
 - Ask me before anything expensive to reverse: base distro, installer, bootloader, compositor, licensing, repo visibility.
-- `installer-disk` changes require Opus authoring + Codex review + my approval.
+- `installer-disk` changes require Opus authoring + Codex review + auto approval.
 - Prefer maintained upstream; write custom code only for the distinctive UX.
 - Signing keys live in GitHub secrets or offline. Never in the repo.
