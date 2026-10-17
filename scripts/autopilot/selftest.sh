@@ -91,6 +91,13 @@ ok "sweep dispatches for an autopilot merge with no audit run, not for owner mer
   grep -q "merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS" && ! grep -q "sha=2222" "$CALLS"'
 : >"$CALLS"; echo "[{\"displayTitle\":\"merge-audit $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs
 ok "sweep skips a merge that already has its merge-audit run" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
+reset; claude_pr; codex_done
+echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list
+export AUTOPILOT_LOG="$tmp/autopilot.log"; : >"$AUTOPILOT_LOG"
+gates merge 5 >/dev/null || true; gates push-workflows >/dev/null || true
+unset AUTOPILOT_LOG
+ok "merge + sweep in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events

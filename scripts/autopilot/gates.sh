@@ -173,12 +173,17 @@ protected() { gh api "repos/$REPO/branches/main/protection" >/dev/null 2>&1; }
 # (which carries the audited sha), not on the run's commit.
 push_workflows() { # merge-sha
   local sha="$1" wf
+  # A run that was just dispatched takes a few seconds to show up in `gh run list`, so also
+  # skip what an earlier gates.sh call in this orchestrator run dispatched (shared log).
+  if [[ -n "${AUTOPILOT_LOG:-}" ]] && grep -qF "dispatched merge-audit.yml for $sha" "$AUTOPILOT_LOG" 2>/dev/null; then
+    return 0
+  fi
   if gh run list --repo "$REPO" --workflow merge-audit.yml --limit 200 --json displayTitle,headSha,event \
       --jq '.[] | .displayTitle, (select(.event == "push") | .headSha)' | grep -qF "$sha"; then
     return 0
   fi
   for wf in lint.yml merge-audit.yml; do
-    if w gh workflow run "$wf" --repo "$REPO" --ref main -f sha="$sha"; then log "dispatched $wf for ${sha:0:7} on main"
+    if w gh workflow run "$wf" --repo "$REPO" --ref main -f sha="$sha"; then log "dispatched $wf for $sha on main"
     else log "couldn't dispatch $wf for ${sha:0:7}"; fi
   done
 }
