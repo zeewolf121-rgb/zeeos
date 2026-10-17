@@ -32,8 +32,8 @@ Visual pixel-diff baselines are **report-only** in this phase. They become gatin
 | P2-2 | Base theme **configuration**, all under `desktop/live/overlay/`: ZeeOS Light/Dark colour schemes (`.colors`), default accent, Breeze cursor and icons, Noto fonts, `/etc/xdg` defaults, SDDM Breeze settings. Placeholder wallpaper is **generated** by a `desktop/` script (gradient from the palette), so no art lands outside `/branding` | desktop-shell | claude | both | — `parallel-safe` |
 | P2-3 | GTK3/GTK4/libadwaita consistency: GTK settings defaults, adw-gtk3 for GTK3, portal colour-scheme and accent for libadwaita | desktop-shell | claude | both | P2-2 |
 | P2-4 | `zeeos-theme-check` (guest): verify the effective theme and print `ZEEOS_THEME_OK`, switch to dark and print `ZEEOS_DARK_READY`, print `ZEEOS_MEM` at desktop-ready | desktop-shell | claude | both | P2-2, P2-3 |
-| P2-5 | Harness: wait for the theme and dark markers, take light and dark screenshots, record idle RAM and boot time in junit properties; report-only image diff | vm-integrator | claude | both | — `parallel-safe` (marker protocol fixed in this plan) |
-| P2-6 | `boot-test.yml`: upload both screenshots, put boot time and idle RAM in the step summary | ci-engineer | claude | both | P2-5 |
+| P2-5 | Harness: when the guest prints `ZEEOS_THEME_CHECK`, require `ZEEOS_THEME_OK` and `ZEEOS_DARK_READY` and take light and dark screenshots; otherwise behave as today. Record idle RAM and boot time in junit properties; report-only image diff | vm-integrator | claude | both | — `parallel-safe` (backward-compatible, see the marker protocol) |
+| P2-6 | `boot-test.yml`: upload both screenshots, put boot time and idle RAM in the step summary. **Interactive:** `agent-dispatch` forbids workflow edits, so an orchestrator session does this. The issue is opened with `needs-human` so autopilot doesn't dispatch it | ci-engineer | claude | both | P2-5 |
 
 ## Carried over from Phase 1
 
@@ -46,10 +46,12 @@ Visual pixel-diff baselines are **report-only** in this phase. They become gatin
 All markers go to the serial console, one per line, in this order:
 ```
 ZEEOS_DESKTOP_READY
+ZEEOS_THEME_CHECK
 ZEEOS_MEM total_kb=<n> available_kb=<n> used_kb=<n>
 ZEEOS_THEME_OK scheme=<name> gtk=<name> portal=<prefer-light|prefer-dark>
 ZEEOS_DARK_READY
 ```
+- `ZEEOS_THEME_CHECK` announces that the image has the P2-4 check. The harness (P2-5) requires the later markers only after seeing it, so P2-5 can merge before P2-4 without breaking boot-test. Once P2-4 is on `main`, every cell must reach `ZEEOS_DARK_READY`.
 - On a failed check, print `ZEEOS_THEME_FAIL <reason>` instead of `ZEEOS_THEME_OK`, and skip the dark switch.
 - The harness screenshots after `ZEEOS_THEME_OK` (light) and after `ZEEOS_DARK_READY` (dark), each with the TCG settle delay (#84).
 
