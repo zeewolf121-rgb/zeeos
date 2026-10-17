@@ -225,20 +225,24 @@ protected() { gh api "repos/$REPO/branches/main/protection" >/dev/null 2>&1; }
 
 # A merge made with GITHUB_TOKEN starts no push workflows, so main's lint and merge-audit
 # never run on it (#48 -> a3c177a). Dispatch them by hand, once per merge commit. A
-# dispatched run's head is main's tip at dispatch time, so dedupe on merge-audit's run-name
-# (which carries the audited sha), not on the run's commit.
+# dispatched run's head is main's tip at dispatch time, so dedupe on the run-name (both
+# workflows put the sha they check in it), not on the run's commit. Each workflow is checked
+# on its own: if one dispatch failed, the next sweep sends just that one.
+has_run() { # workflow merge-sha
+  local wf="$1" sha="$2"
+  # A run that was just dispatched takes a few seconds to show up in `gh run list`, so also
+  # count what an earlier gates.sh call in this orchestrator run dispatched (shared log).
+  if [[ -n "${AUTOPILOT_LOG:-}" ]] && grep -qF "dispatched $wf for $sha" "$AUTOPILOT_LOG" 2>/dev/null; then
+    return 0
+  fi
+  gh run list --repo "$REPO" --workflow "$wf" --branch main --limit 200 --json displayTitle,headSha,event \
+    --jq '.[] | (select(.event == "workflow_dispatch") | .displayTitle), (select(.event == "push") | .headSha)' \
+    | grep -qF "$sha"
+}
 push_workflows() { # merge-sha
   local sha="$1" wf
-  # A run that was just dispatched takes a few seconds to show up in `gh run list`, so also
-  # skip what an earlier gates.sh call in this orchestrator run dispatched (shared log).
-  if [[ -n "${AUTOPILOT_LOG:-}" ]] && grep -qF "dispatched merge-audit.yml for $sha" "$AUTOPILOT_LOG" 2>/dev/null; then
-    return 0
-  fi
-  if gh run list --repo "$REPO" --workflow merge-audit.yml --limit 200 --json displayTitle,headSha,event \
-      --jq '.[] | .displayTitle, (select(.event == "push") | .headSha)' | grep -qF "$sha"; then
-    return 0
-  fi
   for wf in lint.yml merge-audit.yml; do
+    has_run "$wf" "$sha" && continue
     if w gh workflow run "$wf" --repo "$REPO" --ref main -f sha="$sha"; then log "dispatched $wf for $sha on main"
     else log "couldn't dispatch $wf for ${sha:0:7}"; fi
   done

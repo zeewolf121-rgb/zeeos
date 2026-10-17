@@ -32,7 +32,9 @@ case "$1 $2" in
       [[ "${args[j]}" == --label ]] && key+="_${args[j+1]}"
       [[ "${args[j]}" == --milestone ]] && key+="_ms"
     done ;;
-  "run list") key=runs ;;
+  "run list")
+    key=runs
+    for ((j=0; j<${#args[@]}; j++)); do [[ "${args[j]}" == --workflow ]] && key+="_${args[j+1]%.yml}"; done ;;
   "repo view") echo o/r; exit 0 ;;
   *) write=1 ;;
 esac
@@ -90,15 +92,22 @@ reset
 echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list
 ok "sweep dispatches for an autopilot merge with no audit run, not for owner merges" 'gates push-workflows >/dev/null
   grep -q "merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS" && ! grep -q "sha=2222" "$CALLS"'
-: >"$CALLS"; echo "[{\"displayTitle\":\"merge-audit $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs
-ok "sweep skips a merge that already has its merge-audit run" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
+: >"$CALLS"; echo "[{\"displayTitle\":\"merge-audit $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs_merge-audit
+# The two dispatches are tracked apart: a lost lint dispatch is resent even though the
+# merge-audit one went through.
+ok "lint missing + merge-audit present -> only lint dispatched" 'gates push-workflows >/dev/null &&
+  grep -q "CALL workflow run lint.yml --repo o/r --ref main -f sha=$msha" "$CALLS" && ! grep -q "workflow run merge-audit.yml" "$CALLS"'
+: >"$CALLS"; echo "[{\"displayTitle\":\"lint $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs_lint
+ok "lint + merge-audit both present -> nothing dispatched" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
+: >"$CALLS"; echo "[{\"displayTitle\":\"x\",\"headSha\":\"$msha\",\"event\":\"push\"}]" | fx runs_lint
+ok "an owner-push lint run on the merge sha counts too" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
 reset; claude_pr; codex_done
 echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
 echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list
 export AUTOPILOT_LOG="$tmp/autopilot.log"; : >"$AUTOPILOT_LOG"
 gates merge 5 >/dev/null || true; gates push-workflows >/dev/null || true
 unset AUTOPILOT_LOG
-ok "merge + sweep in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
+ok "merge + sweep in one orchestrator run dispatch lint and merge-audit once each" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 && $(grep -c "workflow run lint.yml" "$CALLS") == 1 ]]'
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
@@ -269,7 +278,7 @@ echo '[{"number":6,"state":"OPEN","labels":[{"name":"model:claude"},{"name":"age
 out="$("$here/phase.sh" status 2>/dev/null)"
 ok "phase 1 current, no LLM needed" '[[ "$out" == *current=1* && "$out" == *needs_llm=false* ]]'
 echo '[{"number":6,"state":"CLOSED","labels":[{"name":"model:claude"},{"name":"agent:x"}]}]' | fx issue_list_ms
-echo '[{"databaseId":9}]' | fx runs
+echo '[{"databaseId":9}]' | fx runs_nightly-health
 echo '{"jobs":[{"name":"gate","conclusion":"skipped"},{"name":"health","conclusion":"skipped"}]}' | fx actions_runs_9_jobs
 out="$("$here/phase.sh" status 2>/dev/null)"
 ok "skipped nightly (kill switch) doesn't count as green" '[[ "$out" == *prev_exit=false* && "$out" == *needs_llm=false* ]]'

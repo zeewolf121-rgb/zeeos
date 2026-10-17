@@ -1,4 +1,6 @@
 name: lint
+# A dispatched run names the sha it lints: gates.sh dedupes its dispatches on it.
+run-name: lint ${{ inputs.sha || github.sha }}
 on:
   pull_request:
   push:
