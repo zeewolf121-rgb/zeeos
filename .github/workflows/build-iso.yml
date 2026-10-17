@@ -27,7 +27,7 @@ jobs:
           iso=true
           if [[ "$EVENT" == pull_request ]]; then
             files="$(git diff --name-only "$BASE"...HEAD)"
-            hits="$(grep -E '^(build/|Makefile$|\.github/workflows/(build-iso|boot-test)\.yml$)' <<<"$files" | grep -v '\.md$' || true)"
+            hits="$(grep -E '^(build/|desktop/live/|vm/|Makefile$|\.github/workflows/(build-iso|boot-test)\.yml$)' <<<"$files" | grep -v '\.md$' || true)"
             [[ -n "$hits" ]] || iso=false
           fi
           echo "iso=$iso" >>"$GITHUB_OUTPUT"
