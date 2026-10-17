@@ -12,8 +12,8 @@ TIMEOUT=${TIMEOUT:-840}
 DIAG_AFTER=${DIAG_AFTER:-240}
 
 # Serial ttys with a real UART behind them (sysfs type != 0). Not a fixed ttyS0/ttyAMA0 list: on
-# QEMU aarch64 virt, ttyS0 is an 8250 placeholder (type 0, uart:unknown). It opens, but nothing
-# written to it reaches serial.log (#105).
+# QEMU aarch64 virt, ttyS0 is an 8250 placeholder (type 0). It opens, but every write fails with
+# EIO, and the old cat-then-fallback lost the whole dump that way (#105).
 ttys=()
 for t in ttyS0 ttyAMA0; do
     read -r type <"/sys/class/tty/$t/type" 2>/dev/null && [ "$type" != 0 ] && [ -w "/dev/$t" ] \
@@ -51,7 +51,6 @@ diagnostics() {
             | grep -E 'kwin|plasma|sddm-helper|pam_' | tail -n 40
         echo "--- coredumps"; coredumpctl --no-pager list 2>&1 | tail -n 5
         echo "--- consoles: ${ttys[*]-none}; active: $(cat /sys/class/tty/console/active 2>&1)"
-        head -n 3 /proc/tty/driver/serial 2>&1
         echo "=== end diagnostics ==="
     } | serial
 }
