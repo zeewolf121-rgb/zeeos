@@ -51,6 +51,8 @@ The status passes only if **the other model reviewed the PR's head commit** and 
 
 The authoring model comes from the branch name, or from the linked issue's `model:` label. If it can't be determined, the status fails. The `needs-decision` label (models disagree, CONVENTIONS) also fails it until the owner decides.
 
+"Reviewed" for Codex means its `codex-review-state` block names the head commit as `completed`. If that block reports findings, Codex's review object for the head must also exist, because the "Completed" summary can arrive before its P1 threads (#65). Threads that are *outdated* (their lines changed since) don't block a head the reviewer has re-reviewed. When the gate merges, it resolves the reviewer's outdated threads itself; the fixer never resolves its reviewer's threads.
+
 Reviews are requested once per commit: when a PR is opened or marked ready, and again after CI goes green on a new commit. That saves Codex quota compared with reviewing every push. Turn off Codex's own automatic reviews in Codex settings, or each Claude PR gets reviewed twice.
 
 ## 3. Merging, branch protection, owner approval

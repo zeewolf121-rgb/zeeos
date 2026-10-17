@@ -17,14 +17,44 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REQUIRED_CHECKS='lint build-iso boot-test'
 
-unresolved_threads() { # "login first-comment", one line per unresolved thread
+threads_json() { # all review threads of a PR (id, resolved, outdated, first comment)
   # shellcheck disable=SC2016  # GraphQL variables, not shell
   gh api graphql -F owner="$OWNER" -F name="${REPO#*/}" -F pr="$1" -f query='
     query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){
-      pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved
+      pullRequest(number:$pr){reviewThreads(first:100){nodes{id isResolved isOutdated
         comments(first:1){nodes{author{login} body}}}}}}}' \
-    --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
-          | .comments.nodes[0] | "\(.author.login) \(.body | gsub("\n"; " "))"'
+    --jq '.data.repository.pullRequest.reviewThreads.nodes'
+}
+unresolved_threads() { # pr [reviewer-prefix...]: "login first-comment" per thread that still applies
+  # A reviewer's outdated threads (their lines changed since) don't block once that reviewer
+  # has reviewed the head commit; it re-flags what remains. Only the given reviewers (the ones
+  # that reviewed the head) get the exemption; anyone else's open threads all still count.
+  local pr="$1"; shift
+  threads_json "$pr" | jq -r --args '.[] | select(.isResolved | not)
+    | (.comments.nodes[0].author.login) as $who
+    | select((.isOutdated | not) or ([$ARGS.positional[] as $p | $who | startswith($p)] | any | not))
+    | .comments.nodes[0] | "\(.author.login) \(.body | gsub("\n"; " "))"' "$@"
+}
+head_reviewers() { # pr sha model: login prefixes of the models that reviewed this head commit
+  case "$3" in
+    claude) codex_reviewed "$1" "$2" && echo "$CODEX_BOT" ;;
+    codex) [[ -n "$(claude_verdict "$1" "$2")" ]] && echo "$CLAUDE_BOT" ;;
+    human)
+      codex_reviewed "$1" "$2" && echo "$CODEX_BOT"
+      [[ "$(claude_verdict "$1" "$2")" == pass ]] && echo "$CLAUDE_BOT" ;;
+  esac
+  return 0
+}
+resolve_superseded() { # pr reviewer-login-prefix: resolve that reviewer's outdated open threads
+  # Only the gate does this, only after the reviewer's review of the head commit came back
+  # clean; the fixer never resolves its reviewer's threads (no self-approval).
+  local id
+  for id in $(threads_json "$1" | jq -r --arg who "$2" '.[] | select((.isResolved | not) and .isOutdated
+      and (.comments.nodes[0].author.login | startswith($who))) | .id'); do
+    # shellcheck disable=SC2016  # GraphQL variables, not shell
+    w gh api graphql -F id="$id" -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id}}}' >/dev/null
+    log "#$1: resolved superseded review thread $id"
+  done
 }
 reviews_by() { # login-prefix -> commit ids of their reviews
   gh api --paginate "repos/$REPO/pulls/$1/reviews" \
@@ -36,7 +66,19 @@ comments_by() { # login-prefix -> comment bodies
 }
 pushed_at() { gh api "repos/$REPO/commits/$1" --jq .commit.committer.date; }
 
-codex_reviewed() { # pr sha: a Codex review on this commit, or its summary says Completed for it
+codex_reviewed() { # pr sha: Codex finished reviewing this exact commit, findings posted
+  # Codex keeps machine-readable state in its summary comment. Its "Completed" can appear
+  # before the review (and its P0/P1 threads) is posted, so when it reports findings we also
+  # wait for the review object on the head commit (the race behind #65).
+  local st
+  st="$(comments_by "$1" "$CODEX_BOT" | sed -n 's/.*codex-review-state:v1 \({.*}\) -->.*/\1/p' | tail -n1)"
+  if [[ -n "$st" ]]; then
+    jq -e --arg s "$2" '.code_review.commit_sha == $s and .code_review.status == "completed"' <<<"$st" >/dev/null \
+      || return 1
+    if jq -e '.code_review.has_any_findings != true' <<<"$st" >/dev/null; then return 0; fi
+    reviews_by "$1" "$CODEX_BOT" | grep -qx "$2"; return
+  fi
+  # Older summaries without the state block.
   reviews_by "$1" "$CODEX_BOT" | grep -qx "$2" && return 0
   comments_by "$1" "$CODEX_BOT" | grep -F 'Code Review' | grep -F 'Completed' | grep -qF "\`${2:0:7}\`"
 }
@@ -58,7 +100,8 @@ cross_review() {
   local pr="$1" sha model threads v
   sha="$(pr_head "$pr")"; model="$(pr_model "$pr")"
   if has_label "$pr" needs-decision; then echo "models disagree (needs-decision); owner decides"; return 1; fi
-  threads="$(unresolved_threads "$pr")"
+  # shellcheck disable=SC2046  # one reviewer prefix per word
+  threads="$(unresolved_threads "$pr" $(head_reviewers "$pr" "$sha" "$model"))"
   case "$model" in
     claude)
       codex_reviewed "$pr" "$sha" || { echo "waiting for Codex review of ${sha:0:7}"; return 1; }
@@ -156,8 +199,20 @@ request_review() {
       GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "@codex review" >/dev/null
       log "#$pr: requested Codex review of ${sha:0:7}" ;;
     codex)
-      [[ -n "$(claude_verdict "$pr" "$sha")" ]] && return 0
-      if gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' | grep -qF "<!-- claude-review-requested sha=$sha -->"; then
+      # One more request after an unfinished review (verdict=error); otherwise once per commit.
+      local v reqs limit=1
+      v="$(claude_verdict "$pr" "$sha")"
+      [[ -n "$v" && "$v" != error ]] && return 0
+      [[ "$v" == error ]] && limit=2
+      reqs="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' \
+        | grep -cF "<!-- claude-review-requested sha=$sha -->" || true)"
+      if (( reqs >= limit )); then
+        # The retry also ended unfinished: stop retrying and hand it to the owner (once).
+        if [[ "$v" == error ]] && ! has_label "$pr" needs-human; then
+          w gh issue edit "$pr" --repo "$REPO" --add-label needs-human >/dev/null
+          w gh pr comment "$pr" --repo "$REPO" --body "@$OWNER the Claude review of ${sha:0:7} did not finish twice (verdict=error). Labelled needs-human; check the agent-dispatch claude-review runs, then remove the label to retry." >/dev/null
+          log "#$pr needs-human: Claude review unfinished twice"
+        fi
         return 0
       fi
       w gh workflow run agent-dispatch.yml --repo "$REPO" -f pr="$pr" -f mode=review
@@ -206,9 +261,15 @@ merge() {
   if ! out="$(cross_review "$pr")"; then
     request_review "$pr"
     # Blocking review comments go back to the authoring model (fix-retry.sh --review).
-    if [[ "$out" == unresolved* ]]; then "$here/fix-retry.sh" --review "$pr" || true; fi
+    if [[ "$out" == unresolved* || "$out" == "Claude review verdict: fail" ]]; then
+      "$here/fix-retry.sh" --review "$pr" || true
+    fi
     echo "#$pr cross-review: $out"; return 1
   fi
+  # The reviewer's latest review of the head is clean: clear its superseded (outdated) threads,
+  # which GitHub's required conversation resolution would otherwise block on.
+  local who
+  for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_superseded "$pr" "$who"; done
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
     # Hard stop: never merged by autopilot. Ping the owner once per commit.
