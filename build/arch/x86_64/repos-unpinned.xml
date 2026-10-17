@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- NOT reproducible: live Fedora mirrors. Only for ZEEOS_UNPINNED=1 and 'make pin-packages'. -->
+<image>
+  <repository type="rpm-md" alias="fedora" sourcetype="metalink" package_gpgcheck="true">
+    <source path="https://mirrors.fedoraproject.org/metalink?repo=fedora-44&amp;arch=x86_64">
+      <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+    </source>
+  </repository>
+  <repository type="rpm-md" alias="fedora-updates" sourcetype="metalink" package_gpgcheck="true">
+    <source path="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&amp;arch=x86_64">
+      <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+    </source>
+  </repository>
+</image>

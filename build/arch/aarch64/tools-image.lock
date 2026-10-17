@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Digest-pinned build container for aarch64 (ADR-0008). Written by build/container/publish.sh.
+# Empty until first published: run.sh then builds the Containerfile locally and warns.
+TOOLS_IMAGE=
