@@ -65,7 +65,11 @@ pk="$(find "$out/image" -name '*.packages' | head -1)"
 if (( ! unpinned )); then
   # shellcheck source=build/pin/lib.sh
   source "$root/build/pin/lib.sh"
-  if ! diff -u <(pin_lock_identities "$lock") <(pin_identities <"$out/packages.list") >"$out/lock-vs-packages.diff"; then
+  # comm (coreutils), not diff: the build container has no diffutils. Both sides are LC_ALL=C sorted.
+  # Lines: "-<identity>" only in the lock, "+<identity>" only in the image.
+  LC_ALL=C comm -3 <(pin_lock_identities "$lock") <(pin_identities <"$out/packages.list") \
+    | sed -e 's/^\t/+/' -e '/^+/!s/^/-/' >"$out/lock-vs-packages.diff"
+  if [[ -s "$out/lock-vs-packages.diff" ]]; then
     echo "packages.list does not match $lock (see $out/lock-vs-packages.diff):" >&2
     cat "$out/lock-vs-packages.diff" >&2
     exit 1
