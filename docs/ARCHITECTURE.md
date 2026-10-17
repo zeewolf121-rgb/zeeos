@@ -1,6 +1,6 @@
 # ZeeOS Architecture
 
-> Status: **Phase 0 draft, waiting for owner approval.** Decisions marked *Proposed* in `docs/adr/` are not final until the owner approves them.
+> Status: **Phase 0 draft, waiting for owner approval.** Decisions marked *Proposed* in `docs/adr/` are not final until their PR merges after cross-review (docs/adr/README.md).
 
 ## 1. What ZeeOS is
 

@@ -65,7 +65,7 @@ A PR merges (squash, branch deleted) only when **all** of these hold for its hea
 
 **`owner-gate`** fails for any PR that is a hard stop (§7) until the owner approves the head commit. Approval means either the owner's GitHub review approval on that commit, or the label `owner-approved` applied **by the owner** after that commit was pushed. Any new push removes the label.
 
-**Branch protection is not active yet.** GitHub returns *"Upgrade to GitHub Pro or make this repository public"* for both branch protection and rulesets on this private repo. Until that changes, the gates above are enforced by autopilot's own merge code. Nothing stops a person with write access from merging by hand. After upgrading, the owner runs `scripts/autopilot/protect-main.sh` once. It requires `lint`, `build-iso`, `boot-test`, `cross-review` and `owner-gate`, sets 0 required approvals, applies the rules to admins, and turns on auto-merge. Approvals stay at 0 because PRs from local sessions are authored by the owner's account, and GitHub never lets you approve your own PR. Owner approval is the `owner-gate` status.
+**Branch protection is active** (repository public since 2026-10-16; checked 2026-10-17). `main` requires `lint`, `build-iso`, `cross-review` and `owner-gate`, up to date with `main`, **all review threads resolved** (`required_conversation_resolution`), and applies to admins. Thread resolution is therefore enforced by GitHub for every PR, including `decision` and ADR PRs that no longer need the owner gate. `scripts/autopilot/protect-main.sh` sets this up; it requires `lint`, `build-iso`, `boot-test`, `cross-review` and `owner-gate`, sets 0 required approvals, applies the rules to admins, and turns on auto-merge. Approvals stay at 0 because PRs from local sessions are authored by the owner's account, and GitHub never lets you approve your own PR. Owner approval is the `owner-gate` status.
 
 ## 4. fix-on-failure
 
@@ -88,14 +88,15 @@ Every 2 hours, `paused` issues (set by an agent that ran out of turns or hit a u
 
 | Hard stop | How it's enforced |
 |---|---|
-| `installer-disk` and `decision` PRs | `owner-gate` + never merged by autopilot. The label counts if it's on the PR now, was ever applied to it, or is on the linked issue |
-| ADR changes (`docs/adr/`) | Path rule in `owner-gate`; never merged by autopilot |
+| `installer-disk` PRs | `owner-gate` + never merged by autopilot. The label counts if it's on the PR now, was ever applied to it, or is on the linked issue |
 | Workflow changes (`.github/workflows/`) and the gate code itself (`scripts/autopilot/`) | Path rule; agent prompts forbid editing them. `GITHUB_TOKEN` can't push workflow files anyway |
 | Signing keys and secrets (`security/keys/`, `*secret*`, `*minisign*`, `*.key`, `*.pem`, `*.minisig`) | Path rule. Signing secrets are only read by `release.yml` |
 | Phase 6 manual gate | Autopilot opens the checklist issue (assigned to the owner) and stops. Phase 7 opens only after the owner closes it **and** tags `v1.0.0` |
 | Final `v1.0.0` tag | Autopilot only creates `-rc.N` tags; `release.yml` refuses a final tag unless the owner pushed it |
 
 For a hard-stop PR whose automated gates all pass, autopilot comments once per commit, mentioning the owner, and leaves the merge to them.
+
+`decision` PRs and ADR changes (`docs/adr/`) are not hard stops (owner decision, 2026-10-17). They merge like any other PR once CI and cross-review pass and every review thread is resolved. Unattended agents still may not edit `docs/adr/` (agent-dispatch prompt), so ADRs come only from interactive sessions.
 
 ## 8. Release
 
