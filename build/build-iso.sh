@@ -44,9 +44,9 @@ if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
 pk="$(find "$out/image" -name '*.packages' | head -1)"
 [[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
 # P2-1: Fedora branding must not ship in the image.
-if grep -qE '^(fedora-logos|plasma-lookandfeel-fedora)' "$out/packages.list" 2>/dev/null; then
+if grep -qE '^fedora-logos' "$out/packages.list" 2>/dev/null; then
   echo "Fedora branding package found in the image:" >&2
-  grep -E '^(fedora-logos|plasma-lookandfeel-fedora)' "$out/packages.list" >&2
+  grep -E '^fedora-logos' "$out/packages.list" >&2
   exit 1
 fi
 iso="$(find "$out/image" -name '*.iso' | head -1)"

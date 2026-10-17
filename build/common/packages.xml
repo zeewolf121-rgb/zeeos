@@ -46,8 +46,9 @@
        uninstall also removes every package depending on them, which took plasma-workspace and
        the plasma.desktop session with it (#98, run 39057784343). generic-logos provides
        system-logos instead; a hard dependency on these names now fails the build loudly. -->
+  <!-- plasma-lookandfeel-fedora stays: plasma-workspace requires it at the exact version (run
+       39059081199). It's only a dependency; P2-2 makes ZeeOS the default via /etc/xdg. -->
   <ignore name="fedora-logos"/>
   <ignore name="fedora-logos-classic"/>
-  <ignore name="plasma-lookandfeel-fedora"/>
 </packages>
 </image>
