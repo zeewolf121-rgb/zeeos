@@ -16,7 +16,7 @@
     <keytable>us</keytable>
     <timezone>UTC</timezone>
     <rpm-excludedocs>true</rpm-excludedocs>
-    <type image="iso" flags="overlay" firmware="uefi" mediacheck="true"
+    <type image="iso" flags="overlay" squashfscompression="zstd" firmware="uefi" mediacheck="true"
           volid="ZEEOS_0_1" publisher="ZeeOS" application_id="ZeeOS"
           kernelcmdline="rd.live.image console=tty0 console=ttyAMA0,115200">
       <bootloader name="grub2"/>
