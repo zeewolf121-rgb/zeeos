@@ -70,7 +70,7 @@ Constraints:
 - The PR body lists the NEVRA diff and any Bodhi security advisories.
 - A PR that bumps `shim-*`, `grub2-efi-*` or `kernel` on either arch gets a boot-chain label. It must pass `boot-test SECUREBOOT=on` on **both** arches before merge. Stale shim or GRUB pins risk SBAT/dbx revocation on updated firmware, so these PRs take priority.
 - Owner and cross-review rules stay as they are (CONVENTIONS). No auto-merge.
-- A PR opened with the default `GITHUB_TOKEN` does not trigger `pull_request` workflows. The job therefore needs a GitHub App or fine-grained token, stored in GitHub encrypted secrets, or the owner re-runs checks by hand. ci-engineer documents which one.
+- A PR opened with the default `GITHUB_TOKEN` does not trigger `pull_request` workflows. The job therefore opens the PR with a GitHub App or fine-grained token stored in GitHub encrypted secrets, or explicitly `workflow_dispatch`es the required build and boot workflows on the PR head. Manual re-runs are not an accepted path (rule 5). ci-engineer documents which mechanism it uses.
 - Fedora rebases (ADR-0001) are just a refresh against N+1 repos in the rebase PR.
 
 ## Consequences
