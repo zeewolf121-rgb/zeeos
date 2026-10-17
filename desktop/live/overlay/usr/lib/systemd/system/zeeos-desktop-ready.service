@@ -9,6 +9,8 @@ ConditionKernelCommandLine=rd.live.image
 Type=oneshot
 ExecStart=/usr/libexec/zeeos-desktop-ready
 TimeoutStartSec=900
+Nice=19
+CPUSchedulingPolicy=idle
 
 [Install]
 WantedBy=graphical.target

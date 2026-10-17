@@ -13,18 +13,26 @@ DIAG_AFTER=${DIAG_AFTER:-240}
 
 serial() { for tty in /dev/ttyS0 /dev/ttyAMA0; do [ -w "$tty" ] && cat >"$tty" && return; done; cat; }
 
-# running <comm> [uid]: true if a process with that name (and uid) exists. Reads /proc, so it
-# doesn't depend on procps-ng being in the image.
-running() {
-    local p comm uid
+# scan <uid>: one pass over /proc using only bash builtins (no forks; under TCG every fork is
+# expensive). Sets have_plasma (plasmashell owned by uid), have_xorg, have_splash. Reads /proc
+# directly so it doesn't depend on procps-ng being in the image.
+scan() {
+    local p comm k v
+    have_plasma=0 have_xorg=0 have_splash=0
     for p in /proc/[0-9]*; do
-        comm=$(cat "$p/comm" 2>/dev/null) || continue
-        [ "$comm" = "$1" ] || continue
-        [ -z "${2:-}" ] && return 0
-        uid=$(awk '/^Uid:/ {print $2}' "$p/status" 2>/dev/null)
-        [ "$uid" = "$2" ] && return 0
+        read -r comm <"$p/comm" 2>/dev/null || continue
+        case $comm in
+            plasmashell)
+                while read -r k v _; do
+                    if [ "$k" = "Uid:" ]; then
+                        [ "$v" = "$1" ] && have_plasma=1
+                        break
+                    fi
+                done <"$p/status" 2>/dev/null ;;
+            Xorg) have_xorg=1 ;;
+            ksplashqml) have_splash=1 ;;
+        esac
     done
-    return 1
 }
 
 diagnostics() {
@@ -44,17 +52,23 @@ diagnostics() {
 }
 
 uid=$(id -u "$USER_NAME" 2>/dev/null) || { echo "no user $USER_NAME" | serial; exit 1; }
-up=0
-for ((i = 0; i < TIMEOUT; i++)); do
+up=0 diag_done=0
+POLL=${POLL:-3}
+SECONDS=0
+while [ "$SECONDS" -lt "$TIMEOUT" ]; do
     # Ready = plasmashell on Wayland and the startup splash gone (ksplashqml exits when Plasma
     # finishes starting), so the screenshot taken at the marker shows the desktop, not the splash.
-    if running plasmashell "$uid" && [ -S "/run/user/$uid/wayland-0" ] && ! running Xorg \
-        && ! running ksplashqml; then
+    scan "$uid"
+    if [ "$have_plasma" = 1 ] && [ -S "/run/user/$uid/wayland-0" ] && [ "$have_xorg" = 0 ] \
+        && [ "$have_splash" = 0 ]; then
         up=1
         break
     fi
-    [ "$i" = "$DIAG_AFTER" ] && [ "$DRY_RUN" != 1 ] && diagnostics "$i"
-    sleep 1
+    if [ "$diag_done" = 0 ] && [ "$SECONDS" -ge "$DIAG_AFTER" ] && [ "$DRY_RUN" != 1 ]; then
+        diag_done=1
+        diagnostics "$SECONDS"
+    fi
+    sleep "$POLL"
 done
 [ "$up" = 1 ] || { echo "plasmashell not up after ${TIMEOUT}s" | serial; exit 1; }
 
