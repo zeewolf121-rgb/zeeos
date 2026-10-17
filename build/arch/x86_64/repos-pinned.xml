@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- ADR-0008: the only repo is the closure repo holding exactly the RPMs in packages.lock.
+     @CLOSURE_DIR@ is substituted by build-iso.sh. Signatures are checked against Fedora's key. -->
+<image>
+  <repository type="rpm-md" alias="zeeos-closure" package_gpgcheck="true">
+    <source path="dir://@CLOSURE_DIR@"/>
+    <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+  </repository>
+</image>

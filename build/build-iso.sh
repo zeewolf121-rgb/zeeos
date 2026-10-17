@@ -21,25 +21,54 @@ cp -a "$src/." "$desc/"
 xml_sed() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; v="${v//</&lt;}"; printf '%s' "$v" | sed 's/[\\&|]/\\&/g'; }
 # kiwi resolves file:// includes against its cwd, not the description dir: make the path absolute.
 sed -i "s|<include from=\"file://|<include from=\"file://$(xml_sed "$desc")/|" "$desc/config.xml"
-# Repo snapshot pinning: ZEEOS_SNAPSHOT_URL (a dated mirror root) replaces the mirror metalinks.
-if [[ -n "${ZEEOS_SNAPSHOT_URL:-}" ]]; then
-  snap="$(xml_sed "$ZEEOS_SNAPSHOT_URL")"
-  sed -i -E \
-    -e 's| sourcetype="metalink"||' \
-    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=fedora-44&amp;arch=[a-z0-9_]+|$snap/releases/44/Everything/$arch/os|" \
-    -e "s|https://mirrors.fedoraproject.org/metalink\?repo=updates-released-f44&amp;arch=[a-z0-9_]+|$snap/updates/44/Everything/$arch|" \
-    "$desc/config.xml"
+# Package source (ADR-0008). Default: the closure repo built from packages.lock is the ONLY repo.
+# ZEEOS_UNPINNED=1 is a developer opt-out onto the live mirrors (CI and releases never set it).
+lock="$src/packages.lock"
+unpinned=0
+if [[ "${ZEEOS_UNPINNED:-0}" == 1 ]]; then
+  unpinned=1
+  cp "$src/repos-unpinned.xml" "$desc/repos.xml"
+  echo "WARNING: ZEEOS_UNPINNED=1: building from live Fedora mirrors; the output is NOT reproducible" >&2
 else
-  echo "WARNING: repos not pinned to a snapshot (set ZEEOS_SNAPSHOT_URL)" >&2
+  closure="${ZEEOS_CLOSURE_DIR:-$out/closure}"
+  if [[ "${DRY_RUN:-0}" != 1 ]]; then
+    if [[ "${ZEEOS_CLOSURE_REBUILD:-0}" == 1 ]]; then "$root/build/pin/fetch.sh" "$arch" "$closure"
+    elif [[ -z "${ZEEOS_CLOSURE_DIR:-}" ]]; then "$root/build/pin/pull.sh" "$arch" "$closure"
+    fi
+    [[ -f "$closure/repodata/repomd.xml" ]] || { echo "no closure repo in $closure" >&2; exit 1; }
+  fi
+  sed "s|@CLOSURE_DIR@|$(xml_sed "$closure")|" "$src/repos-pinned.xml" >"$desc/repos.xml"
 fi
-echo "staged description in $desc (SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH)"
+rm -f "$desc/repos-pinned.xml" "$desc/repos-unpinned.xml"
+echo "staged description in $desc (SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH, unpinned=$unpinned)"
 [[ "${DRY_RUN:-0}" == 1 ]] && exit 0
+
+if [[ "${ZEEOS_RESOLVE_ONLY:-0}" == 1 ]]; then
+  # make pin-packages: install into a root only, then list it (same fields as kiwi's .packages).
+  [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]] || { echo "ZEEOS_RESOLVE_ONLY runs inside the build container" >&2; exit 2; }
+  rm -rf "$out/resolve-root"
+  kiwi-ng system prepare --description "$desc" --root "$out/resolve-root"
+  rpm --root "$out/resolve-root" -qa --qf '%{NAME}|%{EPOCHNUM}|%{VERSION}|%{RELEASE}|%{ARCH}\n' >"$out/resolved.list"
+  rm -rf "$out/resolve-root"
+  exit 0
+fi
 
 if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
 "${run[@]}" "$(command -v kiwi-ng)" --type iso system build \
   --description "$desc" --target-dir "$out/image"
 pk="$(find "$out/image" -name '*.packages' | head -1)"
 [[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
+# Pinned builds must contain exactly the locked packages (identities; sha256 only matters at fetch).
+if (( ! unpinned )); then
+  # shellcheck source=build/pin/lib.sh
+  source "$root/build/pin/lib.sh"
+  if ! diff -u <(pin_lock_identities "$lock") <(pin_identities <"$out/packages.list") >"$out/lock-vs-packages.diff"; then
+    echo "packages.list does not match $lock (see $out/lock-vs-packages.diff):" >&2
+    cat "$out/lock-vs-packages.diff" >&2
+    exit 1
+  fi
+  echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages)"
+fi
 iso="$(find "$out/image" -name '*.iso' | head -1)"
 [[ -n "$iso" ]] || { echo "kiwi produced no ISO" >&2; exit 1; }
 size=$(stat -c %s "$iso")

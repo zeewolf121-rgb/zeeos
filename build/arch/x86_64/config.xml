@@ -21,13 +21,9 @@
       <bootloader name="grub2"/>
     </type>
   </preferences>
-  <!-- Repos: Fedora 44 mirrors for now. TODO(P1-2): pin to a dated snapshot. -->
-  <repository type="rpm-md" alias="fedora" sourcetype="metalink">
-    <source path="https://mirrors.fedoraproject.org/metalink?repo=fedora-44&amp;arch=x86_64"/>
-  </repository>
-  <repository type="rpm-md" alias="fedora-updates" sourcetype="metalink">
-    <source path="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&amp;arch=x86_64"/>
-  </repository>
+  <!-- Repos (ADR-0008): build-iso.sh stages repos-pinned.xml (the closure repo) as repos.xml;
+       repos-unpinned.xml only with ZEEOS_UNPINNED=1 (developer opt-out) or when resolving the lock. -->
+  <include from="file://repos.xml"/>
   <include from="file://packages.xml"/>
   <!-- Fedora-signed boot chain only: no custom or unsigned kernel, shim or GRUB. -->
   <packages type="image">
