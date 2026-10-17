@@ -81,6 +81,19 @@ if [ "$DRY_RUN" = 1 ]; then echo "$qemu ${args[*]}"; exit 0; fi
 "$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
 qpid=$!
 trap 'kill "$qpid" 2>/dev/null || true' EXIT
+shot() { python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$1\"}" >/dev/null; }
+# Wait up to $2 s for a serial line matching $1. 0 = found, 1 = ZEEOS_THEME_FAIL seen, 2 = timeout/QEMU gone.
+wait_for() {
+  local t=$SECONDS
+  while (( SECONDS - t < $2 )); do
+    grep -aq -- "$1" "$OUT/serial.log" && return 0
+    grep -aq '^ZEEOS_THEME_FAIL' "$OUT/serial.log" && return 1
+    kill -0 "$qpid" 2>/dev/null || return 2
+    sleep 2
+  done
+  return 2
+}
+theme=none
 start=$SECONDS; result=timeout
 while (( SECONDS - start < TIMEOUT )); do
   if grep -aq -- "$MARKER" "$OUT/serial.log"; then result=pass; break; fi
@@ -97,11 +110,31 @@ if kill -0 "$qpid" 2>/dev/null; then
   # The guest may have crashed or rebooted during the delay: recheck, and fail without a screenshot.
   if ! kill -0 "$qpid" 2>/dev/null; then
     [ "$result" != pass ] || result=qemu-exited-before-screenshot
-  elif ! python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$OUT/screenshot.ppm\"}" >/dev/null; then
+  elif ! shot "$OUT/screenshot.ppm"; then
     echo "screendump failed" >&2
     [ "$result" != pass ] || result=screendump-failed
+  elif [ "$result" = pass ] && grep -aq '^ZEEOS_THEME_CHECK' "$OUT/serial.log"; then
+    # The image carries the phase-2 theme check: light and dark markers are required too.
+    theme=ok
+    for step in "ZEEOS_THEME_OK light" "ZEEOS_DARK_READY dark"; do
+      mk=${step% *}; nm=${step#* }
+      rc=0; wait_for "^$mk" "${THEME_TIMEOUT:-600}" || rc=$?
+      if [ "$rc" = 1 ]; then theme=fail-$nm; break; fi
+      if [ "$rc" != 0 ]; then theme=timeout-$nm; break; fi
+      sleep "$shot_delay"
+      if ! kill -0 "$qpid" 2>/dev/null || ! shot "$OUT/screenshot-$nm.ppm"; then theme=screenshot-$nm; break; fi
+    done
+    [ "$theme" = ok ] || result=theme-$theme
   fi
   python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true
+fi
+
+mem=$(grep -aom1 '^ZEEOS_MEM .*' "$OUT/serial.log" || true)
+memkv() { echo "$mem" | grep -o "$1=[0-9]*" | cut -d= -f2 || true; }
+diffpct=""
+if [ -s "$OUT/screenshot-light.ppm" ] && [ -s "$OUT/screenshot-dark.ppm" ]; then
+  # Report-only: never affects the result.
+  diffpct=$(python3 -I "$here/imgdiff.py" "$OUT/screenshot-light.ppm" "$OUT/screenshot-dark.ppm" || true)
 fi
 
 # The guest kernel must report the Secure Boot state that was asked for, or the cell proves nothing.
@@ -114,7 +147,13 @@ fail=1; [ "$result" = pass ] && fail=0
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   printf '<testsuite name="zeeos-boot" tests="1" failures="%d" time="%d">\n' "$fail" "$elapsed"
-  printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/></properties>\n' "$accel" "$ARCH" "$SECUREBOOT"
+  printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$SECUREBOOT"
+  printf '<property name="theme_check" value="%s"/><property name="boot_seconds" value="%d"/>' "$theme" "$elapsed"
+  for k in total_kb available_kb used_kb; do
+    v=$(memkv "$k"); [ -z "$v" ] || printf '<property name="idle_%s" value="%s"/>' "$k" "$v"
+  done
+  [ -z "$diffpct" ] || printf '<property name="light_dark_diff_pct" value="%s"/>' "$diffpct"
+  echo '</properties>'
   printf '<testcase classname="boot" name="%s" time="%d">' "$name" "$elapsed"
   [ "$fail" = 0 ] || printf '<failure message="marker %s: %s"/>' "$MARKER" "$result"
   echo '</testcase></testsuite>'
