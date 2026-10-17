@@ -13,18 +13,23 @@ DIAG_AFTER=${DIAG_AFTER:-240}
 
 serial() { for tty in /dev/ttyS0 /dev/ttyAMA0; do [ -w "$tty" ] && cat >"$tty" && return; done; cat; }
 
-# running <comm> [uid]: true if a process with that name (and uid) exists. Reads /proc, so it
-# doesn't depend on procps-ng being in the image.
-running() {
-    local p comm uid
+# scan_procs <uid>: one pass over /proc with bash builtins only (no cat/awk per process: under
+# TCG those forks made each poll take many seconds and starved Plasma's own startup, #98/#80).
+# Sets has_plasmashell (owned by <uid>), has_xorg, has_ksplash.
+scan_procs() {
+    local p comm k v _
+    has_plasmashell=0 has_xorg=0 has_ksplash=0
     for p in /proc/[0-9]*; do
-        comm=$(cat "$p/comm" 2>/dev/null) || continue
-        [ "$comm" = "$1" ] || continue
-        [ -z "${2:-}" ] && return 0
-        uid=$(awk '/^Uid:/ {print $2}' "$p/status" 2>/dev/null)
-        [ "$uid" = "$2" ] && return 0
+        read -r comm <"$p/comm" 2>/dev/null || continue
+        case $comm in
+            Xorg) has_xorg=1 ;;
+            ksplashqml) has_ksplash=1 ;;
+            plasmashell)
+                while read -r k v _; do
+                    if [[ $k == Uid: ]]; then [[ $v == "$1" ]] && has_plasmashell=1; break; fi
+                done <"$p/status" 2>/dev/null ;;
+        esac
     done
-    return 1
 }
 
 diagnostics() {
@@ -44,17 +49,21 @@ diagnostics() {
 }
 
 uid=$(id -u "$USER_NAME" 2>/dev/null) || { echo "no user $USER_NAME" | serial; exit 1; }
-up=0
-for ((i = 0; i < TIMEOUT; i++)); do
+up=0 diag_done=0
+# Time with $SECONDS, not iterations: a slow poll must not stretch the timeout or the diagnostics.
+start=$SECONDS
+while (( SECONDS - start < TIMEOUT )); do
     # Ready = plasmashell on Wayland and the startup splash gone (ksplashqml exits when Plasma
     # finishes starting), so the screenshot taken at the marker shows the desktop, not the splash.
-    if running plasmashell "$uid" && [ -S "/run/user/$uid/wayland-0" ] && ! running Xorg \
-        && ! running ksplashqml; then
+    scan_procs "$uid"
+    if (( has_plasmashell && ! has_xorg && ! has_ksplash )) && [ -S "/run/user/$uid/wayland-0" ]; then
         up=1
         break
     fi
-    [ "$i" = "$DIAG_AFTER" ] && [ "$DRY_RUN" != 1 ] && diagnostics "$i"
-    sleep 1
+    if (( ! diag_done && SECONDS - start >= DIAG_AFTER )) && [ "$DRY_RUN" != 1 ]; then
+        diagnostics "$((SECONDS - start))"; diag_done=1
+    fi
+    sleep 2
 done
 [ "$up" = 1 ] || { echo "plasmashell not up after ${TIMEOUT}s" | serial; exit 1; }
 
