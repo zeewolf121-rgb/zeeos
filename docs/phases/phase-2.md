@@ -52,10 +52,11 @@ All markers go to the serial console, one per line, in this order:
 ZEEOS_THEME_CHECK
 ZEEOS_DESKTOP_READY
 ZEEOS_MEM total_kb=<n> available_kb=<n> used_kb=<n>
-ZEEOS_THEME_OK scheme=<name> gtk=<name> portal=<prefer-light|prefer-dark>
+ZEEOS_THEME_OK scheme=ZeeOSLight gtk=<name> portal=prefer-light
 ZEEOS_DARK_READY
 ```
 - `ZEEOS_THEME_CHECK` announces that the image has the P2-4 check. The same unit prints it **before** `ZEEOS_DESKTOP_READY`, so the harness has always seen it by the time the legacy success marker appears. The harness (P2-5) requires the later markers only after seeing it, so P2-5 can merge before P2-4 without breaking boot-test. Once P2-4 is on `main`, every cell must reach `ZEEOS_DARK_READY`.
+- `ZEEOS_THEME_OK` is printed only in **light** mode: `scheme=ZeeOSLight` and `portal=prefer-light`. The live-session default must be light, so the first screenshot really is the light one. Anything else is `ZEEOS_THEME_FAIL <reason>`.
 - On a failed check, print `ZEEOS_THEME_FAIL <reason>` instead of `ZEEOS_THEME_OK`, and skip the dark switch.
 - The harness screenshots after `ZEEOS_THEME_OK` (light) and after `ZEEOS_DARK_READY` (dark), each with the TCG settle delay (#84, 90 s).
 - There's no channel from harness to guest, so the guest waits **150 s** after `ZEEOS_THEME_OK` before switching to dark. That's longer than the harness's light-screenshot delay (90 s under TCG, 0 under KVM/HVF). Configurable on the kernel command line as `zeeos.dark_delay=<s>`. If the harness delay changes, this must change with it.
