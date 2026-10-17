@@ -20,6 +20,8 @@ cp -a "$src/." "$desc/"
 # Live desktop overlay (owned by desktop-shell): copied into the image root, never edited here.
 mkdir -p "$desc/root"
 cp -a "$root/desktop/live/overlay/." "$desc/root/"
+# Placeholder wallpaper (desktop-shell): generated into the image root, no committed art (#100).
+"$root/desktop/scripts/gen-wallpaper.sh" "$desc/root" light
 # Escape a value for use inside an XML attribute and as a sed replacement (| delimiter).
 xml_sed() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; v="${v//</&lt;}"; printf '%s' "$v" | sed 's/[\\&|]/\\&/g'; }
 # kiwi resolves file:// includes against its cwd, not the description dir: make the path absolute.
