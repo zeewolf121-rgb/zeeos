@@ -3,6 +3,7 @@
 # Boot a ZeeOS ISO under QEMU + OVMF/AAVMF and wait for the desktop-ready serial marker.
 # Env: ARCH=x86_64|aarch64  SECUREBOOT=on|off  ISO=<path>  DISK=<seed image, optional>
 #      OUT=<result dir>  TIMEOUT=<seconds>  MARKER=<serial string>  DRY_RUN=1 (print command only)
+#      SCREENSHOT_DELAY=<seconds after the marker; default 0, 90 under TCG>
 # Writes OUT/{serial.log,screenshot.ppm,junit.xml,accel}. DISK is attached through a qcow2
 # overlay, so the seed image is never modified.
 set -euo pipefail
@@ -89,8 +90,17 @@ done
 elapsed=$((SECONDS - start))
 
 if kill -0 "$qpid" 2>/dev/null; then
-  python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$OUT/screenshot.ppm\"}" >/dev/null \
-    || echo "screendump failed" >&2
+  # Under TCG, Plasma's software rendering needs well over a minute to paint after the marker;
+  # an immediate screendump is black (aarch64, run 39021393078). Only delay on a pass.
+  shot_delay=${SCREENSHOT_DELAY:-0}; [ "$accel" = tcg ] && shot_delay=${SCREENSHOT_DELAY:-90}
+  [ "$result" = pass ] && sleep "$shot_delay"
+  # The guest may have crashed or rebooted during the delay: recheck, and fail without a screenshot.
+  if ! kill -0 "$qpid" 2>/dev/null; then
+    [ "$result" != pass ] || result=qemu-exited-before-screenshot
+  elif ! python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$OUT/screenshot.ppm\"}" >/dev/null; then
+    echo "screendump failed" >&2
+    [ "$result" != pass ] || result=screendump-failed
+  fi
   python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true
 fi
 
