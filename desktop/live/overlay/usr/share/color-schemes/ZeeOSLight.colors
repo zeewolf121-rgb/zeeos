@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: CC-BY-SA-4.0
 # ZeeOS Light colour scheme (placeholder palette until theme-designer, #10).
 [General]
 ColorScheme=ZeeOSLight

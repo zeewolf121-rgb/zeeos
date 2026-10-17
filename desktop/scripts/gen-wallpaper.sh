@@ -24,6 +24,6 @@ cat > "$out" <<SVG
 </svg>
 SVG
 cat > "$root/usr/share/wallpapers/ZeeOS/metadata.json" <<'JSON'
-{"KPlugin":{"Id":"ZeeOS","Name":"ZeeOS","License":"GPL-3.0-or-later"}}
+{"KPlugin":{"Id":"ZeeOS","Name":"ZeeOS","License":"CC-BY-SA-4.0"}}
 JSON
 echo "wrote $out"
