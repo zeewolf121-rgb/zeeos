@@ -94,8 +94,13 @@ if kill -0 "$qpid" 2>/dev/null; then
   # an immediate screendump is black (aarch64, run 39021393078). Only delay on a pass.
   shot_delay=${SCREENSHOT_DELAY:-0}; [ "$accel" = tcg ] && shot_delay=${SCREENSHOT_DELAY:-90}
   [ "$result" = pass ] && sleep "$shot_delay"
-  python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$OUT/screenshot.ppm\"}" >/dev/null \
-    || echo "screendump failed" >&2
+  # The guest may have crashed or rebooted during the delay: recheck, and fail without a screenshot.
+  if ! kill -0 "$qpid" 2>/dev/null; then
+    [ "$result" != pass ] || result=qemu-exited-before-screenshot
+  elif ! python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$OUT/screenshot.ppm\"}" >/dev/null; then
+    echo "screendump failed" >&2
+    [ "$result" != pass ] || result=screendump-failed
+  fi
   python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true
 fi
 
