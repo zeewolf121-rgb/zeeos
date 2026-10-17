@@ -9,6 +9,7 @@
 #   merge           merge if every gate passes; hard-stop PRs are left for the owner
 #   review-model    model id for a Claude review: Opus for installer-disk work (PR or linked issue)
 #   push-workflows  dispatch lint + merge-audit for recent autopilot merges that have no audit run
+#   blocking        print the unresolved blocking review comments (input for a review fix)
 # Env: see lib.sh; CODEX_TOKEN (owner token for "@codex review" comments).
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
@@ -202,7 +203,12 @@ merge() {
   [[ "$info" == "OPEN false MERGEABLE" ]] || { echo "#$pr not mergeable ($info)"; return 1; }
   sha="$(pr_head "$pr")"
   out="$(checks_green "$pr" "$sha")" || { echo "#$pr $out"; return 1; }
-  out="$(cross_review "$pr")" || { request_review "$pr"; echo "#$pr cross-review: $out"; return 1; }
+  if ! out="$(cross_review "$pr")"; then
+    request_review "$pr"
+    # Blocking review comments go back to the authoring model (fix-retry.sh --review).
+    if [[ "$out" == unresolved* ]]; then "$here/fix-retry.sh" --review "$pr" || true; fi
+    echo "#$pr cross-review: $out"; return 1
+  fi
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
     # Hard stop: never merged by autopilot. Ping the owner once per commit.
@@ -221,7 +227,7 @@ merge() {
   if [[ -n "$msha" ]]; then push_workflows "$msha" || true; fi
 }
 
-cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|review-model> <pr> | push-workflows}"
+cmd="${1:?usage: gates.sh <cross-review|owner-gate|status|request-review|merge|review-model|blocking> <pr> | push-workflows}"
 if [[ "$cmd" == push-workflows ]]; then push_workflows_recent; exit 0; fi
 pr="${2:?pr}"
 case "$cmd" in
@@ -230,6 +236,9 @@ case "$cmd" in
   status) status "$pr" ;;
   request-review) request_review "$pr" ;;
   merge) merge "$pr" ;;
+  blocking)
+    unresolved_threads "$pr" | grep -E "^(${CODEX_BOT}[^ ]* .*badge/P[01]-|${CLAUDE_BOT}[^ ]* [* ]*\[blocking\])" \
+      | sed -E 's/<[^>]*>//g; s/!\[[^]]*\]\([^)]*\)//g' | cut -c1-1500 || true ;;
   review-model)
     if [[ "$(hard_stop_reasons "$pr")" == *label:installer-disk* ]]; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
   *) echo "unknown command: $cmd" >&2; exit 2 ;;

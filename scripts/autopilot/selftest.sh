@@ -135,6 +135,16 @@ reset; claude_pr; codex_done
 echo '[{"filename":"scripts/merge-audit-notes.md"}]' | fx pulls_5_files
 ok "a similarly named file is not a hard stop" 'gates owner-gate 5 >/dev/null'
 
+# Review fix: unresolved Codex P1 on a green Claude PR -> one fix round per commit.
+reset; claude_pr; codex_done
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) fix x"}]}}]}}}}}' | fx graphql
+gates merge 5 >/dev/null || true
+ok "blocking review comments -> review fix dispatched" 'grep -q "workflow run agent-dispatch.yml --repo o/r -f pr=5 -f mode=fix" "$CALLS" && grep -q "autopilot-review-fix sha=$sha n=1" "$CALLS"'
+jq --arg m "<!-- autopilot-review-fix sha=$sha n=1 -->" '. + [{"user":{"login":"o"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"; gates merge 5 >/dev/null || true
+ok "at most one review fix per commit (cross-review still blocked by the P1)" '! grep -q "mode=fix" "$CALLS" && [[ "$(gates cross-review 5)" == unresolved* ]]'
+ok "blocking prints the comment for the fix prompt" '[[ "$(gates blocking 5)" == *"fix x"* ]]'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
@@ -184,6 +194,28 @@ echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":
 echo '{"labels":[{"name":"model:claude"},{"name":"agent:desktop-shell"},{"name":"ready"}]}' | fx issue_view_14
 "$here/dispatch.sh" 2>/dev/null
 ok "paused issue gets the last slot before a ready one" 'grep -q "issue=7" "$CALLS" && ! grep -q "issue=14" "$CALLS"'
+
+# Pause cap: 3 pauses without commits -> needs-human instead of another resume.
+pause_fx() {
+  reset
+  echo '[{"number":7,"createdAt":"2026-01-05","labels":[{"name":"paused"},{"name":"in-progress"}]}]' | fx issue_list_paused
+  echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"paused"},{"name":"in-progress"}]}' | fx issue_view_7
+}
+pz() { echo "{\"event\":\"$1\",\"label\":{\"name\":\"$2\"},\"created_at\":\"$3\"}"; }
+pause_fx
+echo "[$(pz labeled paused 2026-10-16T01:00:00Z),$(pz labeled paused 2026-10-16T02:00:00Z),$(pz labeled paused 2026-10-16T03:00:00Z)]" | fx issues_7_events
+"$here/dispatch.sh" 2>/dev/null
+ok "3 pauses, no branch -> needs-human, not resumed" 'grep -q "issue edit 7 --repo o/r --add-label needs-human" "$CALLS" && ! grep -q "issue=7" "$CALLS"'
+pause_fx
+echo "[$(pz labeled paused 2026-10-16T01:00:00Z),$(pz labeled paused 2026-10-16T02:00:00Z),$(pz unlabeled needs-human 2026-10-16T02:30:00Z),$(pz labeled paused 2026-10-16T03:00:00Z)]" | fx issues_7_events
+"$here/dispatch.sh" 2>/dev/null
+ok "owner clearing needs-human resets the pause count" 'grep -q "issue=7" "$CALLS"'
+pause_fx
+echo "[$(pz labeled paused 2026-10-16T01:00:00Z),$(pz labeled paused 2026-10-16T02:00:00Z),$(pz labeled paused 2026-10-16T03:00:00Z)]" | fx issues_7_events
+echo '[{"object":{"sha":"c0ffee"}}]' | fx git_matching-refs_heads_agent_image-builder_7-
+echo '{"commit":{"committer":{"date":"2026-10-16T02:30:00Z"}}}' | fx commits_c0ffee
+"$here/dispatch.sh" 2>/dev/null
+ok "pauses with commits in between keep resuming" 'grep -q "issue=7" "$CALLS"'
 
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset

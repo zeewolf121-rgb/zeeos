@@ -17,6 +17,21 @@ inflight() { # running agents of a model; paused / needs-human issues hold no sl
     --jq "[.[] | select(any(.labels[]; .name == \"model:$1\"))
            | select(all(.labels[]; .name != \"paused\" and .name != \"needs-human\"))] | length"
 }
+# Paused 3+ times (since needs-human was last cleared) with no commit on its agent branch
+# since the third-last pause: resuming again would only burn another run.
+stuck() { # issue agent
+  local pauses third last
+  pauses="$(gh api --paginate "repos/$REPO/issues/$1/events?per_page=100" \
+    --jq '.[] | select(.label.name == "paused" or .label.name == "needs-human")
+          | "\(.created_at) \(.event) \(.label.name)"' \
+    | awk '$3 == "needs-human" && $2 == "unlabeled" {n = 0; delete t; next}
+           $3 == "paused" && $2 == "labeled" {t[++n] = $1} END {if (n >= 3) print t[n - 2]}')"
+  [[ -n "$pauses" ]] || return 1
+  third="$pauses"
+  last="$(gh api --paginate "repos/$REPO/git/matching-refs/heads/agent/$2/$1-" --jq '.[].object.sha' \
+    | while read -r s; do gh api "repos/$REPO/commits/$s" --jq .commit.committer.date; done | sort | tail -n1)"
+  [[ -z "$last" || "$last" < "$third" ]]
+}
 deps_closed() {
   local d
   for d in $(labels_of "$1" | sed -n 's/^blocked-by:#//p'); do
@@ -32,6 +47,11 @@ for n in $(gh issue list --repo "$REPO" --state open --label "$from" --limit 100
   model="$(issue_model "$n")"; agent="$(issue_agent "$n")"
   if [[ -z "$model" || -z "$agent" ]]; then log "#$n not dispatched: needs model:* and agent:* labels"; continue; fi
   if ! deps_closed "$n"; then log "#$n waits for its blocked-by issues"; continue; fi
+  if [[ "$from" == paused ]] && stuck "$n" "$agent"; then
+    w gh issue edit "$n" --repo "$REPO" --add-label needs-human >/dev/null
+    w gh issue comment "$n" --repo "$REPO" --body "@$OWNER paused 3 times with no new commits; autopilot stopped resuming it. Read the agent's last comment, fix the blocker, then remove needs-human." >/dev/null
+    log "#$n needs-human: paused 3x without progress"; continue
+  fi
   case "$model" in
     claude) (( used_claude < CAP_CLAUDE )) || continue ;;
     codex) (( used_codex < CAP_CODEX )) || continue ;;
