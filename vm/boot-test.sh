@@ -97,7 +97,7 @@ fi
 # The guest kernel must report the Secure Boot state that was asked for, or the cell proves nothing.
 want=enabled; [ "$SECUREBOOT" = off ] && want=disabled
 got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$OUT/serial.log" | awk '{print $NF}' || true)
-if [ -n "$got" ] && [ "$got" != "$want" ]; then result="$result,secureboot-$got"; fi
+if [ "$got" != "$want" ]; then result="$result,secureboot-${got:-unreported}"; fi
 
 name="boot.$ARCH.sb-$SECUREBOOT"
 fail=1; [ "$result" = pass ] && fail=0
