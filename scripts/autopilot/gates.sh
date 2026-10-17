@@ -66,6 +66,14 @@ comments_by() { # login-prefix -> comment bodies
 }
 pushed_at() { gh api "repos/$REPO/commits/$1" --jq .commit.committer.date; }
 
+codex_receipt() { # pr sha: Codex posted "no major issues" for exactly this commit
+  # One line per comment body, so the receipt marker and its commit stay together.
+  # shellcheck disable=SC2016  # the backticks are literal Markdown
+  gh api --paginate "repos/$REPO/issues/$1/comments" \
+    --jq ".[] | select(.user.login | startswith(\"$CODEX_BOT\")) | .body | gsub(\"\\n\"; \" \")" \
+    | grep -F 'codex-review-receipt:v1' | grep -oE 'Reviewed commit:\*\* `[0-9a-f]{7,40}`' \
+    | grep -oE '[0-9a-f]{7,40}' | awk -v s="$2" 'index(s, $0) == 1 {f = 1} END {exit !f}'
+}
 codex_reviewed() { # pr sha: Codex finished reviewing this exact commit, findings posted
   # Codex keeps machine-readable state in its summary comment. Its "Completed" can appear
   # before the review (and its P0/P1 threads) is posted, so when it reports findings we also
@@ -76,7 +84,10 @@ codex_reviewed() { # pr sha: Codex finished reviewing this exact commit, finding
     jq -e --arg s "$2" '.code_review.commit_sha == $s and .code_review.status == "completed"' <<<"$st" >/dev/null \
       || return 1
     if jq -e '.code_review.has_any_findings != true' <<<"$st" >/dev/null; then return 0; fi
-    reviews_by "$1" "$CODEX_BOT" | grep -qx "$2"; return
+    reviews_by "$1" "$CODEX_BOT" | grep -qx "$2" && return 0
+    # has_any_findings is sticky for the PR's lifetime. A clean re-review of a later commit posts
+    # no review object, only a receipt comment naming that commit, so accept the receipt.
+    codex_receipt "$1" "$2"; return
   fi
   # Older summaries without the state block.
   reviews_by "$1" "$CODEX_BOT" | grep -qx "$2" && return 0
