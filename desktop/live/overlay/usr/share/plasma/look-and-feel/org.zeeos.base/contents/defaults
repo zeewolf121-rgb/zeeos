@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Plasma reads the default wallpaper from the selected look-and-feel's [Wallpaper] group.
+# Points at the wallpaper generated at build time by desktop/scripts/gen-wallpaper.sh (no art is committed).
+[kdeglobals][General]
+ColorScheme=ZeeOSLight
+
+[Wallpaper]
+Image=/usr/share/wallpapers/ZeeOS
