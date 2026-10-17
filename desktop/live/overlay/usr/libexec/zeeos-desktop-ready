@@ -11,7 +11,18 @@ DRY_RUN=${DRY_RUN:-0}
 TIMEOUT=${TIMEOUT:-840}
 DIAG_AFTER=${DIAG_AFTER:-240}
 
-serial() { for tty in /dev/ttyS0 /dev/ttyAMA0; do [ -w "$tty" ] && cat >"$tty" && return; done; cat; }
+# Serial ttys with a real UART behind them (sysfs type != 0). Not a fixed ttyS0/ttyAMA0 list: on
+# QEMU aarch64 virt, ttyS0 is an 8250 placeholder (type 0). It opens, but every write fails with
+# EIO, and the old cat-then-fallback lost the whole dump that way (#105).
+ttys=()
+for t in ttyS0 ttyAMA0; do
+    read -r type <"/sys/class/tty/$t/type" 2>/dev/null && [ "$type" != 0 ] && [ -w "/dev/$t" ] \
+        && ttys+=("/dev/$t")
+done
+
+# serial: copy stdin to every serial tty and to stdout (the journal). It's one reader with a
+# timeout, so a tty that fails or stalls can neither swallow nor block the rest.
+serial() { timeout -k 5 30 tee -- "${ttys[@]+"${ttys[@]}"}"; }
 
 # scan_procs <uid>: one pass over /proc with bash builtins only (no cat/awk per process: under
 # TCG those forks made each poll take many seconds and starved Plasma's own startup, #98/#80).
@@ -44,6 +55,7 @@ diagnostics() {
         journalctl -b --no-pager -o short-monotonic 2>/dev/null \
             | grep -E 'kwin|plasma|sddm-helper|pam_' | tail -n 40
         echo "--- coredumps"; coredumpctl --no-pager list 2>&1 | tail -n 5
+        echo "--- consoles: ${ttys[*]-none}; active: $(cat /sys/class/tty/console/active 2>&1)"
         echo "=== end diagnostics ==="
     } | serial
 }
@@ -69,7 +81,4 @@ done
 
 if [ "$DRY_RUN" = 1 ]; then echo "$MARKER (dry run)"; exit 0; fi
 sleep "${SETTLE:-5}"   # let the panel and wallpaper paint before the harness screenshots
-for tty in /dev/ttyS0 /dev/ttyAMA0 /dev/console; do
-    if [ -w "$tty" ]; then echo "$MARKER" >"$tty"; fi
-done
-echo "$MARKER"
+echo "$MARKER" | timeout -k 5 10 tee -- "${ttys[@]+"${ttys[@]}"}" /dev/console || true
