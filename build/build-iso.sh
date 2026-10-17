@@ -61,6 +61,12 @@ if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
   --description "$desc" --target-dir "$out/image"
 pk="$(find "$out/image" -name '*.packages' | head -1)"
 [[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
+# P2-1: Fedora branding must not ship in the image.
+if grep -qE '^fedora-logos' "$out/packages.list" 2>/dev/null; then
+  echo "Fedora branding package found in the image:" >&2
+  grep -E '^fedora-logos' "$out/packages.list" >&2
+  exit 1
+fi
 # Pinned builds must contain exactly the locked packages (identities; sha256 only matters at fetch).
 if (( ! unpinned )); then
   # shellcheck source=build/pin/lib.sh
