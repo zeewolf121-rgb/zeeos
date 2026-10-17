@@ -106,14 +106,17 @@ if kill -0 "$qpid" 2>/dev/null; then
   # Under TCG, Plasma's software rendering needs well over a minute to paint after the marker;
   # an immediate screendump is black (aarch64, run 39021393078). Only delay on a pass.
   shot_delay=${SCREENSHOT_DELAY:-0}; [ "$accel" = tcg ] && shot_delay=${SCREENSHOT_DELAY:-90}
-  [ "$result" = pass ] && sleep "$shot_delay"
+  # With the theme check, the per-marker delays below replace this one: sleeping here too would eat
+  # into the guest's light-mode window, and the "light" screenshot would show dark mode.
+  has_theme=0; grep -aq '^ZEEOS_THEME_CHECK' "$OUT/serial.log" && has_theme=1
+  [ "$result" = pass ] && [ "$has_theme" = 0 ] && sleep "$shot_delay"
   # The guest may have crashed or rebooted during the delay: recheck, and fail without a screenshot.
   if ! kill -0 "$qpid" 2>/dev/null; then
     [ "$result" != pass ] || result=qemu-exited-before-screenshot
   elif ! shot "$OUT/screenshot.ppm"; then
     echo "screendump failed" >&2
     [ "$result" != pass ] || result=screendump-failed
-  elif [ "$result" = pass ] && grep -aq '^ZEEOS_THEME_CHECK' "$OUT/serial.log"; then
+  elif [ "$result" = pass ] && [ "$has_theme" = 1 ]; then
     # The image carries the phase-2 theme check: light and dark markers are required too.
     theme=ok
     for step in "ZEEOS_THEME_OK light" "ZEEOS_DARK_READY dark"; do
@@ -125,6 +128,8 @@ if kill -0 "$qpid" 2>/dev/null; then
       if ! kill -0 "$qpid" 2>/dev/null || ! shot "$OUT/screenshot-$nm.ppm"; then theme=screenshot-$nm; break; fi
     done
     [ "$theme" = ok ] || result=theme-$theme
+    # screenshot.ppm was taken before the desktop painted; the light capture is the real one.
+    [ ! -s "$OUT/screenshot-light.ppm" ] || cp "$OUT/screenshot-light.ppm" "$OUT/screenshot.ppm"
   fi
   python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true
 fi
