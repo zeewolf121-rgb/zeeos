@@ -1,6 +1,6 @@
 # ADR-0008: Package pinning for reproducible builds
 
-- Status: **Proposed** (needs owner decision and Codex cross-review)
+- Status: **Accepted** (owner, 2026-10-17; Codex cross-review at f22983a)
 - Date: 2026-10-16
 - Deciders: owner; architect (Claude); reviewer (Codex)
 
