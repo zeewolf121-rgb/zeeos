@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 ARCH ?= x86_64
 SECUREBOOT ?= on
+# The ISO that `make iso ARCH=…` writes; override with ISO=<path>.
+ISO ?= $(firstword $(wildcard out/$(ARCH)/image/*.iso))
 .PHONY: iso iso-host pin-container reproducible boot-test lint
 iso:
 	build/container/run.sh $(ARCH)
@@ -11,7 +13,7 @@ pin-container:
 reproducible:
 	build/check-reproducible.sh $(ARCH)
 boot-test:
-	@echo "make boot-test ARCH=$(ARCH) SECUREBOOT=$(SECUREBOOT): not implemented yet (Phase 1, agent:vm-integrator)" >&2; exit 2
+	ARCH=$(ARCH) SECUREBOOT=$(SECUREBOOT) $(if $(ISO),ISO=$(ISO)) $(if $(OUT),OUT=$(OUT)) vm/boot-test.sh
 lint:
 	shellcheck -x scripts/*.sh scripts/autopilot/*.sh build/*.sh build/common/*.sh build/container/*.sh
 	yamllint -d relaxed .github
