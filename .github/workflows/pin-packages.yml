@@ -102,18 +102,20 @@ jobs:
               [[ -f "locks/lock-$a/$f" ]] && cp "locks/lock-$a/$f" "build/arch/$a/$f"
             done
           done
-          git diff --quiet -- build/arch && { echo "locks unchanged"; exit 0; }
+          # Stage first: on the first run the locks are untracked, and plain `git diff` ignores those.
+          git add -A -- build/arch
+          git diff --cached --quiet -- build/arch && { echo "locks unchanged"; exit 0; }
           # human/* = no authoring model: gates.sh accepts a review by either model (lib.sh pr_model).
           target="$BASE"; [[ "$BASE" == main ]] && target=human/pin-refresh
           locks=(build/arch/x86_64/packages.lock build/arch/aarch64/packages.lock)
           all_locks=(build/arch/*/packages.lock build/arch/*/tools-image.lock build/arch/*/tools.lock)
           # ADR-0008: the PR body lists the package diff; shim/grub2-efi/kernel bumps get boot-chain.
-          changes="$(git diff -U0 -- "${locks[@]}" | grep -E '^[+-][^+#-]' || true)"
+          changes="$(git diff --cached -U0 -- "${locks[@]}" | { grep -E '^[+-][^+#-]' || true; })"
           boot_chain=false
-          grep -qE '^[+-](shim-|grub2-efi-|kernel[ -])' <<<"$changes" && boot_chain=true
+          if grep -qE '^[+-](shim-|grub2-efi-|kernel[ -])' <<<"$changes"; then boot_chain=true; fi
           # Security advisories for the new builds (lock line: name epoch:version-release.arch sha256 source).
-          advisories="$(grep -E '^\+' <<<"$changes" | awk '{ evra = $2; sub(/^[0-9]+:/, "", evra); sub(/\.[^.]+$/, "", evra);
-              print $4 "-" evra }' | sort -u | head -n 150 | while read -r nvr; do
+          advisories="$({ grep -E '^\+' <<<"$changes" || true; } | awk '{ evra = $2; sub(/^[0-9]+:/, "", evra); sub(/\.[^.]+$/, "", evra);
+              print $4 "-" evra }' | sort -u | while read -r nvr; do
               if resp="$(curl -fsS --max-time 20 "https://bodhi.fedoraproject.org/updates/?builds=$nvr")" \
                 && jq -e '.updates' >/dev/null <<<"$resp"; then
                 jq -r '.updates[] | select(.type == "security") | "- [\(.alias)](https://bodhi.fedoraproject.org/updates/\(.alias)) \(.title)"' <<<"$resp"
@@ -134,7 +136,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$target"
-          git add -- "${all_locks[@]}"
           git commit -m "chore(build): refresh packages.lock (pin-packages run ${{ github.run_id }})"
           if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
           shown="$(head -n 300 <<<"$changes")"
