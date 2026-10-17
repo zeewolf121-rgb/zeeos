@@ -37,7 +37,7 @@ jobs:
       - name: Install QEMU and UEFI firmware
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq --no-install-recommends ${{ matrix.pkgs }} qemu-utils python3
+          sudo apt-get install -yq --no-install-recommends ${{ matrix.pkgs }} ipxe-qemu qemu-utils python3
           ls /usr/share/OVMF /usr/share/AAVMF 2>/dev/null || true
       - name: Enable KVM
         run: |
