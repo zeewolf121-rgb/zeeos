@@ -1,0 +1,2 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# rpm -qa of the published build container for aarch64 (written by build/container/publish.sh).
