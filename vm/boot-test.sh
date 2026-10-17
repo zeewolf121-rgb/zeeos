@@ -32,10 +32,15 @@ case $ARCH in
     fi ;;
   aarch64)
     qemu=qemu-system-aarch64; machine=(-machine virt,gic-version=max); cpu=max
-    code=$(first /usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.raw /usr/share/AAVMF/AAVMF_CODE.fd || true)
-    vars=$(first /usr/share/edk2/aarch64/vars-template-pflash.raw /usr/share/AAVMF/AAVMF_VARS.fd || true)
-    if [ "$SECUREBOOT" = on ]; then   # MS-keys AAVMF vars, if the distro ships one
-      vars=$(first /usr/share/AAVMF/AAVMF_VARS.ms.fd "$vars" || true)
+    if [ "$SECUREBOOT" = on ]; then
+      # SB needs a secboot-built CODE plus MS-keys VARS (Debian/Ubuntu AAVMF); plain AAVMF_CODE.fd
+      # boots with "Secure boot disabled" even with .ms VARS. No silent fallback to non-SB.
+      code=$(first /usr/share/AAVMF/AAVMF_CODE.ms.fd /usr/share/AAVMF/AAVMF_CODE.secboot.fd || true)
+      vars=$(first /usr/share/AAVMF/AAVMF_VARS.ms.fd || true)
+    else
+      code=$(first /usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.raw /usr/share/AAVMF/AAVMF_CODE.no-secboot.fd \
+        /usr/share/AAVMF/AAVMF_CODE.fd || true)
+      vars=$(first /usr/share/edk2/aarch64/vars-template-pflash.raw /usr/share/AAVMF/AAVMF_VARS.fd || true)
     fi ;;
   *) echo "unsupported ARCH=$ARCH" >&2; exit 2;;
 esac
@@ -50,11 +55,16 @@ accel=tcg
 if [ -w /dev/kvm ] && [ "$ARCH" = "$(uname -m)" ]; then accel=kvm; cpu=host
 elif [ "$(uname -s)" = Darwin ] && [ "$ARCH" = "$(uname -m | sed s/arm64/aarch64/)" ]; then accel=hvf; cpu=host; fi
 
+# aarch64 under TCG is slow enough that systemd's generators time out (~90 s). Cheap pointer-auth
+# emulation and multi-threaded TCG cut boot time substantially.
+smp=2
+if [ "$accel" = tcg ] && [ "$ARCH" = aarch64 ]; then cpu=max,pauth-impdef=on; smp=4; fi
+
 mkdir -p "$OUT"
 echo "$accel" > "$OUT/accel"
 [ -n "${vars:-}" ] && cp "$vars" "$OUT/vars.fd"
 sock=$OUT/qmp.sock
-args=(-accel "$accel" -cpu "$cpu" -m 4096 -smp 2 "${machine[@]}"
+args=(-accel "$accel" -cpu "$cpu" -m 4096 -smp "$smp" "${machine[@]}"
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=${code:-/nonexistent}"
   -drive "if=pflash,format=raw,unit=1,file=$OUT/vars.fd"
   -drive "file=${ISO:-/nonexistent},media=cdrom,readonly=on"
@@ -83,6 +93,11 @@ if kill -0 "$qpid" 2>/dev/null; then
     || echo "screendump failed" >&2
   python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true
 fi
+
+# The guest kernel must report the Secure Boot state that was asked for, or the cell proves nothing.
+want=enabled; [ "$SECUREBOOT" = off ] && want=disabled
+got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$OUT/serial.log" | awk '{print $NF}' || true)
+if [ "$got" != "$want" ]; then result="$result,secureboot-${got:-unreported}"; fi
 
 name="boot.$ARCH.sb-$SECUREBOOT"
 fail=1; [ "$result" = pass ] && fail=0
