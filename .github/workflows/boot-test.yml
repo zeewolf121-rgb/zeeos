@@ -1,9 +1,10 @@
-# Boot tests, called by build-iso after a successful build (so the result reports on the PR),
-# or run by hand. P1-7/P1-8 replace the stub with the QEMU harness and SB on/off.
+# Boot tests (#13): arch × Secure Boot on/off under QEMU via `make boot-test` (vm/boot-test.sh).
+# Called by build-iso after a successful build, so the iso-<arch> artifacts come from the same
+# run. To run by hand, dispatch build-iso. Phase 1 exit criterion (docs/phases/phase-1.md): all
+# four cells reach ZEEOS_DESKTOP_READY, with a screenshot.
 name: boot-test
 on:
   workflow_call:
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -12,7 +13,67 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-    runs-on: ubuntu-24.04
+        sb: ['on', 'off']
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            pkgs: qemu-system-x86 ovmf
+            timeout: 600
+          # GitHub's arm64 runners have no /dev/kvm, so aarch64 runs under TCG: allow longer.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            pkgs: qemu-system-arm qemu-efi-aarch64
+            timeout: 1800
+    name: boot (${{ matrix.arch }}, sb-${{ matrix.sb }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      ARCH: ${{ matrix.arch }}
+      SB: ${{ matrix.sb }}
+      OUT: out/boot-test/${{ matrix.arch }}-sb${{ matrix.sb }}
+      TIMEOUT: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@v5
-      - run: make boot-test ARCH=${{ matrix.arch }} SECUREBOOT=on
+      - name: Install QEMU and UEFI firmware
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends ${{ matrix.pkgs }} qemu-utils python3
+          ls /usr/share/OVMF /usr/share/AAVMF 2>/dev/null || true
+      - name: Enable KVM
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm.rules >/dev/null
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          else
+            echo "no /dev/kvm on this runner; QEMU falls back to TCG"
+          fi
+      - name: Download the ISO
+        uses: actions/download-artifact@v5
+        with:
+          name: iso-${{ matrix.arch }}
+          path: out/${{ matrix.arch }}/image
+      - name: Boot
+        run: |
+          iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
+          [[ -n "$iso" ]] || { echo "::error::no ISO in iso-$ARCH artifact"; exit 1; }
+          make boot-test ARCH="$ARCH" SECUREBOOT="$SB" ISO="$iso" OUT="$OUT"
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### boot $ARCH sb-$SB: accel $(cat "$OUT/accel" 2>/dev/null || echo n/a)"
+            echo '```'; tail -n 40 "$OUT/serial.log" 2>/dev/null || echo "(no serial log)"; echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload serial log, screenshot and JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-${{ matrix.arch }}-sb${{ matrix.sb }}
+          path: |
+            ${{ env.OUT }}/serial.log
+            ${{ env.OUT }}/screenshot.ppm
+            ${{ env.OUT }}/junit.xml
+            ${{ env.OUT }}/accel
+            ${{ env.OUT }}/qemu.stderr
+          if-no-files-found: ignore
+          retention-days: 14
