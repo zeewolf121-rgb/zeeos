@@ -1,9 +1,17 @@
 # Flags anything that reaches main without passing the merge gates. Branch protection
 # isn't available on this plan, so this is detection, not prevention (see scripts/merge-audit.sh).
 name: merge-audit
+# The audited sha is in the run name: gates.sh dedupes its dispatches on it.
+run-name: merge-audit ${{ inputs.sha || github.sha }}
 on:
   push:
     branches: [main]
+  # gates.sh dispatches this for autopilot merges: their GITHUB_TOKEN push starts no runs.
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: main commit to audit (default is the branch tip)
+        required: false
 permissions:
   contents: read
   pull-requests: read
@@ -15,6 +23,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
+      SHA: ${{ inputs.sha || github.sha }}
     steps:
       - uses: actions/checkout@v5
-      - run: scripts/merge-audit.sh "${{ github.sha }}"
+      - run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "not a full commit sha: $SHA" >&2; exit 1; }
+          scripts/merge-audit.sh "$SHA"

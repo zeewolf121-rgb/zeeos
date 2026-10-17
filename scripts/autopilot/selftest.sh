@@ -75,6 +75,23 @@ ok "unresolved Codex P2 does not block" 'gates cross-review 5 >/dev/null'
 ok "plain PR needs no owner approval" 'gates owner-gate 5 >/dev/null'
 ok "merge goes through when all gates pass" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
 
+# Autopilot merges push with GITHUB_TOKEN, which starts no workflows: gates.sh dispatches
+# main's lint + merge-audit for the merge commit itself.
+msha=1111111111111111111111111111111111111111
+ok "an unmerged (queued --auto) PR dispatches nothing yet" '! grep -q "workflow run" "$CALLS"'
+: >"$CALLS"; echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
+ok "merged PR dispatches lint + merge-audit for its merge commit" 'gates merge 5 >/dev/null || true
+  grep -q "CALL workflow run lint.yml --repo o/r --ref main -f sha=$msha" "$CALLS" &&
+  grep -q "CALL workflow run merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS"'
+: >"$CALLS"
+ok "a failed dispatch doesn't fail the merge" 'FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null && grep -q "pr merge 5" "$CALLS"'
+reset
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list
+ok "sweep dispatches for an autopilot merge with no audit run, not for owner merges" 'gates push-workflows >/dev/null
+  grep -q "merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS" && ! grep -q "sha=2222" "$CALLS"'
+: >"$CALLS"; echo "[{\"displayTitle\":\"merge-audit $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs
+ok "sweep skips a merge that already has its merge-audit run" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
+
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
 ok "removed installer-disk label still counts" '! gates owner-gate 5 >/dev/null'
