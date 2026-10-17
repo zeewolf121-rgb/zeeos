@@ -1,0 +1,87 @@
+# Package pinning (ADR-0008, #45): resolve the closure on native runners, publish the closure
+# image to GHCR, and commit build/arch/<arch>/packages.lock. Manual dispatch can target a branch
+# (e.g. #80's); the daily run refreshes main through a rolling PR. The publish step's
+# anonymous-pull check fails until the owner makes the ghcr.io/<owner>/zeeos-closure-* packages
+# public once. Commits pushed with GITHUB_TOKEN don't trigger CI; re-run checks on the PR by hand.
+name: pin-packages
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: branch to commit the locks to (default main → rolling PR)
+        required: false
+        default: main
+  schedule:
+    - cron: '41 3 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: pin-packages-${{ inputs.branch || 'main' }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    if: vars.AUTOPILOT == 'on' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ github.token }}
+        run: echo "$TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Resolve, fetch and publish
+        env:
+          ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
+        run: make pin-packages ARCH=${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lock-${{ matrix.arch }}
+          path: build/arch/${{ matrix.arch }}/packages.lock
+          if-no-files-found: error
+          retention-days: 7
+  commit:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BASE: ${{ inputs.branch || 'main' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: lock-*
+          path: locks
+      - name: Commit the locks
+        run: |
+          for a in x86_64 aarch64; do cp "locks/lock-$a/packages.lock" "build/arch/$a/packages.lock"; done
+          git diff --quiet -- build/arch && { echo "locks unchanged"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          target="$BASE"; [[ "$BASE" == main ]] && target=agent/ci-engineer/pin-refresh
+          git checkout -B "$target"
+          git add build/arch/*/packages.lock
+          git commit -m "chore(build): refresh packages.lock (pin-packages run ${{ github.run_id }})"
+          if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
+          if [[ "$BASE" == main ]] && ! gh pr view "$target" >/dev/null 2>&1; then
+            gh pr create --base main --head "$target" --title "chore(build): refresh packages.lock" \
+              --label agent:image-builder --label phase:1 --label arch:both \
+              --body "Automated lock refresh from run ${{ github.run_id }} (ADR-0008). Re-run CI on this PR by hand: pushes by GITHUB_TOKEN don't trigger workflows."
+          fi
