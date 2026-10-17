@@ -59,8 +59,8 @@ Constraints:
 
 ### Build-container tools
 
-- Publish the built container image to `ghcr.io/<owner>/zeeos-build`, one image per arch, each built natively on that arch's runner. Pin it by digest in a lock next to `base-image.lock`.
-- The `Containerfile` remains the recipe. When the image is published, `rpm -qa` is captured to `build/container/tools.lock` so tool versions are reviewable in the refresh PR.
+- Publish the built container image to `ghcr.io/<owner>/zeeos-build`, one image per arch, each built natively on that arch's runner. The per-arch digests differ, so each one is pinned in `build/arch/<arch>/tools-image.lock` (rule 4). `build/container/base-image.lock` stays where it is only if `pin.sh` records the multi-arch manifest-list digest. image-builder confirms that while implementing, and moves it under `build/arch/<arch>/` otherwise.
+- The `Containerfile` remains the recipe. When an arch's image is published, its `rpm -qa` is captured to `build/arch/<arch>/tools.lock`, so tool versions are reviewable in the refresh PR.
 - `make iso` pulls the pinned image. Building the image locally from the `Containerfile` is still possible, but it warns that it is unpinned, as `run.sh` already does for an empty base digest.
 - Why: kiwi has to exist before any package repo is in use, and digest pinning is already the pattern for the base image. A second closure repo just for tools would add moving parts without adding any guarantee.
 
@@ -87,7 +87,7 @@ Constraints:
 
 | Agent | Work | Depends on |
 |---|---|---|
-| image-builder (`build/`, `Makefile`) | Lock format; `build/` resolve, fetch and publish scripts; `make pin-packages`; closure pull and only-repo wiring in `build-iso.sh` / `run.sh`; `packages.list`-vs-lock check; `ZEEOS_UNPINNED` opt-out; tool image lock and pull in `run.sh`; `tools.lock` capture; first locks for both arches | this ADR Accepted |
+| image-builder (`build/`, `Makefile`) | Lock format; `build/` resolve, fetch and publish scripts; `make pin-packages`; closure pull and only-repo wiring in `build-iso.sh` / `run.sh`; `packages.list`-vs-lock check; `ZEEOS_UNPINNED` opt-out; per-arch `build/arch/<arch>/tools-image.lock` and pull in `run.sh`; `build/arch/<arch>/tools.lock` capture; first locks for both arches | this ADR Accepted |
 | ci-engineer (`.github/`) | Daily refresh workflow (both native runners, `packages: write`, opens the rolling PR, boot-chain label); publish job for the closure and build-container images; scheduled day-apart reproducibility job; PR-trigger token decision. **Workflow files can't be edited by unattended agents, so this needs an interactive session or the owner** | image-builder scripts |
 | architect (`docs/`) | ARCHITECTURE.md §5 update, plus §4 if the D9 reconciliation changes it; mark this ADR Accepted only after the owner decides | owner decision |
 
