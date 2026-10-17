@@ -23,12 +23,12 @@ podman pull -q --authfile "$tmp/auth" "$repo@$digest" >/dev/null \
   || { echo "::error::$repo is not anonymously pullable: the owner must make the GHCR package public (ADR-0008)" >&2; exit 1; }
 lock="$root/build/arch/$arch"
 {
-  echo "# SPDX-License-Identifier: GPL-3.0-or-later"
+  echo "# SPDX-License-""Identifier: GPL-3.0-or-later"
   echo "# Digest-pinned build container for $arch (ADR-0008). Written by build/container/publish.sh."
   echo "TOOLS_IMAGE=$repo@$digest"
 } >"$lock/tools-image.lock"
 {
-  echo "# SPDX-License-Identifier: GPL-3.0-or-later"
+  echo "# SPDX-License-""Identifier: GPL-3.0-or-later"
   echo "# rpm -qa of the published build container for $arch (written by build/container/publish.sh)."
   podman run --rm "$repo@$digest" rpm -qa --qf '%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | LC_ALL=C sort
 } >"$lock/tools.lock"
