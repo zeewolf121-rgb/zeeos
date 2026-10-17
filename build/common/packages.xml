@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- Shared minimal package set (no desktop yet). Arch packages live in build/arch/<arch>/. -->
+<!-- Shared package set: minimal base plus the live Plasma desktop (Wayland only). Arch packages live in build/arch/<arch>/. -->
 <image>
 <packages type="image">
   <package name="basesystem"/>
@@ -24,5 +24,9 @@
   <package name="systemd"/>
   <package name="util-linux"/>
   <package name="vim-minimal"/>
+  <package name="plasma-desktop"/>
+  <package name="kwin"/>
+  <package name="sddm"/>
+  <package name="sddm-wayland-plasma"/>
 </packages>
 </image>
