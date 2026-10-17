@@ -13,5 +13,12 @@ passwd -d liveuser
 
 # Live session: passwordless root (Phase 1 only; the serial console autologins, see arch overlay).
 passwd -d root
+
+# P2-1: no Fedora branding. sddm-breeze (a hard dependency) ships the Fedora-named SDDM theme
+# 01-breeze-fedora; drop that one directory. SDDM uses plain Breeze (desktop/ sets Current=breeze).
+rm -rf /usr/share/sddm/themes/01-breeze-fedora
+if compgen -G '/usr/share/sddm/themes/*fedora*' >/dev/null; then
+  echo "Fedora-named SDDM theme still present" >&2; exit 1
+fi
 rm -f /etc/machine-id
 touch /etc/machine-id
