@@ -68,7 +68,7 @@ If a desktop, installer or branding file needs an `if arch == …`, that is a de
 
 - One entry point: `make iso ARCH=x86_64|aarch64`. It runs the build inside a pinned container (`build/container/Containerfile`) so the host OS does not matter.
 - Output goes to `out/zeeos-<ver>-<arch>.iso`, plus a package manifest and a build log.
-- Reproducibility: package repos are pinned to a dated snapshot, `SOURCE_DATE_EPOCH` is derived from the git commit time, and the container image is pinned by digest. Bit-for-bit identical ISOs are a goal tracked in CI, not a v1 promise.
+- Reproducibility (ADR-0008): each arch has a full-closure lockfile (`build/arch/<arch>/packages.lock`, NEVRA + sha256). The only package source is a ZeeOS-published, digest-pinned closure repo holding exactly those Fedora-signed RPMs (`ghcr.io/<owner>/zeeos-closure-<arch>`, public). The build container is a published, digest-pinned image per arch. `SOURCE_DATE_EPOCH` is derived from the git commit time. A daily refresh job opens a PR when Fedora updates land. Bit-for-bit identical ISOs are a goal tracked in CI, not a v1 promise.
 
 ## 6. Testing strategy
 
