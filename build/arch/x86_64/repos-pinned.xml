@@ -4,7 +4,8 @@
      @CLOSURE_DIR@ is substituted by build-iso.sh. Signatures are checked against Fedora's key. -->
 <image>
   <repository type="rpm-md" alias="zeeos-closure" package_gpgcheck="true">
-    <source path="dir://@CLOSURE_DIR@"/>
-    <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+    <source path="dir://@CLOSURE_DIR@">
+      <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+    </source>
   </repository>
 </image>
