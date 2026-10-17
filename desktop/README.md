@@ -12,5 +12,13 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
   with a Wayland socket and no Xorg. It is a root system unit, not a user unit, because a user cannot open the serial tty.
   `DRY_RUN=1` prints without writing to the tty.
 
+## Base theme (issue #93, P2-2)
+
+- `usr/share/color-schemes/ZeeOS{Light,Dark}.colors`: placeholder palette; the live session starts light.
+- `etc/xdg/kdeglobals`, `etc/xdg/kcminputrc`: default scheme and accent, Breeze icons/cursor/style, Noto Sans fonts.
+- `etc/sddm.conf.d/20-zeeos-theme.conf`: stock Breeze SDDM theme, Breeze cursor, Noto Sans.
+- `scripts/gen-wallpaper.sh <root> [light|dark]`: generates the placeholder gradient wallpaper (no committed art).
+  Needs from image-builder: run it against the image root at build time. Pointing Plasma at it is left to a follow-up.
+
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
