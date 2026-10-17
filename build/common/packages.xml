@@ -42,10 +42,12 @@
   <package name="xdg-desktop-portal"/>
   <package name="xdg-desktop-portal-kde"/>
   <package name="xdg-desktop-portal-gtk"/>
-</packages>
-<packages type="uninstall">
-  <package name="fedora-logos"/>
-  <package name="fedora-logos-classic"/>
-  <package name="plasma-lookandfeel-fedora"/>
+  <!-- Exclude Fedora branding at install time (dnf exclude), not <packages type="uninstall">:
+       uninstall also removes every package depending on them, which took plasma-workspace and
+       the plasma.desktop session with it (#98, run 39057784343). generic-logos provides
+       system-logos instead; a hard dependency on these names now fails the build loudly. -->
+  <ignore name="fedora-logos"/>
+  <ignore name="fedora-logos-classic"/>
+  <ignore name="plasma-lookandfeel-fedora"/>
 </packages>
 </image>
