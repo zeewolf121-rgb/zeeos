@@ -200,8 +200,8 @@ jobs:
         run: |
           v="$(sed -n '1s/^verdict: *\(pass\|fail\)$/\1/p' claude-review.md 2>/dev/null || true)"
           summary="$(tail -n +2 claude-review.md 2>/dev/null | head -n 5 || true)"
-          { echo "<!-- claude-review sha=$SHA verdict=${v:-fail} run=$GITHUB_RUN_ID -->"
-            echo "**Claude review** of ${SHA:0:7}: ${v:-fail (review did not finish)}"
+          { echo "<!-- claude-review sha=$SHA verdict=${v:-error} run=$GITHUB_RUN_ID -->"
+            echo "**Claude review** of ${SHA:0:7}: ${v:-error (review did not finish; it will be re-requested once)}"
             echo; echo "$summary"; } | gh pr comment "$PR" --body-file -
   request-review:
     if: >-

@@ -147,6 +147,14 @@ ok "a P1 thread that still applies keeps blocking" '! gates cross-review 5 >/dev
 : >"$CALLS"; FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null || true
 ok "failed review-fix dispatch leaves no marker (retried next run)" 'grep -q "mode=fix" "$CALLS" && ! grep -q "autopilot-review-fix" "$CALLS"'
 
+# Owner (human/*) PR: only the model that reviewed the head gets the outdated-thread exemption.
+reset; claude_pr; codex_done
+jq '.headRefName = "human/z/fix" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"C1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"claude"},"body":"[blocking] old claude"}]}}]}}}}}' | fx graphql
+ok "human PR: outdated Claude [blocking] still blocks when only Codex re-reviewed" '! gates cross-review 5 >/dev/null'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"X1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) old codex"}]}}]}}}}}' | fx graphql
+ok "human PR: outdated Codex P1 is exempt once Codex re-reviewed" 'gates cross-review 5 >/dev/null'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
@@ -158,7 +166,14 @@ echo '{"jobs":[{"name":"claude-review"}]}' | fx actions_runs_77_jobs
 ok "verified Claude verdict passes" 'gates cross-review 5 >/dev/null'
 sed -i.bak 's/verdict=pass/verdict=fail/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
 : >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
-ok "Claude fail verdict on a Codex PR -> review fix sent to Codex" 'grep -q "@codex address the unresolved" "$CALLS" && grep -q "autopilot-review-fix" "$CALLS"'
+ok "Claude fail verdict on a Codex PR -> review fix sent to Codex, marker in the same comment" 'grep -q "autopilot-review-fix sha=$sha n=1 -->@codex address" "$CALLS"'
+# An unfinished Claude review (verdict=error) is re-requested once, never "fixed".
+sed -i.bak 's/verdict=fail/verdict=error/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
+: >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
+ok "error verdict: no fixer, Claude review re-requested" '! grep -q "autopilot-review-fix" "$CALLS" && grep -q "mode=review" "$CALLS"'
+jq --arg m "<!-- claude-review-requested sha=$sha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m},{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"; gates request-review 5 >/dev/null || true
+ok "error verdict: at most one extra request" '! grep -q "mode=review" "$CALLS"'
 
 # Dispatch: caps, priority, labels.
 reset

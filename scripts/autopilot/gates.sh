@@ -24,11 +24,25 @@ threads_json() { # all review threads of a PR (id, resolved, outdated, first com
         comments(first:1){nodes{author{login} body}}}}}}}' \
     --jq '.data.repository.pullRequest.reviewThreads.nodes'
 }
-unresolved_threads() { # "login first-comment" per unresolved thread that still applies
-  # Outdated threads (the lines they point at were changed since) don't block: the reviewer
-  # has already reviewed the head commit when this is consulted, and re-flags what remains.
-  threads_json "$1" | jq -r '.[] | select((.isResolved | not) and (.isOutdated | not))
-    | .comments.nodes[0] | "\(.author.login) \(.body | gsub("\n"; " "))"'
+unresolved_threads() { # pr [reviewer-prefix...]: "login first-comment" per thread that still applies
+  # A reviewer's outdated threads (their lines changed since) don't block once that reviewer
+  # has reviewed the head commit; it re-flags what remains. Only the given reviewers (the ones
+  # that reviewed the head) get the exemption; anyone else's open threads all still count.
+  local pr="$1"; shift
+  threads_json "$pr" | jq -r --args '.[] | select(.isResolved | not)
+    | (.comments.nodes[0].author.login) as $who
+    | select((.isOutdated | not) or ([$ARGS.positional[] as $p | $who | startswith($p)] | any | not))
+    | .comments.nodes[0] | "\(.author.login) \(.body | gsub("\n"; " "))"' "$@"
+}
+head_reviewers() { # pr sha model: login prefixes of the models that reviewed this head commit
+  case "$3" in
+    claude) codex_reviewed "$1" "$2" && echo "$CODEX_BOT" ;;
+    codex) [[ -n "$(claude_verdict "$1" "$2")" ]] && echo "$CLAUDE_BOT" ;;
+    human)
+      codex_reviewed "$1" "$2" && echo "$CODEX_BOT"
+      [[ "$(claude_verdict "$1" "$2")" == pass ]] && echo "$CLAUDE_BOT" ;;
+  esac
+  return 0
 }
 resolve_superseded() { # pr reviewer-login-prefix: resolve that reviewer's outdated open threads
   # Only the gate does this, only after the reviewer's review of the head commit came back
@@ -85,7 +99,8 @@ cross_review() {
   local pr="$1" sha model threads v
   sha="$(pr_head "$pr")"; model="$(pr_model "$pr")"
   if has_label "$pr" needs-decision; then echo "models disagree (needs-decision); owner decides"; return 1; fi
-  threads="$(unresolved_threads "$pr")"
+  # shellcheck disable=SC2046  # one reviewer prefix per word
+  threads="$(unresolved_threads "$pr" $(head_reviewers "$pr" "$sha" "$model"))"
   case "$model" in
     claude)
       codex_reviewed "$pr" "$sha" || { echo "waiting for Codex review of ${sha:0:7}"; return 1; }
@@ -183,10 +198,14 @@ request_review() {
       GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "@codex review" >/dev/null
       log "#$pr: requested Codex review of ${sha:0:7}" ;;
     codex)
-      [[ -n "$(claude_verdict "$pr" "$sha")" ]] && return 0
-      if gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' | grep -qF "<!-- claude-review-requested sha=$sha -->"; then
-        return 0
-      fi
+      # One more request after an unfinished review (verdict=error); otherwise once per commit.
+      local v reqs limit=1
+      v="$(claude_verdict "$pr" "$sha")"
+      [[ -n "$v" && "$v" != error ]] && return 0
+      [[ "$v" == error ]] && limit=2
+      reqs="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' \
+        | grep -cF "<!-- claude-review-requested sha=$sha -->" || true)"
+      (( reqs < limit )) || return 0
       w gh workflow run agent-dispatch.yml --repo "$REPO" -f pr="$pr" -f mode=review
       w gh pr comment "$pr" --repo "$REPO" --body "<!-- claude-review-requested sha=$sha -->Requested Claude review of ${sha:0:7}." >/dev/null
       log "#$pr: requested Claude review of ${sha:0:7}" ;;
@@ -211,11 +230,8 @@ merge() {
   fi
   # The reviewer's latest review of the head is clean: clear its superseded (outdated) threads,
   # which GitHub's required conversation resolution would otherwise block on.
-  case "$(pr_model "$pr")" in
-    claude) resolve_superseded "$pr" "$CODEX_BOT" ;;
-    codex) resolve_superseded "$pr" "$CLAUDE_BOT" ;;
-    *) resolve_superseded "$pr" "$CODEX_BOT"; resolve_superseded "$pr" "$CLAUDE_BOT" ;;
-  esac
+  local who
+  for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_superseded "$pr" "$who"; done
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
     # Hard stop: never merged by autopilot. Ping the owner once per commit.

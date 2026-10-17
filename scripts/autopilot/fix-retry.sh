@@ -38,8 +38,11 @@ if [[ "${1:-}" == --review ]]; then
               || { log "#$pr: review-fix dispatch failed; will retry"; exit 0; } ;;
     codex)
       [[ -n "${CODEX_TOKEN:-}" ]] || { log "#$pr: no CODEX_TOKEN for the Codex review fix"; exit 0; }
-      GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "@codex address the unresolved [blocking] review comments on this PR, push the fixes to this branch, and reply on each thread. Stay inside your role's directories (AGENTS.md)." >/dev/null \
-        || { log "#$pr: @codex review-fix comment failed; will retry"; exit 0; } ;;
+      # The marker rides in the @codex comment itself: that comment's issue_comment event starts
+      # cross-review, which can cancel this run before a separate marker comment is written.
+      GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-review-fix sha=$sha n=$n -->@codex address the unresolved [blocking] review comments on this PR (automatic review fix $n/$max), push the fixes to this branch, and reply on each thread. Stay inside your role's directories (AGENTS.md)." >/dev/null \
+        || { log "#$pr: @codex review-fix comment failed; will retry"; exit 0; }
+      log "#$pr: review fix $n/$max sent to codex"; exit 0 ;;
   esac
   w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-review-fix sha=$sha n=$n -->Automatic review fix $n/$max: sent the unresolved blocking review comments at ${sha:0:7} back to $model." >/dev/null
   log "#$pr: review fix $n/$max sent to $model"; exit 0
@@ -74,12 +77,13 @@ case "$model" in
             || { log "#$pr: retry dispatch failed; will retry"; exit 0; } ;;
   codex)
     [[ -n "${CODEX_TOKEN:-}" ]] || { log "#$pr: no CODEX_TOKEN for the Codex retry"; exit 0; }
-    GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "@codex fix the CI failure on this PR (attempt $n/$max). Summary of the failed run $url:
+    GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-retry sha=$sha n=$n -->@codex fix the CI failure on this PR (attempt $n/$max). Summary of the failed run $url:
 \`\`\`
 $summary
 \`\`\`
 Push the fix to this branch. Stay inside your role's directories (AGENTS.md)." >/dev/null \
-      || { log "#$pr: @codex retry comment failed; will retry"; exit 0; } ;;
+      || { log "#$pr: @codex retry comment failed; will retry"; exit 0; }
+    log "#$pr: retry $n/$max sent to codex"; exit 0 ;;   # marker is in the @codex comment
 esac
 w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-retry sha=$sha n=$n -->Automatic retry $n/$max for the CI failure in $url:
 \`\`\`
