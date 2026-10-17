@@ -1,4 +1,6 @@
-# The owner approves decision and installer-disk work (MISSION §7).
+# Review requests go to the owner. Approval rules live in docs/MISSION.md §7 and docs/AUTOPILOT.md §7:
+# the owner approves installer-disk, workflows, scripts/autopilot/ and signing; decision and ADR PRs
+# merge after Claude/Codex cross-review with all threads resolved (owner decision, 2026-10-17).
 *            @zeewolf121-rgb
 /installer/  @zeewolf121-rgb
 /docs/adr/   @zeewolf121-rgb
