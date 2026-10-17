@@ -79,15 +79,16 @@ codex_reviewed() { # pr sha: Codex finished reviewing this exact commit, finding
   # before the review (and its P0/P1 threads) is posted, so when it reports findings we also
   # wait for the review object on the head commit (the race behind #65).
   local st
+  # A receipt ("Didn't find any major issues", naming this exact commit) is Codex's final verdict
+  # for it, whatever the summary's state block says. That block can be stale (commit_sha null on
+  # #104), so check the receipt first. Unresolved P0/P1 threads still block in cross_review.
+  codex_receipt "$1" "$2" && return 0
   st="$(comments_by "$1" "$CODEX_BOT" | sed -n 's/.*codex-review-state:v1 \({.*}\) -->.*/\1/p' | tail -n1)"
   if [[ -n "$st" ]]; then
     jq -e --arg s "$2" '.code_review.commit_sha == $s and .code_review.status == "completed"' <<<"$st" >/dev/null \
       || return 1
     if jq -e '.code_review.has_any_findings != true' <<<"$st" >/dev/null; then return 0; fi
-    reviews_by "$1" "$CODEX_BOT" | grep -qx "$2" && return 0
-    # has_any_findings is sticky for the PR's lifetime. A clean re-review of a later commit posts
-    # no review object, only a receipt comment naming that commit, so accept the receipt.
-    codex_receipt "$1" "$2"; return
+    reviews_by "$1" "$CODEX_BOT" | grep -qx "$2"; return
   fi
   # Older summaries without the state block.
   reviews_by "$1" "$CODEX_BOT" | grep -qx "$2" && return 0
