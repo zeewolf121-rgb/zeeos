@@ -37,6 +37,7 @@ case "$1 $2" in
   *) write=1 ;;
 esac
 if [[ "$1 $2" == "workflow run" && -n "${FAIL_WORKFLOW_RUN:-}" ]]; then echo "CALL $*" >>"$CALLS"; exit 1; fi
+[[ "$*" == *mutation* ]] && write=1
 if [[ -n "$write" ]]; then echo "CALL $*" >>"$CALLS"; [[ "$1 $2" == "issue create" ]] && echo "https://x/issues/99"; exit 0; fi
 f="$FIX/$key.json"
 [[ -f "$f" ]] || { [[ "$key" == *protection* ]] && exit 1; echo "[]" >"$f"; }
@@ -121,6 +122,31 @@ jq --arg m "<!-- autopilot-review-fix sha=$sha n=1 -->" '. + [{"user":{"login":"
 ok "at most one review fix per commit (cross-review still blocked by the P1)" '! grep -q "mode=fix" "$CALLS" && [[ "$(gates cross-review 5)" == unresolved* ]]'
 ok "blocking prints the comment for the fix prompt" '[[ "$(gates blocking 5)" == *"fix x"* ]]'
 
+# Codex review state (race behind #65): "completed" with findings needs the review object.
+cstate() { echo "[{\"user\":{\"login\":\"chatgpt-codex-connector[bot]\"},\"body\":\"<!-- codex-review-state:v1 {\\\"code_review\\\":{\\\"commit_sha\\\":\\\"$1\\\",\\\"has_any_findings\\\":$2,\\\"status\\\":\\\"completed\\\"}} --> | 📝 **Code Review** | ✅ **Completed** x | \`${1:0:7}\` | Manual |\"}]"; }
+reset; claude_pr
+cstate "$sha" true | fx issues_5_comments
+ok "findings reported but review not posted yet -> still waiting" '[[ "$(gates cross-review 5)" == waiting* ]]'
+echo "[{\"user\":{\"login\":\"chatgpt-codex-connector[bot]\"},\"commit_id\":\"$sha\"}]" | fx pulls_5_reviews
+ok "review object on head -> reviewed (threads decide)" 'gates cross-review 5 >/dev/null'
+cstate deadbeef false | fx issues_5_comments; rm -f "$FIX/pulls_5_reviews.json"
+ok "state for another commit -> waiting" '[[ "$(gates cross-review 5)" == waiting* ]]'
+cstate "$sha" false | fx issues_5_comments
+ok "clean state on head -> reviewed" 'gates cross-review 5 >/dev/null'
+
+# Outdated blocking threads don't block a re-reviewed head; the gate resolves them on merge.
+reset; claude_pr; codex_done
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) old"}]}}]}}}}}' | fx graphql
+ok "outdated P1 thread doesn't block" 'gates cross-review 5 >/dev/null'
+gates merge 5 >/dev/null || true
+ok "merge resolves the superseded thread" 'grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T1" "$CALLS"'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) live"}]}}]}}}}}' | fx graphql
+ok "a P1 thread that still applies keeps blocking" '! gates cross-review 5 >/dev/null'
+
+# The review-fix marker is written only after the dispatch succeeded.
+: >"$CALLS"; FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null || true
+ok "failed review-fix dispatch leaves no marker (retried next run)" 'grep -q "mode=fix" "$CALLS" && ! grep -q "autopilot-review-fix" "$CALLS"'
+
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
@@ -130,6 +156,9 @@ ok "forged Claude verdict (wrong workflow) rejected" '! gates cross-review 5 >/d
 echo '{"path":".github/workflows/agent-dispatch.yml","head_branch":"main"}' | fx actions_runs_77
 echo '{"jobs":[{"name":"claude-review"}]}' | fx actions_runs_77_jobs
 ok "verified Claude verdict passes" 'gates cross-review 5 >/dev/null'
+sed -i.bak 's/verdict=pass/verdict=fail/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
+: >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
+ok "Claude fail verdict on a Codex PR -> review fix sent to Codex" 'grep -q "@codex address the unresolved" "$CALLS" && grep -q "autopilot-review-fix" "$CALLS"'
 
 # Dispatch: caps, priority, labels.
 reset
