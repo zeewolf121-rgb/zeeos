@@ -61,7 +61,7 @@ Owns architecture, decomposition, integration, merges, build, installer, desktop
 Works `model:codex` issues. Owns branding, security, and red-team review (data loss, licensing, security). Reviews every Claude PR.
 
 ### Cross-model rules
-- No model approves its own PR. A merge needs CI green + the other model's review + my approval for `decision` and `installer-disk`.
+- No model approves its own PR. A merge needs CI green + the other model's review + my approval for `installer-disk` (and workflows, `scripts/autopilot/`, signing). `decision` and ADR PRs merge after cross-review with all threads resolved (my decision, 2026-10-17).
 - On disagreement, each model states its position in five bullets or fewer; I decide. No loops.
 - Shared context lives in the repo only: CLAUDE.md, AGENTS.md (kept in sync by script, under 150 lines each), /docs/ARCHITECTURE.md, /docs/adr/.
 
