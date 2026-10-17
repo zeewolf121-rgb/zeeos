@@ -19,8 +19,28 @@ concurrency:
   group: pin-packages-${{ inputs.branch || 'main' }}
   cancel-in-progress: false
 jobs:
-  resolve:
+  # `make pin-packages` lands with #80 (ADR-0008 image-builder part). Until it's on the checked-out
+  # ref, the daily run skips with a notice; a manual dispatch against such a ref fails loudly.
+  gate:
     if: vars.AUTOPILOT == 'on' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.t.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+      - id: t
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if grep -q '^pin-packages:' Makefile; then echo "ready=true" >>"$GITHUB_OUTPUT"; exit 0; fi
+          msg="no pin-packages target on ${{ inputs.branch || 'main' }} (lands with #80)"
+          if [[ "$EVENT" == schedule ]]; then echo "::notice::$msg; skipping"; echo "ready=false" >>"$GITHUB_OUTPUT"
+          else echo "::error::$msg"; exit 1; fi
+  resolve:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +98,16 @@ jobs:
           target="$BASE"; [[ "$BASE" == main ]] && target=agent/ci-engineer/pin-refresh
           locks=(build/arch/x86_64/packages.lock build/arch/aarch64/packages.lock)
           # ADR-0008: the PR body lists the package diff; shim/grub2-efi/kernel bumps get boot-chain.
-          changes="$(git diff -U0 -- "${locks[@]}" | grep -E '^[+-][^+#-]' | head -n 200 || true)"
+          changes="$(git diff -U0 -- "${locks[@]}" | grep -E '^[+-][^+#-]' || true)"
+          boot_chain=false
+          grep -qE '^[+-](shim-|grub2-efi-|kernel[ -])' <<<"$changes" && boot_chain=true
+          # Security advisories for the new builds (lock line: name epoch:version-release.arch sha256 source).
+          advisories="$(grep -E '^\+' <<<"$changes" | awk '{ evra = $2; sub(/^[0-9]+:/, "", evra); sub(/\.[^.]+$/, "", evra);
+              print $4 "-" evra }' | sort -u | head -n 150 | while read -r nvr; do
+              curl -fsS --max-time 20 "https://bodhi.fedoraproject.org/updates/?builds=$nvr" \
+                | jq -r '.updates[]? | select(.type == "security") | "- [\(.alias)](https://bodhi.fedoraproject.org/updates/\(.alias)) \(.title)"' \
+                || echo "- (Bodhi lookup failed for $nvr)"
+            done | sort -u)"
           pr_open=""
           if [[ "$target" != "$BASE" ]]; then
             pr_open="$(gh pr list --head "$target" --state open --json number --jq '.[0].number // empty')"
@@ -95,8 +124,11 @@ jobs:
           git add "${locks[@]}"
           git commit -m "chore(build): refresh packages.lock (pin-packages run ${{ github.run_id }})"
           if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
-          body="$(printf 'Automated lock refresh from run %s (ADR-0008).\n\n<details><summary>Package changes</summary>\n\n```diff\n%s\n```\n</details>\n' \
-            "${{ github.run_id }}" "$changes")"
+          shown="$(head -n 300 <<<"$changes")"
+          (( $(wc -l <<<"$changes") > 300 )) && shown+=$'\n'"… $(( $(wc -l <<<"$changes") - 300 )) more lines (full diff in the commit)"
+          body="$(printf 'Automated lock refresh from run %s (ADR-0008).%s\n\n### Security advisories (Bodhi)\n%s\n\n<details><summary>Package changes</summary>\n\n```diff\n%s\n```\n</details>\n' \
+            "${{ github.run_id }}" "$([[ $boot_chain == true ]] && echo ' **Boot chain changed: boot-test SECUREBOOT=on must pass on both arches.**')" \
+            "${advisories:-none found}" "$shown")"
           pr="$(gh pr list --head "$target" --state open --json number --jq '.[0].number // empty')"
           if [[ "$BASE" == main ]]; then
             if [[ -z "$pr" ]]; then
@@ -107,7 +139,7 @@ jobs:
               gh pr edit "$pr" --body "$body"
             fi
           fi
-          if [[ -n "$pr" ]] && grep -qE '^[+-](shim-|grub2-efi-|kernel[ -])' <<<"$changes"; then
+          if [[ -n "$pr" && "$boot_chain" == true ]]; then
             gh label create boot-chain --color b60205 \
               --description "Bumps shim/grub2-efi/kernel: boot-test SECUREBOOT=on on both arches first (ADR-0008)" \
               2>/dev/null || true
