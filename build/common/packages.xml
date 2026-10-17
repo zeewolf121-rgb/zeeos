@@ -28,5 +28,12 @@
   <package name="kwin"/>
   <package name="sddm"/>
   <package name="sddm-wayland-plasma"/>
+  <!-- From boot-test diagnostics (run 39016137155): pam_systemd.so missing (no logind session /
+       XDG_RUNTIME_DIR), session exit 127 (startplasma-wayland / dbus-run-session), no DRM, no theme. -->
+  <package name="systemd-pam"/>
+  <package name="plasma-workspace"/>
+  <package name="dbus-tools"/>
+  <package name="mesa-dri-drivers"/>
+  <package name="sddm-breeze"/>
 </packages>
 </image>
