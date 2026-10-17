@@ -71,29 +71,49 @@ jobs:
           pattern: lock-*
           path: locks
       - name: Commit the locks
+        id: commit
         run: |
           for a in x86_64 aarch64; do cp "locks/lock-$a/packages.lock" "build/arch/$a/packages.lock"; done
           git diff --quiet -- build/arch && { echo "locks unchanged"; exit 0; }
           target="$BASE"; [[ "$BASE" == main ]] && target=agent/ci-engineer/pin-refresh
-          # An open rolling PR already carrying these exact locks: leave its head (and its reviews
-          # and approvals) alone instead of recreating the same commit every day.
-          if [[ "$target" != "$BASE" ]] && git fetch -q origin "$target" 2>/dev/null \
-            && git diff --quiet FETCH_HEAD -- build/arch/x86_64/packages.lock build/arch/aarch64/packages.lock; then
-            echo "$target already has these locks"; exit 0
+          locks=(build/arch/x86_64/packages.lock build/arch/aarch64/packages.lock)
+          # ADR-0008: the PR body lists the package diff; shim/grub2-efi/kernel bumps get boot-chain.
+          changes="$(git diff -U0 -- "${locks[@]}" | grep -E '^[+-][^+#-]' | head -n 200 || true)"
+          pr_open=""
+          if [[ "$target" != "$BASE" ]]; then
+            pr_open="$(gh pr list --head "$target" --state open --json number --jq '.[0].number // empty')"
+          fi
+          # Keep an OPEN rolling PR that already carries these exact locks (and its reviews and
+          # approvals). A closed PR's leftover branch doesn't count: recreate it.
+          if [[ -n "$pr_open" ]] && git fetch -q origin "$target" 2>/dev/null \
+            && git diff --quiet FETCH_HEAD -- "${locks[@]}"; then
+            echo "open PR #$pr_open already has these locks"; exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$target"
-          git add build/arch/*/packages.lock
+          git add "${locks[@]}"
           git commit -m "chore(build): refresh packages.lock (pin-packages run ${{ github.run_id }})"
           if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
-          if [[ "$BASE" == main ]] && ! gh pr view "$target" >/dev/null 2>&1; then
-            gh pr create --base main --head "$target" --title "chore(build): refresh packages.lock" \
-              --label agent:image-builder --label phase:1 --label arch:both \
-              --body "Automated lock refresh from run ${{ github.run_id }} (ADR-0008)."
+          body="$(printf 'Automated lock refresh from run %s (ADR-0008).\n\n<details><summary>Package changes</summary>\n\n```diff\n%s\n```\n</details>\n' \
+            "${{ github.run_id }}" "$changes")"
+          pr="$(gh pr list --head "$target" --state open --json number --jq '.[0].number // empty')"
+          if [[ "$BASE" == main ]]; then
+            if [[ -z "$pr" ]]; then
+              gh pr create --base main --head "$target" --title "chore(build): refresh packages.lock" \
+                --label agent:image-builder --label arch:both --body "$body"
+              pr="$(gh pr list --head "$target" --state open --json number --jq '.[0].number')"
+            else
+              gh pr edit "$pr" --body "$body"
+            fi
+          fi
+          if [[ -n "$pr" ]] && grep -qE '^[+-](shim-|grub2-efi-|kernel[ -])' <<<"$changes"; then
+            gh label create boot-chain --color b60205 \
+              --description "Bumps shim/grub2-efi/kernel: boot-test SECUREBOOT=on on both arches first (ADR-0008)" \
+              2>/dev/null || true
+            gh pr edit "$pr" --add-label boot-chain
           fi
           echo "target=$target" >>"$GITHUB_OUTPUT"
-        id: commit
       # Pushes made with GITHUB_TOKEN start no workflows, so dispatch the required checks on the
       # new head; their check runs attach to that commit and count for the PR.
       - name: Run the required checks on the new head
