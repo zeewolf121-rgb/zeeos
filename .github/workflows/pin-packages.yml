@@ -1,0 +1,172 @@
+# Package pinning (ADR-0008, #45): resolve the closure on native runners, publish the closure
+# image to GHCR, and commit build/arch/<arch>/packages.lock. Manual dispatch can target a branch
+# (e.g. #80's); the daily run refreshes main through a rolling PR. The publish step's
+# anonymous-pull check fails until the owner makes the ghcr.io/<owner>/zeeos-closure-* packages
+# public once. GITHUB_TOKEN pushes trigger no CI, so the commit job dispatches lint and build-iso.
+name: pin-packages
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: branch to commit the locks to (default main → rolling PR)
+        required: false
+        default: main
+  schedule:
+    - cron: '41 3 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: pin-packages-${{ inputs.branch || 'main' }}
+  cancel-in-progress: false
+jobs:
+  # `make pin-packages` lands with #80 (ADR-0008 image-builder part). Until it's on the checked-out
+  # ref, the daily run skips with a notice; a manual dispatch against such a ref fails loudly.
+  gate:
+    if: vars.AUTOPILOT == 'on' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.t.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+      - id: t
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if grep -q '^pin-packages:' Makefile; then echo "ready=true" >>"$GITHUB_OUTPUT"; exit 0; fi
+          msg="no pin-packages target on ${{ inputs.branch || 'main' }} (lands with #80)"
+          if [[ "$EVENT" == schedule ]]; then echo "::notice::$msg; skipping"; echo "ready=false" >>"$GITHUB_OUTPUT"
+          else echo "::error::$msg"; exit 1; fi
+  resolve:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ github.token }}
+        run: echo "$TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Resolve, fetch and publish
+        env:
+          ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
+        run: make pin-packages ARCH=${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lock-${{ matrix.arch }}
+          path: |
+            build/arch/${{ matrix.arch }}/packages.lock
+            build/arch/${{ matrix.arch }}/tools-image.lock
+            build/arch/${{ matrix.arch }}/tools.lock
+          if-no-files-found: error
+          retention-days: 7
+  commit:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+      issues: write          # create the boot-chain label if missing
+      pull-requests: write
+    env:
+      BASE: ${{ inputs.branch || 'main' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: lock-*
+          path: locks
+      - name: Commit the locks
+        id: commit
+        run: |
+          for a in x86_64 aarch64; do
+            for f in packages.lock tools-image.lock tools.lock; do
+              [[ -f "locks/lock-$a/$f" ]] && cp "locks/lock-$a/$f" "build/arch/$a/$f"
+            done
+          done
+          # Stage first: on the first run the locks are untracked, and plain `git diff` ignores those.
+          git add -A -- build/arch
+          git diff --cached --quiet -- build/arch && { echo "locks unchanged"; exit 0; }
+          # human/* = no authoring model: gates.sh accepts a review by either model (lib.sh pr_model).
+          target="$BASE"; [[ "$BASE" == main ]] && target=human/pin-refresh
+          locks=(build/arch/x86_64/packages.lock build/arch/aarch64/packages.lock)
+          all_locks=(build/arch/*/packages.lock build/arch/*/tools-image.lock build/arch/*/tools.lock)
+          # ADR-0008: the PR body lists the package diff; shim/grub2-efi/kernel bumps get boot-chain.
+          changes="$(git diff --cached -U0 -- "${locks[@]}" | { grep -E '^[+-][^+#-]' || true; })"
+          boot_chain=false
+          if grep -qE '^[+-](shim-|grub2-efi-|kernel[ -])' <<<"$changes"; then boot_chain=true; fi
+          # Security advisories for the new builds (lock line: name epoch:version-release.arch sha256 source).
+          advisories="$({ grep -E '^\+' <<<"$changes" || true; } | awk '{ evra = $2; sub(/^[0-9]+:/, "", evra); sub(/\.[^.]+$/, "", evra);
+              print $4 "-" evra }' | sort -u | while read -r nvr; do
+              if resp="$(curl -fsS --max-time 20 "https://bodhi.fedoraproject.org/updates/?builds=$nvr")" \
+                && jq -e '.updates' >/dev/null <<<"$resp"; then
+                jq -r '.updates[] | select(.type == "security") | "- [\(.alias)](https://bodhi.fedoraproject.org/updates/\(.alias)) \(.title)"' <<<"$resp"
+              else
+                echo "- (Bodhi lookup failed for $nvr)"
+              fi
+            done | sort -u)"
+          pr_open=""
+          if [[ "$target" != "$BASE" ]]; then
+            pr_open="$(gh pr list --head "$target" --state open --json number --jq '.[0].number // empty')"
+          fi
+          # Keep an OPEN rolling PR that already carries these exact locks (and its reviews and
+          # approvals). A closed PR's leftover branch doesn't count: recreate it.
+          if [[ -n "$pr_open" ]] && git fetch -q origin "$target" 2>/dev/null \
+            && git diff --quiet FETCH_HEAD -- "${all_locks[@]}"; then
+            echo "open PR #$pr_open already has these locks"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$target"
+          git commit -m "chore(build): refresh packages.lock (pin-packages run ${{ github.run_id }})"
+          if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
+          shown="$(head -n 300 <<<"$changes")"
+          (( $(wc -l <<<"$changes") > 300 )) && shown+=$'\n'"… $(( $(wc -l <<<"$changes") - 300 )) more lines (full diff in the commit)"
+          # shellcheck disable=SC2016  # the backticks are literal Markdown fences
+          body="$(printf 'Automated lock refresh from run %s (ADR-0008).%s\n\n### Security advisories (Bodhi)\n%s\n\n<details><summary>Package changes</summary>\n\n```diff\n%s\n```\n</details>\n' \
+            "${{ github.run_id }}" "$([[ $boot_chain == true ]] && echo ' **Boot chain changed: boot-test SECUREBOOT=on must pass on both arches.**')" \
+            "${advisories:-none found}" "$shown")"
+          pr="$(gh pr list --head "$target" --state open --json number --jq '.[0].number // empty')"
+          if [[ "$BASE" == main ]]; then
+            if [[ -z "$pr" ]]; then
+              gh pr create --base main --head "$target" --title "chore(build): refresh packages.lock" \
+                --label agent:image-builder --label arch:both --body "$body"
+              pr="$(gh pr list --head "$target" --state open --json number --jq '.[0].number')"
+            else
+              gh pr edit "$pr" --body "$body"
+            fi
+          fi
+          if [[ -n "$pr" && "$boot_chain" == true ]]; then
+            gh label create boot-chain --color b60205 \
+              --description "Bumps shim/grub2-efi/kernel: boot-test SECUREBOOT=on on both arches first (ADR-0008)" \
+              || gh label list --search boot-chain --json name --jq '.[].name' | grep -qx boot-chain
+            gh pr edit "$pr" --add-label boot-chain
+          fi
+          echo "target=$target" >>"$GITHUB_OUTPUT"
+      # Pushes made with GITHUB_TOKEN start no workflows, so dispatch the required checks on the
+      # new head; their check runs attach to that commit and count for the PR.
+      - name: Run the required checks on the new head
+        if: steps.commit.outputs.target != ''
+        env:
+          TARGET: ${{ steps.commit.outputs.target }}
+        run: |
+          gh workflow run lint.yml --ref "$TARGET"
+          gh workflow run build-iso.yml --ref "$TARGET"
