@@ -174,6 +174,7 @@ ok "error verdict: no fixer, Claude review re-requested" '! grep -q "autopilot-r
 jq --arg m "<!-- claude-review-requested sha=$sha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m},{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
 : >"$CALLS"; gates request-review 5 >/dev/null || true
 ok "error verdict: at most one extra request" '! grep -q "mode=review" "$CALLS"'
+ok "error verdict twice: needs-human + owner ping" 'grep -q "issue edit 5 --repo o/r --add-label needs-human" "$CALLS" && grep -q "did not finish twice" "$CALLS"'
 
 # Dispatch: caps, priority, labels.
 reset

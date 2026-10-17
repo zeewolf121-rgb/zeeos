@@ -198,6 +198,9 @@ jobs:
         env:
           SHA: ${{ steps.pr.outputs.sha }}
         run: |
+          # Earlier steps may have failed before recording the head; look it up again so the
+          # marker always names a commit (request_review keys its one retry on it).
+          SHA="${SHA:-$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)}"
           v="$(sed -n '1s/^verdict: *\(pass\|fail\)$/\1/p' claude-review.md 2>/dev/null || true)"
           summary="$(tail -n +2 claude-review.md 2>/dev/null | head -n 5 || true)"
           { echo "<!-- claude-review sha=$SHA verdict=${v:-error} run=$GITHUB_RUN_ID -->"

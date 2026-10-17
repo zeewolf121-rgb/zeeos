@@ -205,7 +205,15 @@ request_review() {
       [[ "$v" == error ]] && limit=2
       reqs="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' \
         | grep -cF "<!-- claude-review-requested sha=$sha -->" || true)"
-      (( reqs < limit )) || return 0
+      if (( reqs >= limit )); then
+        # The retry also ended unfinished: stop retrying and hand it to the owner (once).
+        if [[ "$v" == error ]] && ! has_label "$pr" needs-human; then
+          w gh issue edit "$pr" --repo "$REPO" --add-label needs-human >/dev/null
+          w gh pr comment "$pr" --repo "$REPO" --body "@$OWNER the Claude review of ${sha:0:7} did not finish twice (verdict=error). Labelled needs-human; check the agent-dispatch claude-review runs, then remove the label to retry." >/dev/null
+          log "#$pr needs-human: Claude review unfinished twice"
+        fi
+        return 0
+      fi
       w gh workflow run agent-dispatch.yml --repo "$REPO" -f pr="$pr" -f mode=review
       w gh pr comment "$pr" --repo "$REPO" --body "<!-- claude-review-requested sha=$sha -->Requested Claude review of ${sha:0:7}." >/dev/null
       log "#$pr: requested Claude review of ${sha:0:7}" ;;
