@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Default wallpaper for new users: the generated ZeeOS wallpaper (usr/share/wallpapers/ZeeOS).
+[Wallpapers]
+defaultWallpaperTheme=ZeeOS
+defaultFileSuffix=.svg
+defaultWidth=3840
+defaultHeight=2160

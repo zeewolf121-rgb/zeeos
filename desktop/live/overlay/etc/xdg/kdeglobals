@@ -13,4 +13,5 @@ toolBarFont=Noto Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 Theme=breeze
 
 [KDE]
+LookAndFeelPackage=org.kde.breeze.desktop
 widgetStyle=Breeze
