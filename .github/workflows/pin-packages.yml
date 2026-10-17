@@ -69,7 +69,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: lock-${{ matrix.arch }}
-          path: build/arch/${{ matrix.arch }}/packages.lock
+          path: |
+            build/arch/${{ matrix.arch }}/packages.lock
+            build/arch/${{ matrix.arch }}/tools-image.lock
+            build/arch/${{ matrix.arch }}/tools.lock
           if-no-files-found: error
           retention-days: 7
   commit:
@@ -78,6 +81,7 @@ jobs:
     permissions:
       actions: write
       contents: write
+      issues: write          # create the boot-chain label if missing
       pull-requests: write
     env:
       BASE: ${{ inputs.branch || 'main' }}
@@ -93,10 +97,16 @@ jobs:
       - name: Commit the locks
         id: commit
         run: |
-          for a in x86_64 aarch64; do cp "locks/lock-$a/packages.lock" "build/arch/$a/packages.lock"; done
+          for a in x86_64 aarch64; do
+            for f in packages.lock tools-image.lock tools.lock; do
+              [[ -f "locks/lock-$a/$f" ]] && cp "locks/lock-$a/$f" "build/arch/$a/$f"
+            done
+          done
           git diff --quiet -- build/arch && { echo "locks unchanged"; exit 0; }
-          target="$BASE"; [[ "$BASE" == main ]] && target=agent/ci-engineer/pin-refresh
+          # human/* = no authoring model: gates.sh accepts a review by either model (lib.sh pr_model).
+          target="$BASE"; [[ "$BASE" == main ]] && target=human/pin-refresh
           locks=(build/arch/x86_64/packages.lock build/arch/aarch64/packages.lock)
+          all_locks=(build/arch/*/packages.lock build/arch/*/tools-image.lock build/arch/*/tools.lock)
           # ADR-0008: the PR body lists the package diff; shim/grub2-efi/kernel bumps get boot-chain.
           changes="$(git diff -U0 -- "${locks[@]}" | grep -E '^[+-][^+#-]' || true)"
           boot_chain=false
@@ -104,9 +114,12 @@ jobs:
           # Security advisories for the new builds (lock line: name epoch:version-release.arch sha256 source).
           advisories="$(grep -E '^\+' <<<"$changes" | awk '{ evra = $2; sub(/^[0-9]+:/, "", evra); sub(/\.[^.]+$/, "", evra);
               print $4 "-" evra }' | sort -u | head -n 150 | while read -r nvr; do
-              curl -fsS --max-time 20 "https://bodhi.fedoraproject.org/updates/?builds=$nvr" \
-                | jq -r '.updates[]? | select(.type == "security") | "- [\(.alias)](https://bodhi.fedoraproject.org/updates/\(.alias)) \(.title)"' \
-                || echo "- (Bodhi lookup failed for $nvr)"
+              if resp="$(curl -fsS --max-time 20 "https://bodhi.fedoraproject.org/updates/?builds=$nvr")" \
+                && jq -e '.updates' >/dev/null <<<"$resp"; then
+                jq -r '.updates[] | select(.type == "security") | "- [\(.alias)](https://bodhi.fedoraproject.org/updates/\(.alias)) \(.title)"' <<<"$resp"
+              else
+                echo "- (Bodhi lookup failed for $nvr)"
+              fi
             done | sort -u)"
           pr_open=""
           if [[ "$target" != "$BASE" ]]; then
@@ -115,13 +128,13 @@ jobs:
           # Keep an OPEN rolling PR that already carries these exact locks (and its reviews and
           # approvals). A closed PR's leftover branch doesn't count: recreate it.
           if [[ -n "$pr_open" ]] && git fetch -q origin "$target" 2>/dev/null \
-            && git diff --quiet FETCH_HEAD -- "${locks[@]}"; then
+            && git diff --quiet FETCH_HEAD -- "${all_locks[@]}"; then
             echo "open PR #$pr_open already has these locks"; exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$target"
-          git add "${locks[@]}"
+          git add -- "${all_locks[@]}"
           git commit -m "chore(build): refresh packages.lock (pin-packages run ${{ github.run_id }})"
           if [[ "$target" == "$BASE" ]]; then git push origin "$target"; else git push --force origin "$target"; fi
           shown="$(head -n 300 <<<"$changes")"
@@ -142,7 +155,7 @@ jobs:
           if [[ -n "$pr" && "$boot_chain" == true ]]; then
             gh label create boot-chain --color b60205 \
               --description "Bumps shim/grub2-efi/kernel: boot-test SECUREBOOT=on on both arches first (ADR-0008)" \
-              2>/dev/null || true
+              || gh label list --search boot-chain --json name --jq '.[].name' | grep -qx boot-chain
             gh pr edit "$pr" --add-label boot-chain
           fi
           echo "target=$target" >>"$GITHUB_OUTPUT"
