@@ -10,7 +10,7 @@
 ## Scope rules
 
 - Every agent writes only inside the directories it owns (see `docs/agents.md`). If a change needs another agent's directory, open a new issue for that agent and mark yours `blocked-by:#N`.
-- `/docs/adr/` changes need a `decision` label and the owner's approval.
+- `/docs/adr/` changes need a `decision` label, cross-review and every review thread resolved. They no longer need the owner's approval (owner decision, 2026-10-17).
 
 ## Merge requirements
 
