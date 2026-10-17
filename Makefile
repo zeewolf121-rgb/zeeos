@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 ARCH ?= x86_64
 SECUREBOOT ?= on
+# The ISO that `make iso ARCH=…` writes; override with ISO=<path>.
+ISO ?= $(firstword $(wildcard out/$(ARCH)/image/*.iso))
 .PHONY: iso iso-host pin-container reproducible boot-test lint
 iso:
 	build/container/run.sh $(ARCH)
