@@ -33,8 +33,10 @@ while read -r n evra sha src; do
   rm -f "$dest"
   vr="${evra#*:}"; a="${vr##*.}"; vrn="${vr%.*}"; l="${f:0:1}"; l="${l,,}"
   ok=0
-  for u in "$mirror/updates/44/Everything/$a/Packages/$l/$f" \
-           "$mirror/releases/44/Everything/$a/os/Packages/$l/$f" \
+  # Mirrors serve noarch RPMs from each target arch's tree, so use $arch there; Koji keeps the
+  # package's own arch ($a, which can be noarch) in its signed-copy path.
+  for u in "$mirror/updates/44/Everything/$arch/Packages/$l/$f" \
+           "$mirror/releases/44/Everything/$arch/os/Packages/$l/$f" \
            "$koji/${src:-$n}/${vrn%-*}/${vrn##*-}/data/signed/$keyid/$a/$f"; do
     if try "$u" "$dest" "$sha"; then ok=1; break; fi
   done
