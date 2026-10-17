@@ -23,6 +23,10 @@ log() {
 # Run a write action, or just log it under DRY_RUN.
 w() { if [[ -n "${DRY_RUN:-}" ]]; then log "DRY: $*"; else "$@"; fi; }
 
+# The merge guards themselves are hard stops too (owner decision, 2026-10-17): the hook that
+# stops Claude sessions merging (.claude/) and the audit that flags unguarded merges.
+HARD_STOP_PATHS+='|^(\.claude/|scripts/merge-audit\.sh$)'
+
 labels_of() { gh issue view "$1" --repo "$REPO" --json labels --jq '.labels[].name'; }
 has_label() { labels_of "$1" | grep -qxF "$2"; }
 issue_model() { labels_of "$1" | sed -n 's/^model://p' | head -n1; }
