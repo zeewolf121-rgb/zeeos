@@ -13,6 +13,8 @@
 | reviewer | Codex | read-only: PR review, data-loss audit, license audit | — |
 | docs-writer | either | `/docs/user`, `CHANGELOG.md` | — |
 
+Every agent may also write its own handoff file, `.agent/state/<issue>.md`, for the issue it works on (template: `.agent/state/TEMPLATE.md`; autopilot's fix runs update it). Nothing else under `.agent/` is in any agent's scope.
+
 The orchestrator (Claude Code, top level) owns integration, merges, `CLAUDE.md`, `AGENTS.md` and `docs/agent-context.md`.
 
 ## Labels on every issue
