@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name
 # release=44
 # arch=aarch64
-# resolved=2026-10-17T18:19:24Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:71e369c48867eac2480320ad7109dd06d33e69c4854309a3ec8af39ad522417d
+# resolved=2026-10-17T19:55:50Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:d8966131a1026bd2cae08880a66a89000b38e05b651c7602e225236f9ffa3048
 LibRaw 0:0.22.2-1.fc44.aarch64 e92b9744b717843d7028ea5e9dfc9fbf1641c7dbf9d43e63345087ad41a08793 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.aarch64 bfac5045a95b38089bf606e56fed9b3f030011eb1837004ec6b5aa83f871d322 ModemManager
 NetworkManager 1:1.56.1-2.fc44.aarch64 2417739e89469a05c597ce6d087090c1960d10c46cfca97f786fc670db4c31df NetworkManager
@@ -14,6 +14,7 @@ SDL3 0:3.4.18-1.fc44.aarch64 b8d22ea2f2a32982c82ddfb84ea73c2a1e4f2234bc76ecd4ac0
 abattis-cantarell-vf-fonts 0:0.301-17.fc44.noarch 720fbca1cdaf0e5e4cc388402f5de012c9e26eff129d13dd89560d2eea96585c abattis-cantarell-fonts
 abseil-cpp 0:20260107.1-1.fc44.aarch64 69599e2779062a0ce333bdb13ccf0d791ae2fb7aaa6233713d4af349b6cb1023 abseil-cpp
 accountsservice 0:23.13.9-16.fc44.aarch64 358e2a4a3cd3bdb1362f23cfaa6f9a3294149d211663ee9635f0670145cd8231 accountsservice
+adw-gtk3-theme 0:6.4-3.fc44.noarch c7ee3e2f1345b20ad1c00072502f96b158ec3c0e57cff0416bd06a904eafbb10 adw-gtk3-theme
 adwaita-cursor-theme 0:50.0-1.fc44.noarch 6d46cf5017b77db42f9bfecf3866c193c91b49c1a364c23855efa072ba2be537 adwaita-icon-theme
 adwaita-icon-theme 0:50.0-1.fc44.noarch e0a8a851b955b2b98f94fc159abcec0139d0c936d6de50ca2a21c8ffe798d2f7 adwaita-icon-theme
 adwaita-icon-theme-legacy 0:46.2-7.fc44.noarch a07ea59c0d1a711a2e5a582ad5e98e1c582851b6ed83db5d2b031a06cf5c713d adwaita-icon-theme-legacy
@@ -102,7 +103,6 @@ f44-backgrounds-base 0:44.0.0-1.fc44.noarch 1e1f9633c505aac1f54ac3b7d9283d22c6d5
 f44-backgrounds-kde 0:44.0.0-1.fc44.noarch 290be051e9c6b717110e067cb66443da46516dbfeb8fd8708d07d15c5fbfdefe f44-backgrounds
 fdk-aac-free 0:2.0.3-2.fc44.aarch64 5c6f07b76f40a67790ecc38ae5b8006df0ae6ade1f4909400feb140cec010704 fdk-aac-free
 fedora-gpg-keys 0:44-2.noarch 9d9b65b4d52ca949a0b80bf909c7add1f327baea797febb72314019261960958 fedora-repos
-fedora-logos 0:42.0.1-3.fc44.noarch a4590765fa32911de23b114f7445fce37ccc427aaf856fd59fd8b5356607a2c1 fedora-logos
 fedora-release 0:44-18.noarch a85259328505a417ddc862747a68ad255bd9b574b9fc0550051549903be67053 fedora-release
 fedora-release-common 0:44-18.noarch ea06ce5597746df56a5cc7c3bd184a8e0b05eec048f60456b0b9469fc59a0cdc fedora-release
 fedora-release-identity-basic 0:44-18.noarch 39b4b8a1339183697a6e342062ee8e84bad7457273c4e2c81f6a29e87c082346 fedora-release
@@ -131,6 +131,7 @@ gdbm 1:1.23-11.fc44.aarch64 dcc2f24e6fea404516a573e28a2cc35ae1c91708505b3470e8a4
 gdbm-libs 1:1.23-11.fc44.aarch64 06a51f6a20c6e2c41f2a0cdb37e21ae13d306cdad083a341668e59e2ddc624e7 gdbm
 gdisk 0:1.0.10-5.fc44.aarch64 6b67f3cb957dd6b99390e1db184b5bfe9da3b9b710e6b7fb4aedb5a8e704e072 gdisk
 gdk-pixbuf2 0:2.44.6^really2.44.4-3.fc44.aarch64 5d2d7f17f85d976ad475e597cd59f1ef62036c63fdafe39ef98984351e369a35 gdk-pixbuf2
+generic-logos 0:18.0.0-27.fc44.noarch 2f9247f480788ef5cea4bc9f872bc5653ae0578fb7bec045f8b807cacc50699e generic-logos
 geoclue2 0:2.8.2-1.fc44.aarch64 bfe229fdf887ce3abf9cb94c8b5895387b48fbfffee42a9657ed85504f976366 geoclue2
 gettext-envsubst 0:0.26-5.fc44.aarch64 9cac95d120b9561c2cbd05fbdda2e48202579ff11ab5a791159dba63e93d4e92 gettext
 gettext-libs 0:0.26-5.fc44.aarch64 2cf70b6571f5bf677aa399debedecac87983b31909ed64fe24da6fd875c828bc gettext
