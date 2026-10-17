@@ -35,5 +35,20 @@
   <package name="dbus-tools"/>
   <package name="mesa-dri-drivers"/>
   <package name="sddm-breeze"/>
+  <!-- P2-1: no Fedora branding. generic-logos replaces fedora-logos (and its 01-breeze-fedora SDDM theme);
+       adw-gtk3 themes GTK3 and the xdg portals carry libadwaita colour-scheme/accent. -->
+  <package name="generic-logos"/>
+  <package name="adw-gtk3-theme"/>
+  <package name="xdg-desktop-portal"/>
+  <package name="xdg-desktop-portal-kde"/>
+  <package name="xdg-desktop-portal-gtk"/>
+  <!-- Exclude Fedora branding at install time (dnf exclude), not <packages type="uninstall">:
+       uninstall also removes every package depending on them, which took plasma-workspace and
+       the plasma.desktop session with it (#98, run 39057784343). generic-logos provides
+       system-logos instead; a hard dependency on these names now fails the build loudly. -->
+  <!-- plasma-lookandfeel-fedora stays: plasma-workspace requires it at the exact version (run
+       39059081199). It's only a dependency; P2-2 makes ZeeOS the default via /etc/xdg. -->
+  <ignore name="fedora-logos"/>
+  <ignore name="fedora-logos-classic"/>
 </packages>
 </image>
