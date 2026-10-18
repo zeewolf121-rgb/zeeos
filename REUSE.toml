@@ -10,6 +10,12 @@ path = ["Makefile", "scripts/**", ".github/**/*.yml", ".github/CODEOWNERS"]
 SPDX-FileCopyrightText = "2026 ZeeOS contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Original ZeeOS artwork (rendered by branding/wallpapers/src/render.py).
+[[annotations]]
+path = ["branding/wallpapers/*/metadata.json", "branding/wallpapers/*/contents/**", "branding/wallpapers/preview.jpg"]
+SPDX-FileCopyrightText = "2026 ZeeOS contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
 # Code files carry their own SPDX-License-Identifier; this adds the copyright notice
 # (agents keep forgetting SPDX-FileCopyrightText). Artwork in /branding is not covered.
 [[annotations]]

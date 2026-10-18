@@ -20,6 +20,12 @@ cp -a "$src/." "$desc/"
 # Live desktop overlay (owned by desktop-shell): copied into the image root, never edited here.
 mkdir -p "$desc/root"
 cp -a "$root/desktop/live/overlay/." "$desc/root/"
+# ZeeOS wallpapers (owned by theme-designer): every Plasma wallpaper package in branding/wallpapers/
+# (a directory with a metadata.json; src/ holds the generator and is not shipped).
+mkdir -p "$desc/root/usr/share/wallpapers"
+for pkg in "$root"/branding/wallpapers/*/metadata.json; do
+  cp -a "$(dirname "$pkg")" "$desc/root/usr/share/wallpapers/"
+done
 # Escape a value for use inside an XML attribute and as a sed replacement (| delimiter).
 xml_sed() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; v="${v//</&lt;}"; printf '%s' "$v" | sed 's/[\\&|]/\\&/g'; }
 # kiwi resolves file:// includes against its cwd, not the description dir: make the path absolute.
