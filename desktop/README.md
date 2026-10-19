@@ -20,6 +20,9 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - Wallpaper: the art lives in `branding/wallpapers/` (theme-designer). `usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zeeos-wallpaper.js`
   sets the `ZeeOS` package once per user on first login (light/dark follows the colour scheme), and
   `etc/xdg/kscreenlockerrc` uses it on the lock screen. (Replaces the old `scripts/gen-wallpaper.sh` placeholder.)
+- `usr/share/plasma/look-and-feel/org.zeeos.base`: minimal look-and-feel; `contents/defaults` sets the default
+  wallpaper (`[Wallpaper]`, the `ZeeOS` package from `branding/wallpapers/`) and scheme. Selected through
+  `LookAndFeelPackage` in `etc/xdg/kdeglobals`.
 
 ## GTK consistency (issue #95, P2-3)
 
