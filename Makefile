@@ -20,7 +20,7 @@ reproducible:
 boot-test:
 	ARCH=$(ARCH) SECUREBOOT=$(SECUREBOOT) $(if $(ISO),ISO=$(ISO)) $(if $(OUT),OUT=$(OUT)) vm/boot-test.sh
 lint:
-	shellcheck -x scripts/*.sh scripts/autopilot/*.sh build/*.sh build/common/*.sh build/container/*.sh build/pin/*.sh
+	shellcheck -x scripts/*.sh scripts/autopilot/*.sh build/*.sh build/common/*.sh build/container/*.sh build/pin/*.sh security/*.sh
 	yamllint -d relaxed .github
 	actionlint
 	reuse lint
