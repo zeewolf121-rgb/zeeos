@@ -1,0 +1,38 @@
+# ADR-0008 (#88): every pinned image must be anonymously pullable at the PR's own head, so the
+# check shows up on the rolling refresh PR. Runs on PRs that change a lock, and by dispatch:
+# pin-packages dispatches it on the refresh branch, since GITHUB_TOKEN pushes start no workflows.
+# `skopeo inspect --no-creds` reads only the manifest: same anonymous semantics, no multi-GB pull.
+name: verify-pins
+on:
+  pull_request:
+    paths:
+      - build/arch/*/packages.lock
+      - build/arch/*/tools-image.lock
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: verify-pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every pinned image is anonymously pullable
+        run: |
+          fail=0; n=0
+          for lock in build/arch/*/packages.lock build/arch/*/tools-image.lock; do
+            [[ -f "$lock" ]] || continue
+            while read -r ref; do
+              [[ -n "$ref" ]] || continue
+              n=$((n + 1))
+              if skopeo inspect --no-creds --raw "docker://$ref" >/dev/null 2>&1; then
+                echo "ok      $ref ($lock)"
+              else
+                echo "::error file=$lock::$ref is not anonymously pullable: the owner must make the GHCR package public (ADR-0008)"
+                fail=1
+              fi
+            done < <(sed -n 's/^# closure=//p; s/^TOOLS_IMAGE=//p' "$lock")
+          done
+          echo "verify-pins: checked $n pinned image(s)" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "$fail"

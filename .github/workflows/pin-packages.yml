@@ -1,5 +1,6 @@
 # Package pinning (ADR-0008, #45): resolve the closure on native runners, publish the closure
-# image to GHCR, and commit build/arch/<arch>/packages.lock. Manual dispatch can target a branch
+# image to GHCR, and commit build/arch/<arch>/packages.lock (verify-pins.yml then re-checks the
+# anonymous pull on the refresh PR's head). Manual dispatch can target a branch
 # (e.g. #80's); the daily run refreshes main through a rolling PR. The publish step's
 # anonymous-pull check fails until the owner makes the ghcr.io/<owner>/zeeos-closure-* packages
 # public once. GITHUB_TOKEN pushes trigger no CI, so the commit job dispatches lint and build-iso.
@@ -170,3 +171,4 @@ jobs:
         run: |
           gh workflow run lint.yml --ref "$TARGET"
           gh workflow run build-iso.yml --ref "$TARGET"
+          gh workflow run verify-pins.yml --ref "$TARGET"   # anonymous-pull check on the new head (#88)
