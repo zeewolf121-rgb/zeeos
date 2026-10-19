@@ -48,7 +48,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.guard.outputs.tag }}
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           pattern: iso-*
           merge-multiple: true
