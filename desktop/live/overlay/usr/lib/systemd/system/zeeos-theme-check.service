@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Pulled in by zeeos-desktop-ready.service (Wants=), so no separate enable step.
+[Unit]
+Description=ZeeOS theme check (memory, light and dark markers on the serial console)
+After=zeeos-desktop-ready.service
+Requires=zeeos-desktop-ready.service
+ConditionKernelCommandLine=rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zeeos-theme-check
+# 5 s settle + 150 s dark delay + two portal waits, with headroom
+TimeoutStartSec=600

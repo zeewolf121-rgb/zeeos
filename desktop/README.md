@@ -30,7 +30,17 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - `etc/xdg/xdg-desktop-portal/plasma-portals.conf`: KDE portal first, so libadwaita gets colour-scheme and accent
   from `kdeglobals` (`ColorScheme`, `AccentColor`). Switching Plasma to ZeeOS Dark flips libadwaita (GTK4) apps;
   GTK3 apps stay light until kde-gtk-config is in the image (#118).
-- Not verified in a guest yet; `zeeos-theme-check` (P2-4) will cover it.
+- Not verified in a guest yet; `zeeos-theme-check` (P2-4, below) covers it.
+
+## Theme check (issue #96, P2-4)
+
+- `usr/libexec/zeeos-theme-check` with `zeeos-theme-check-announce.service` (prints `ZEEOS_THEME_CHECK` before
+  `ZEEOS_DESKTOP_READY`) and `zeeos-theme-check.service` (after desktop-ready: `ZEEOS_MEM`, light check,
+  `ZEEOS_THEME_OK`, wait `zeeos.dark_delay` s (default 150), switch to dark, read back Plasma scheme, GTK theme and
+  portal `color-scheme`, `ZEEOS_DARK_READY`; else `ZEEOS_THEME_FAIL <reason>`). Format: docs/phases/phase-2.md.
+- Both units are pulled in by `Wants=` in `zeeos-desktop-ready.service`, so `build/` needs no change.
+- Dark GTK3 is set by the script (`adw-gtk3-dark` in the user's `settings.ini`) until kde-gtk-config lands (#118).
+- `DRY_RUN=1` prints without touching the serial tty. Not run in a guest yet; the boot-test CI run is the evidence.
 
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
