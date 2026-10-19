@@ -46,7 +46,8 @@ jobs:
         run: |
           : >"$AUTOPILOT_LOG"
           scripts/autopilot/orchestrate.sh "$RUNNER_TEMP/state.md" | tee -a "$GITHUB_OUTPUT"
-          echo "log_issue=$(scripts/autopilot/report.sh log-issue)" >>"$GITHUB_OUTPUT"
+          log_issue="$(scripts/autopilot/report.sh log-issue)"
+          echo "log_issue=$log_issue" >>"$GITHUB_OUTPUT"
           # Summarise only runs that changed something (event-triggered runs are frequent).
           if grep -qE 'dispatched|merged|ready$|retry|needs-human|tagged|opened|left (ready|paused)' "$AUTOPILOT_LOG"; then
             echo acted=true; else echo acted=false; fi >>"$GITHUB_OUTPUT"
