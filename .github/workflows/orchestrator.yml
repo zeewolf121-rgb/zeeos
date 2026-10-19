@@ -42,6 +42,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
           AUTOPILOT_LOG: ${{ runner.temp }}/autopilot.log
+        shell: bash   # -o pipefail: a failing orchestrate.sh must fail the step, not hide behind tee
         run: |
           : >"$AUTOPILOT_LOG"
           scripts/autopilot/orchestrate.sh "$RUNNER_TEMP/state.md" | tee -a "$GITHUB_OUTPUT"
