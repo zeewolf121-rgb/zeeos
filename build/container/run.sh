@@ -39,13 +39,20 @@ if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then
   }
   trap hand_back EXIT
 fi
-# Opt-in cache hooks for CI (the tag pins only the base image, not the Containerfile, so
-# reuse is never the default):
+# Tools (ADR-0008): use the digest-pinned per-arch image once published; else build locally, unpinned.
+# shellcheck source=build/arch/x86_64/tools-image.lock
+source "$root/build/arch/$arch/tools-image.lock"
+if [[ -n "${TOOLS_IMAGE:-}" && "${ZEEOS_LOCAL_TOOLS:-0}" != 1 ]]; then
+  "${engine[@]}" pull -q "$TOOLS_IMAGE" >/dev/null
+  tag="$TOOLS_IMAGE"
+# Opt-in cache hooks for the local build (the tag pins only the base image, not the
+# Containerfile, so reuse is never the default):
 #   ZEEOS_REUSE_BUILD_IMAGE=1  skip the build if $tag already exists (e.g. after docker load)
 #   ZEEOS_BUILD_CACHE_FROM=ref pass --cache-from ref to the build
-if [[ "${ZEEOS_REUSE_BUILD_IMAGE:-0}" == 1 ]] && "${engine[@]}" image inspect "$tag" >/dev/null 2>&1; then
+elif [[ "${ZEEOS_REUSE_BUILD_IMAGE:-0}" == 1 ]] && "${engine[@]}" image inspect "$tag" >/dev/null 2>&1; then
   echo "build container $tag already present; skipping container build (ZEEOS_REUSE_BUILD_IMAGE=1)"
 else
+  echo "::warning::build tools are NOT pinned (no TOOLS_IMAGE in build/arch/$arch/tools-image.lock, or ZEEOS_LOCAL_TOOLS=1): building the Containerfile locally" >&2
   build_args=(--build-arg "BASE_IMAGE=$base" -t "$tag" -f "$dir/Containerfile")
   [[ -z "${ZEEOS_BUILD_CACHE_FROM:-}" ]] || build_args+=(--cache-from "$ZEEOS_BUILD_CACHE_FROM")
   "${engine[@]}" build "${build_args[@]}" "$dir"
@@ -67,9 +74,23 @@ if [[ -n "$out" ]]; then
     *) args+=("$out"); mounts+=(-v "$out:$out") ;;  # elsewhere: mount at the same path
   esac
 fi
+# Package closure (ADR-0008): pulled on the host (podman login lives there) and mounted read-only.
+# ZEEOS_CLOSURE_REBUILD=1 instead lets the container rebuild it from the lock (writable mount).
+envs=()
+if [[ "${ZEEOS_UNPINNED:-0}" != 1 && "${DRY_RUN:-0}" != 1 ]]; then
+  closure="$root/out/closure-$arch"
+  if [[ "${ZEEOS_CLOSURE_REBUILD:-0}" == 1 ]]; then
+    rm -rf "$closure"; mkdir -p "$closure"; mounts+=(-v "$closure:/closure")
+  else
+    "$root/build/pin/pull.sh" "$arch" "$closure"; mounts+=(-v "$closure:/closure:ro")
+  fi
+  envs+=(-e ZEEOS_CLOSURE_DIR=/closure)
+fi
+# ZEEOS_ENTRY lets `make pin-packages` run build/pin/resolve.sh in the same container.
+entry="${ZEEOS_ENTRY:-build/build-iso.sh}"
 # Inside the container we are root, so build-iso.sh skips sudo (ZEEOS_IN_CONTAINER).
 "${engine[@]}" run --rm --privileged \
-  "${mounts[@]}" -w /work \
+  "${mounts[@]}" -w /work "${envs[@]}" \
   -e SOURCE_DATE_EPOCH="$epoch" -e DRY_RUN="${DRY_RUN:-0}" -e ZEEOS_IN_CONTAINER=1 \
-  -e ZEEOS_SNAPSHOT_URL="${ZEEOS_SNAPSHOT_URL:-}" \
-  "$tag" bash -c 'git config --global --add safe.directory /work && exec build/build-iso.sh "$@"' _ "${args[@]}"
+  -e ZEEOS_UNPINNED="${ZEEOS_UNPINNED:-0}" -e ZEEOS_CLOSURE_REBUILD="${ZEEOS_CLOSURE_REBUILD:-0}" \
+  "$tag" bash -c 'git config --global --add safe.directory /work && exec "$@"' _ "$entry" "${args[@]}"

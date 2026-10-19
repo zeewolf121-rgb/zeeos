@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "ZeeOS-Horizon",
+    "Name": "ZeeOS Horizon",
+    "Authors": [
+      {
+        "Name": "ZeeOS contributors"
+      }
+    ],
+    "License": "CC-BY-SA-4.0"
+  }
+}
