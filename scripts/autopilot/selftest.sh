@@ -102,8 +102,11 @@ ok "merge + sweep in one orchestrator run dispatch merge-audit once" '[[ $(grep 
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
-ok "removed installer-disk label still counts" '! gates owner-gate 5 >/dev/null'
-ok "hard stop is never merged, owner pinged" '! gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS"'
+ok "installer-disk alone needs no owner approval (#70)" 'gates owner-gate 5 >/dev/null'
+ok "a removed hard-stop label still counts" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates owner-gate 5 >/dev/null'
+ok "hard stop is never merged, owner pinged" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS"'
+: >"$CALLS"
+ok "installer-disk PR merges through the gate once reviewed (#70)" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
 
 reset; claude_pr; codex_done
 echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files
@@ -117,7 +120,7 @@ ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
-ok "installer-disk once on the linked issue still counts" '! gates owner-gate 5 >/dev/null'
+ok "a hard-stop label once on the linked issue still counts" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates owner-gate 5 >/dev/null'
 
 # Fork PR: even with a trusted-looking branch name, "Closes #6" and every gate green,
 # autopilot never merges it (the repo is public; anyone can open one).

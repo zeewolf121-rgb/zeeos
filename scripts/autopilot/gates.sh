@@ -140,15 +140,17 @@ cross_review() {
   echo "reviewed by the other model at ${sha:0:7}, nothing blocking"
 }
 
-hard_stop_reasons() { # empty if none
-  # Labels count if they are on the PR now, were ever put on it, or are on its linked issue,
-  # so removing a label can't lift a hard stop.
-  local pr="$1" l r="" hits seen n
-  seen=""
-  for n in "$pr" $(linked_issue "$pr"); do
-    seen+="$(labels_of "$n"; gh api --paginate "repos/$REPO/issues/$n/events" \
-      --jq '.[] | select(.event == "labeled") | .label.name')"$'\n'
+labels_seen() { # pr: labels on the PR now, ever put on it, or on its linked issue (one per line)
+  # Removing a label can't change what it triggers (hard stops, Opus reviews).
+  local n
+  for n in "$1" $(linked_issue "$1"); do
+    labels_of "$n"
+    gh api --paginate "repos/$REPO/issues/$n/events" --jq '.[] | select(.event == "labeled") | .label.name'
   done
+}
+hard_stop_reasons() { # empty if none
+  local pr="$1" l r="" hits seen
+  seen="$(labels_seen "$pr")"
   for l in $HARD_STOP_LABELS; do if grep -qxF "$l" <<<"$seen"; then r+="label:$l "; fi; done
   hits="$(gh api --paginate "repos/$REPO/pulls/$pr/files" --jq '.[].filename' | grep -E "$HARD_STOP_PATHS" || true)"
   if [[ -n "$hits" ]]; then r+="files:$(head -n3 <<<"$hits" | paste -sd, -)"; fi
@@ -313,6 +315,7 @@ case "$cmd" in
     unresolved_threads "$pr" | grep -E "^(${CODEX_BOT}[^ ]* .*badge/P[01]-|${CLAUDE_BOT}[^ ]* [* ]*\[blocking\])" \
       | sed -E 's/<[^>]*>//g; s/!\[[^]]*\]\([^)]*\)//g' | cut -c1-1500 || true ;;
   review-model)
-    if [[ "$(hard_stop_reasons "$pr")" == *label:installer-disk* ]]; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
+    # installer-disk work is reviewed by Opus (MISSION §16), whether or not it is a hard stop.
+    if labels_seen "$pr" | grep -qxF installer-disk; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
   *) echo "unknown command: $cmd" >&2; exit 2 ;;
 esac

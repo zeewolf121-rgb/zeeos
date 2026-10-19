@@ -61,7 +61,7 @@ Owns architecture, decomposition, integration, merges, build, installer, desktop
 Works `model:codex` issues. Owns branding, security, and red-team review (data loss, licensing, security). Reviews every Claude PR.
 
 ### Cross-model rules
-- No model approves its own PR. A merge needs CI green + the other model's review + my approval for `installer-disk` (and workflows, `scripts/autopilot/`, signing). `decision` and ADR PRs merge after cross-review with all threads resolved (my decision, 2026-10-17).
+- No model approves its own PR. A merge needs CI green + the other model's review + my approval for workflows, `scripts/autopilot/`, the merge guards and signing. `decision`, ADR and `installer-disk` PRs merge after cross-review with all threads resolved (my decisions, 2026-10-17 and 2026-10-19).
 - On disagreement, each model states its position in five bullets or fewer; I decide. No loops.
 - Shared context lives in the repo only: CLAUDE.md, AGENTS.md (kept in sync by script, under 150 lines each), /docs/ARCHITECTURE.md, /docs/adr/.
 
@@ -154,6 +154,6 @@ Agents prepare the checklist; I run it or approve it.
 
 ## 16. RULES
 - Ask me before anything expensive to reverse: base distro, installer, bootloader, compositor, licensing, repo visibility.
-- `installer-disk` changes require Opus authoring + Codex review + my approval.
+- `installer-disk` changes require Opus authoring + Codex review (Opus when Claude reviews) + auto approval: no owner sign-off (my decision, 2026-10-19). The disk-safety rules (dry-run, never format an existing ESP, never touch Windows Boot Manager, `install-test.yml`) still apply.
 - Prefer maintained upstream; write custom code only for the distinctive UX.
 - Signing keys live in GitHub secrets or offline. Never in the repo.

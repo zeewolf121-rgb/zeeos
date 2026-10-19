@@ -94,9 +94,10 @@ Every 2 hours, `paused` issues (set by an agent that ran out of turns or hit a u
 
 ## 7. Hard stops (autopilot never bypasses)
 
+`installer-disk` is no longer a hard stop (owner, 2026-10-19). Those PRs merge like any other once the checks and cross-review pass. They're still authored and reviewed by Opus, and the disk-safety rules in CONVENTIONS still apply. `HARD_STOP_LABELS` (`AUTOPILOT_HARD_STOP_LABELS`) is now empty but kept, so a label can be made a hard stop again; a label counts if it's on the PR now, was ever applied to it, or is on the linked issue.
+
 | Hard stop | How it's enforced |
 |---|---|
-| `installer-disk` PRs | `owner-gate` + never merged by autopilot. The label counts if it's on the PR now, was ever applied to it, or is on the linked issue |
 | Workflow changes (`.github/workflows/`) and the gate code itself (`scripts/autopilot/`) | Path rule; agent prompts forbid editing them. `GITHUB_TOKEN` can't push workflow files anyway |
 | Signing keys and secrets (`security/keys/`, `*secret*`, `*minisign*`, `*.key`, `*.pem`, `*.minisig`) | Path rule. Signing secrets are only read by `release.yml` |
 | Phase 6 manual gate | Autopilot opens the checklist issue (assigned to the owner) and stops. Phase 7 opens only after the owner closes it **and** tags `v1.0.0` |
