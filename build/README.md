@@ -27,3 +27,15 @@ build/container/publish.sh <arch>  # tools image + tools.lock, natively per arch
 `PUBLISH=0 make pin-packages` resolves without publishing. An unchanged resolution leaves the lock untouched.
 Each new GHCR package must be made public once by the owner; the publish scripts end with an anonymous pull and fail until then.
 Lock format: `build/pin/lib.sh`. Scripts: `resolve.sh` (in container), `fetch.sh` (in container), `publish.sh` and `pull.sh` (host).
+
+## Build container caching (opt-in)
+
+`build/container/run.sh` honours these, all unset by default. The two image hooks apply only when
+the tools image is built locally (no `TOOLS_IMAGE` in the arch's `tools-image.lock`, or
+`ZEEOS_LOCAL_TOOLS=1`); a pinned tools image is always pulled.
+
+- `ZEEOS_REUSE_BUILD_IMAGE=1`: skip `docker build` when `zeeos-build:<digest12>` already exists
+  (CI can `docker load` a cached tarball first). The tag pins only the base image, so key the
+  cache on `Containerfile` + `base-image.lock`.
+- `ZEEOS_BUILD_CACHE_FROM=<ref>`: passed as `--cache-from`.
+- `ZEEOS_KIWI_CACHE=<abs dir>`: mounted at `/var/cache/kiwi` to keep kiwi's package cache.
