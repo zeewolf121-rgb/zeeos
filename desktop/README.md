@@ -21,5 +21,13 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
   sets the `ZeeOS` package once per user on first login (light/dark follows the colour scheme), and
   `etc/xdg/kscreenlockerrc` uses it on the lock screen. (Replaces the old `scripts/gen-wallpaper.sh` placeholder.)
 
+## GTK consistency (issue #95, P2-3)
+
+- `etc/gtk-3.0/settings.ini`, `etc/gtk-4.0/settings.ini`: `adw-gtk3` theme (GTK3), Breeze icons/cursor, Noto Sans.
+- `etc/xdg/xdg-desktop-portal/plasma-portals.conf`: KDE portal first, so libadwaita gets colour-scheme and accent
+  from `kdeglobals` (`ColorScheme`, `AccentColor`). Switching Plasma to ZeeOS Dark flips libadwaita (GTK4) apps;
+  GTK3 apps stay light until kde-gtk-config is in the image (#118).
+- Not verified in a guest yet; `zeeos-theme-check` (P2-4) will cover it.
+
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
