@@ -61,7 +61,7 @@ jobs:
           echo "$(basename "$iso"): $size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
           (( size < 4000000000 )) || { echo "::error::$iso is $size bytes (limit 4000000000)"; exit 1; }
       - name: Upload ISO (release.yml downloads iso-*)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: iso-${{ matrix.arch }}
           path: out/${{ matrix.arch }}/image/*.iso
@@ -70,7 +70,7 @@ jobs:
           compression-level: 0
       - name: Upload build log and manifests
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-log-${{ matrix.arch }}
           path: |
