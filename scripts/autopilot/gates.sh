@@ -316,6 +316,9 @@ case "$cmd" in
       | sed -E 's/<[^>]*>//g; s/!\[[^]]*\]\([^)]*\)//g' | cut -c1-1500 || true ;;
   review-model)
     # installer-disk work is reviewed by Opus (MISSION §16), whether or not it is a hard stop.
-    if labels_seen "$pr" | grep -qxF installer-disk; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
+    # Read all labels first: `labels_seen | grep -q` would close the pipe on the first match and
+    # SIGPIPE the rest of labels_seen, which under pipefail reads as "not found" (Sonnet).
+    seen="$(labels_seen "$pr")"
+    if grep -qxF installer-disk <<<"$seen"; then echo claude-opus-5-5; else echo claude-sonnet-5-5; fi ;;
   *) echo "unknown command: $cmd" >&2; exit 2 ;;
 esac

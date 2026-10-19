@@ -227,6 +227,12 @@ ok "failed dispatch gives the slot back" 'grep -q "issue edit 4 --repo o/r --rem
 reset; claude_pr
 echo '{"labels":[{"name":"model:claude"},{"name":"agent:installer-engineer"},{"name":"installer-disk"}]}' | fx issue_view_6
 ok "installer-disk on the linked issue -> Opus review" '[[ "$(gates review-model 5)" == claude-opus-5-5 ]]'
+# Codex's repro on #122: label on the PR plus label events on the linked issue made the old
+# `labels_seen | grep -q` SIGPIPE under pipefail and pick Sonnet. Run it a few times.
+reset; claude_pr
+echo '{"labels":[{"name":"installer-disk"}]}' | fx issue_view_5
+echo '[{"event":"labeled","label":{"name":"model:claude"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
+ok "installer-disk on the PR with linked-issue events -> Opus every time" '(for i in 1 2 3 4 5; do [[ "$(gates review-model 5)" == claude-opus-5-5 ]] || exit 1; done)'
 
 # Route: a Codex agent has no .claude/agents file; routing must still work.
 reset
