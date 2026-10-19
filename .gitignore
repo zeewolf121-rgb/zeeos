@@ -1,2 +1,6 @@
 # Owner upload checkout; MISSION.md is tracked at docs/MISSION.md
 /zeeos/
+
+# Self-hosted GitHub Actions runner installed in the checkout (D9): holds .credentials and
+# .runner. Never commit it (CLAUDE.md rule 6). Better: move it out of the repo, see docs/ci/macos-arm64-runner.md.
+/actions-runner/
