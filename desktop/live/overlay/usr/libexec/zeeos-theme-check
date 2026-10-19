@@ -1,0 +1,117 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Guest theme check (P2-4, marker protocol in docs/phases/phase-2.md). Modes:
+#   announce  print ZEEOS_THEME_CHECK (runs before zeeos-desktop-ready)
+#   check     (default) print ZEEOS_MEM, verify the light theme (ZEEOS_THEME_OK), wait, switch
+#             to dark, read back and print ZEEOS_DARK_READY. Any failure prints ZEEOS_THEME_FAIL.
+# Root system unit: it needs the serial tty. It reaches the live session through its runtime dir.
+set -u
+USER_NAME=${LIVE_USER:-liveuser}
+DRY_RUN=${DRY_RUN:-0}
+SETTLE=${SETTLE:-5}
+LIGHT_GTK=${LIGHT_GTK:-adw-gtk3}
+DARK_GTK=${DARK_GTK:-adw-gtk3-dark}
+MEMINFO=${MEMINFO:-/proc/meminfo}
+CMDLINE=${CMDLINE:-/proc/cmdline}
+PORTAL_WAIT=${PORTAL_WAIT:-60}
+
+# Serial ttys with a real UART behind them (see zeeos-desktop-ready).
+ttys=()
+for t in ttyS0 ttyAMA0; do
+    read -r type <"/sys/class/tty/$t/type" 2>/dev/null && [ "$type" != 0 ] && [ -w "/dev/$t" ] \
+        && ttys+=("/dev/$t")
+done
+emit() {
+    if [ "$DRY_RUN" = 1 ]; then echo "$* (dry run)"; return 0; fi
+    echo "$*" | timeout -k 5 30 tee -- "${ttys[@]+"${ttys[@]}"}" /dev/console >/dev/null || true
+}
+
+mode=${1:-check}
+if [ "$mode" = announce ]; then emit ZEEOS_THEME_CHECK; exit 0; fi
+
+fail() { emit "ZEEOS_THEME_FAIL $*"; exit 1; }
+
+uid=$(id -u "$USER_NAME" 2>/dev/null) || fail "no user $USER_NAME"
+home=$(getent passwd "$USER_NAME" | cut -d: -f6)
+rt=/run/user/$uid
+as_user() {
+    runuser -u "$USER_NAME" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY=wayland-0 \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" "$@"
+}
+
+# dark_delay: seconds to wait after ZEEOS_THEME_OK, from zeeos.dark_delay=<s> (default 150).
+dark_delay=150
+read -ra words <"$CMDLINE" 2>/dev/null || words=()
+for w in "${words[@]}"; do
+    case $w in zeeos.dark_delay=*) dark_delay=${w#*=} ;; esac
+done
+[[ $dark_delay =~ ^[0-9]+$ ]] || dark_delay=150
+
+plasma_scheme() { as_user kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null; }
+
+# gtk_theme: effective GTK3 theme name: the user's settings.ini, else the system default.
+gtk_theme() {
+    local f v
+    for f in "$home/.config/gtk-3.0/settings.ini" /etc/gtk-3.0/settings.ini; do
+        v=$(sed -n 's/^gtk-theme-name *= *//p' "$f" 2>/dev/null | tail -n 1)
+        [ -n "$v" ] && { echo "$v"; return; }
+    done
+}
+
+# portal_scheme: org.freedesktop.appearance color-scheme as prefer-dark / prefer-light / none.
+portal_scheme() {
+    local out
+    out=$(as_user gdbus call --session --dest org.freedesktop.portal.Desktop \
+        --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.Read \
+        org.freedesktop.appearance color-scheme 2>/dev/null) || { echo unavailable; return; }
+    case $out in
+        *"uint32 1"*) echo prefer-dark ;;
+        *"uint32 2"*) echo prefer-light ;;
+        *) echo none ;;
+    esac
+}
+
+# wait_portal <expected>: the portal backend starts lazily and follows Plasma with a delay.
+wait_portal() {
+    local start=$SECONDS p
+    while :; do
+        p=$(portal_scheme)
+        [ "$p" = "$1" ] && break
+        (( SECONDS - start >= PORTAL_WAIT )) && break
+        sleep 2
+    done
+    echo "$p"
+}
+
+# Memory at desktop-ready (used = total - available).
+total=0 avail=0
+while read -r k v _; do
+    case $k in MemTotal:) total=$v ;; MemAvailable:) avail=$v ;; esac
+done <"$MEMINFO"
+emit "ZEEOS_MEM total_kb=$total available_kb=$avail used_kb=$((total - avail))"
+
+# Light check.
+scheme=$(plasma_scheme) gtk=$(gtk_theme) portal=$(wait_portal prefer-light)
+[ "$scheme" = ZeeOSLight ] || fail "light: plasma scheme is '$scheme', want ZeeOSLight"
+[ "$gtk" = "$LIGHT_GTK" ] || fail "light: gtk theme is '$gtk', want $LIGHT_GTK"
+[ "$portal" = prefer-light ] || fail "light: portal color-scheme is '$portal', want prefer-light"
+emit "ZEEOS_THEME_OK scheme=$scheme gtk=$gtk portal=$portal"
+
+# The harness has no channel to the guest: wait out its light-screenshot delay.
+[ "$DRY_RUN" = 1 ] || sleep "$dark_delay"
+
+# Switch to dark. kde-gtk-config would sync GTK from Plasma (#118); until then set it here.
+as_user plasma-apply-colorscheme ZeeOSDark >/dev/null 2>&1 || fail "dark: plasma-apply-colorscheme failed"
+as_user mkdir -p "$home/.config/gtk-3.0" "$home/.config/gtk-4.0"
+for v in 3 4; do
+    printf '[Settings]\ngtk-theme-name=%s\ngtk-application-prefer-dark-theme=1\n' "$DARK_GTK" \
+        | as_user tee "$home/.config/gtk-$v.0/settings.ini" >/dev/null
+done
+as_user gsettings set org.gnome.desktop.interface gtk-theme "$DARK_GTK" >/dev/null 2>&1 || true
+sleep "$SETTLE"   # let the repaint finish before the harness screenshots
+
+scheme=$(plasma_scheme) gtk=$(gtk_theme) portal=$(wait_portal prefer-dark)
+[ "$scheme" = ZeeOSDark ] || fail "dark: plasma scheme is '$scheme', want ZeeOSDark"
+[ "$gtk" = "$DARK_GTK" ] || fail "dark: gtk theme is '$gtk', want $DARK_GTK"
+[ "$portal" = prefer-dark ] || fail "dark: portal color-scheme is '$portal', want prefer-dark"
+emit "ZEEOS_DARK_READY scheme=$scheme gtk=$gtk portal=$portal"

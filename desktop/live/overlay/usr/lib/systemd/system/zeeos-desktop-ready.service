@@ -2,7 +2,7 @@
 [Unit]
 Description=ZeeOS desktop-ready marker (serial console)
 After=display-manager.service
-Wants=display-manager.service
+Wants=display-manager.service zeeos-theme-check-announce.service zeeos-theme-check.service
 ConditionKernelCommandLine=rd.live.image
 
 [Service]
