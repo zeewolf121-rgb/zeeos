@@ -35,7 +35,10 @@ done <"$out/resolved.ids" | LC_ALL=C sort >"$new"
 
 # 4. Keep the lock as is unless the package lines changed.
 # String compare, not diff: the build container has no diffutils (diff would exit 127 = "changed").
-if [[ -f "$lock" && "$(pin_lock_body "$lock")" == "$(LC_ALL=C sort "$new")" ]]; then
+# An unchanged body only counts if the lock also records its closure digest: a refresh whose
+# publish was skipped (PUBLISH=0) or failed must publish on the next run, not stop here.
+if [[ -f "$lock" && -n "$(pin_lock_header "$lock" closure)" \
+      && "$(pin_lock_body "$lock")" == "$(LC_ALL=C sort "$new")" ]]; then
   echo "packages.lock for $arch unchanged"; echo unchanged >"$out/pin.status"; exit 0
 fi
 {

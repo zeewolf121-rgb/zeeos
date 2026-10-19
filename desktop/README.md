@@ -17,10 +17,12 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - `usr/share/color-schemes/ZeeOS{Light,Dark}.colors`: placeholder palette; the live session starts light.
 - `etc/xdg/kdeglobals`, `etc/xdg/kcminputrc`: default scheme and accent, Breeze icons/cursor/style, Noto Sans fonts.
 - `etc/sddm.conf.d/20-zeeos-theme.conf`: stock Breeze SDDM theme, Breeze cursor, Noto Sans.
-- `scripts/gen-wallpaper.sh <root> [light|dark]`: generates the placeholder gradient wallpaper (no committed art).
-  `build/build-iso.sh` runs it against the image root at build time (the wallpaper is not committed).
+- Wallpaper: the art lives in `branding/wallpapers/` (theme-designer). `usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zeeos-wallpaper.js`
+  sets the `ZeeOS` package once per user on first login (light/dark follows the colour scheme), and
+  `etc/xdg/kscreenlockerrc` uses it on the lock screen. (Replaces the old `scripts/gen-wallpaper.sh` placeholder.)
 - `usr/share/plasma/look-and-feel/org.zeeos.base`: minimal look-and-feel; `contents/defaults` sets the default
-  wallpaper (`[Wallpaper]`) and scheme. Selected through `LookAndFeelPackage` in `etc/xdg/kdeglobals`.
+  wallpaper (`[Wallpaper]`, the `ZeeOS` package from `branding/wallpapers/`) and scheme. Selected through
+  `LookAndFeelPackage` in `etc/xdg/kdeglobals`.
 
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
