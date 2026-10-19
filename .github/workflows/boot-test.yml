@@ -58,13 +58,24 @@ jobs:
           iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
           [[ -n "$iso" ]] || { echo "::error::no ISO in iso-$ARCH artifact"; exit 1; }
           make boot-test ARCH="$ARCH" SECUREBOOT="$SB" ISO="$iso" OUT="$OUT"
-      - name: Summary
+      - name: Summary (boot time, idle RAM, light/dark)
         if: always()
         run: |
+          # P2-5 records these as junit properties; MISSION §6 caps idle RAM at 1.2 GB.
+          prop() { sed -n "s/.*<property name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$OUT/junit.xml" 2>/dev/null | head -n1; }
+          boot="$(prop boot_seconds)"; used="$(prop idle_used_kb)"; total="$(prop idle_total_kb)"
+          theme="$(prop theme_check)"; diff="$(prop light_dark_diff_pct)"
+          mib() { [[ -n "$1" ]] && echo "$(( $1 / 1024 )) MiB" || echo n/a; }
           { echo "### boot $ARCH sb-$SB: accel $(cat "$OUT/accel" 2>/dev/null || echo n/a)"
+            echo "| boot time | idle RAM used | RAM total | theme check | light/dark diff |"
+            echo "|---|---|---|---|---|"
+            echo "| ${boot:-n/a} s | $(mib "$used") | $(mib "$total") | ${theme:-n/a} | ${diff:-n/a}${diff:+ %} |"
+            if [[ -n "$used" ]] && (( used > 1258291 )); then echo; echo "⚠️ idle RAM above the 1.2 GB target (MISSION §6)"; fi
+            for f in screenshot-light.ppm screenshot-dark.ppm; do [[ -s "$OUT/$f" ]] || echo "- missing $f"; done
             echo '```'; tail -n 40 "$OUT/serial.log" 2>/dev/null || echo "(no serial log)"; echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-      - name: Upload serial log, screenshot and JUnit
+          if [[ -n "$used" ]] && (( used > 1258291 )); then echo "::warning::idle RAM $(mib "$used") is above 1.2 GB"; fi
+      - name: Upload serial log, light/dark screenshots and JUnit
         if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -72,6 +83,8 @@ jobs:
           path: |
             ${{ env.OUT }}/serial.log
             ${{ env.OUT }}/screenshot.ppm
+            ${{ env.OUT }}/screenshot-light.ppm
+            ${{ env.OUT }}/screenshot-dark.ppm
             ${{ env.OUT }}/junit.xml
             ${{ env.OUT }}/accel
             ${{ env.OUT }}/qemu.stderr
