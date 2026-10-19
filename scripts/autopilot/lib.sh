@@ -13,7 +13,9 @@ CODEX_BOT='chatgpt-codex-connector'      # login prefix (REST adds "[bot]")
 CLAUDE_BOT='claude'
 
 # Hard stops (docs/AUTOPILOT.md §7): autopilot never merges these; the owner does.
-HARD_STOP_LABELS='installer-disk'
+# installer-disk is no longer a hard stop (owner, 2026-10-19, #70): it merges on Opus authoring +
+# cross-review like other PRs. Kept as a list so a label can be made a hard stop again.
+HARD_STOP_LABELS="${AUTOPILOT_HARD_STOP_LABELS-}"
 HARD_STOP_PATHS='^(\.github/workflows/|scripts/autopilot/|security/keys/)|(^|/)[^/]*(secret|minisign)[^/]*$|\.(key|pem|minisig)$'
 
 log() {
