@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ZeeOS KWin defaults (P3-4): enable the snap-layout picker and the tiling toggle.
+[Plugins]
+zeeos-snap-layoutsEnabled=true
+zeeos-tilingEnabled=true

@@ -57,5 +57,17 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - `org.zeeos.base` stays as the defaults reference. Keymaps and switching belong to `zee-layout` (P3-3).
 - Not verified in a guest yet: the layout scripts are untested until the boot-test CI run shows the hybrid panels.
 
+## Snap layouts and tiling toggle (issue #129, P3-4)
+
+- `usr/share/kwin/scripts/zeeos-snap-layouts`: QML picker (Meta+Z) with five zone layouts; clicking a zone snaps the
+  active window into it. `usr/share/kwin/scripts/zeeos-tiling`: Meta+T toggles master-stack auto-tiling, off restores geometry.
+- `etc/xdg/kwinrc` enables both scripts by default.
+- Deviation from the issue: a KWin script cannot hook the decoration's maximize button, so the picker opens from a
+  shortcut, not on hover. A hover trigger needs the decoration theme (P3-9/P3-10) or a KWin change; follow-up issue needed.
+- Not the Plasma 6 custom-tile API (those layouts are per-user in `kwinrc`, not shippable as defaults), so zones are
+  fractions of the work area.
+- Meta+T is also Plasma's built-in "Toggle Tiles Editor"; the conflict must be resolved in the keymap profiles (P3-3).
+- Untested in a guest: the boot-test CI run and screenshots are the evidence, and none exists yet.
+
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
