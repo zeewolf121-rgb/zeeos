@@ -20,6 +20,12 @@ at the desktop-ready marker). Without `ZEEOS_THEME_CHECK` nothing changes. junit
 `boot_seconds`, `idle_total_kb`/`idle_available_kb`/`idle_used_kb` (from `ZEEOS_MEM`), and `light_dark_diff_pct`
 (`imgdiff.py`, report-only).
 
+Gating diff (P3-8): after the run, `tests/imgdiff_gate.py` compares each `screenshot-<step>.ppm` with
+`build/arch/$ARCH/baselines/<step>.ppm` (override with `BASELINES`). Only steps with a baseline are compared; with no
+baseline directory or no matching file nothing is gated. Clock/cursor regions are masked via `masks.txt` in the
+baselines dir (`STEP|* X Y W H`, negative X/Y from the right/bottom edge); the threshold is 1.0 % of unmasked pixels
+(channel tolerance 8). A failure sets the result to `imgdiff-gate`; junit property `imgdiff_gate` is `pass|fail|skip`.
+
 Outputs in `OUT`: `serial.log`, `screenshot.ppm` (QMP screendump), `junit.xml`, `accel` (`kvm`/`hvf`/`tcg`).
 
 SB on uses Microsoft-keys enrolled OVMF vars (Fedora edk2 `OVMF_VARS.secboot.fd`); Fedora and Debian/Ubuntu

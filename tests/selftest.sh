@@ -9,4 +9,5 @@ grep -q 'qemu-system-x86_64' <<<"$out" || { echo "FAIL: no qemu command" >&2; ex
 if SECUREBOOT=maybe DRY_RUN=1 OUT=$tmp vm/boot-test.sh 2>/dev/null; then echo "FAIL: bad SECUREBOOT accepted" >&2; exit 1; fi
 if ARCH=riscv DRY_RUN=1 OUT=$tmp vm/boot-test.sh 2>/dev/null; then echo "FAIL: bad ARCH accepted" >&2; exit 1; fi
 rm -rf "$tmp"
+tests/imgdiff_gate_test.sh
 echo "selftest ok"
