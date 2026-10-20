@@ -43,7 +43,8 @@ Window buttons: windows = right (min, max, close); mac and hybrid = left (close,
 | P3-5 | Design-language effects in `/etc/xdg`: KWin blur and translucency for panels and menus, rounded corners where Breeze/KWin support them, tuned animation curves and speed; KRunner centered | desktop-shell | claude | both | small 15 | P3-2 |
 | P3-6 | `zeeos-layout-check` (guest): after `ZEEOS_DARK_READY`, switch back to light, then run each mode with `zee-layout set`, read back panels and keymap, print `ZEEOS_LAYOUT_OK`; then the RTL step (marker protocol below) | desktop-shell | claude | both | medium 40 | P3-1, P3-3 |
 | P3-7 | Harness: when the guest prints `ZEEOS_LAYOUT_CHECK`, require each `ZEEOS_LAYOUT_OK` and `ZEEOS_RTL_OK` and screenshot after each (`screenshot-<mode>.ppm`, `screenshot-rtl.ppm`); otherwise behave as today. Per-step result in junit | vm-integrator | claude | both | medium 40 | — `parallel-safe` (backward-compatible, see the marker protocol) |
-| P3-8 | Gating image diff: baselines per arch under `tests/baselines/<arch>/` (REUSE entry), masked clock/cursor regions, a fixed threshold; a cell fails only on a step that has a baseline. Baselines come from the artifacts of a green `main` run after P3-6 and P3-7, linked in the PR | vm-integrator | claude | both | medium 40 | P3-6, P3-7 |
+| P3-8 | Gating image diff in the shared harness: reads per-arch baselines from `build/arch/<arch>/baselines/` (arch data stays under `build/arch/`, CLAUDE.md rule 4), masked clock/cursor regions, a fixed threshold; a cell fails only on a step that has a baseline. The harness code is arch-neutral and lives in `/tests` | vm-integrator | claude | both | medium 40 | P3-6, P3-7 |
+| P3-11 | Commit the approved baselines to `build/arch/<arch>/baselines/` (REUSE entry), taken from the artifacts of a green `main` run after P3-6, P3-7 and P3-8, linked in the PR | image-builder | claude | both | small 15 | P3-8 |
 | P3-9 | `zee` window decoration art (Aurorae SVG theme, light and dark): original traffic-light buttons for Mac/Hybrid and plain buttons for Windows, nothing traced from Apple or Microsoft art, REUSE entries | theme-designer | codex | both | medium 40 | — `parallel-safe` |
 | P3-10 | Point the three layouts' window decoration at the P3-9 theme (installed the way `branding/wallpapers/` is) | desktop-shell | claude | both | small 15 | P3-2, P3-9 |
 
@@ -89,7 +90,7 @@ Lane E:  P3-2 ─► P3-5;  P3-4           (not on the exit path)
 Lane B:  P3-9 ─► P3-10 (also needs P3-2; not on the exit path)
 ```
 
-P3-4, P3-5 and P3-10 aren't checked by markers. Their PRs link boot-test screenshots as evidence. If one merges after P3-8 and changes a screenshot, its PR opens a vm-integrator issue to re-approve the baselines (`/tests` isn't desktop-shell's scope).
+P3-4, P3-5 and P3-10 aren't checked by markers. Their PRs link boot-test screenshots as evidence. If one merges after P3-8 and changes a screenshot, its PR opens an image-builder issue to re-approve the baselines (`build/arch/` isn't desktop-shell's scope).
 
 ## Carried over
 
