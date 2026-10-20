@@ -10,7 +10,7 @@
 # shim has a 2011 and a 2023 Microsoft signature, and GRUB a 2025 and an older Fedora one.
 # With --tamper-test it also checks that a GRUB copy with one flipped byte is rejected.
 # Usage: security/verify-secureboot-chain.sh <iso> [--tamper-test]
-# Needs: xorriso or bsdtar, objcopy (binutils), sbverify (sbsigntools), openssl, curl, python3.
+# Needs: xorriso or bsdtar, sbverify (sbsigntools), openssl, curl, python3.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 iso="${1:?usage: verify-secureboot-chain.sh <iso> [--tamper-test]}"
@@ -62,7 +62,21 @@ for line in "${ms_cas[@]}"; do
   openssl x509 -inform DER -in "$work/ms-$name.der" -out "$work/ms-$name.pem"
   anchors_ms+=("$work/ms-$name.pem")
 done
-objcopy -O binary --only-section=.vendor_cert "$shim" "$work/vendor_cert.bin"
+# Read the section with a PE parser: GNU objcopy on x86_64 runners cannot open AArch64 PE images.
+python3 -I - "$shim" "$work/vendor_cert.bin" <<'EOF'
+import struct, sys
+d = open(sys.argv[1], "rb").read()
+pe = struct.unpack_from("<I", d, 0x3C)[0]
+if d[pe:pe + 4] != b"PE\0\0": sys.exit("FAIL: shim is not a PE image")
+nsec, = struct.unpack_from("<H", d, pe + 6)
+optsz, = struct.unpack_from("<H", d, pe + 20)
+out = b""
+for i in range(nsec):
+    name, vsize, _, rawsize, rawptr = struct.unpack_from("<8sIIII", d, pe + 24 + optsz + 40 * i)
+    if name.rstrip(b"\0") == b".vendor_cert":
+        out = d[rawptr:rawptr + min(rawsize, vsize) if vsize else rawptr + rawsize]
+open(sys.argv[2], "wb").write(out)
+EOF
 python3 -I - "$work/vendor_cert.bin" "$work/vendor.der" <<'EOF'
 import struct, sys
 d = open(sys.argv[1], "rb").read()
