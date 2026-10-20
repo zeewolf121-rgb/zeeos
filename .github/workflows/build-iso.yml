@@ -87,6 +87,31 @@ jobs:
   boot:
     needs: build
     uses: ./.github/workflows/boot-test.yml
+  # Secure Boot chain in the built ISO (ADR-0004, #9): Microsoft UEFI CA -> shim -> shim's vendor
+  # cert -> GRUB, kernel; plus a tampered-GRUB negative test. Reported, not (yet) a required check.
+  secureboot-chain:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    name: secureboot-chain (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install sbsigntool and xorriso
+        run: sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends sbsigntool xorriso
+      - uses: actions/download-artifact@v6
+        with:
+          name: iso-${{ matrix.arch }}
+          path: out/iso
+      - name: Verify the chain (with the tamper test)
+        run: |
+          iso="$(find out/iso -name '*.iso' | head -n1)"
+          [[ -n "$iso" ]] || { echo "::error::no ISO in iso-${{ matrix.arch }}"; exit 1; }
+          set -o pipefail
+          security/verify-secureboot-chain.sh "$iso" --tamper-test | tee -a "$GITHUB_STEP_SUMMARY"
   build-iso:
     needs: [changes, build]
     if: always()
