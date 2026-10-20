@@ -70,10 +70,16 @@ pe = struct.unpack_from("<I", d, 0x3C)[0]
 if d[pe:pe + 4] != b"PE\0\0": sys.exit("FAIL: shim is not a PE image")
 nsec, = struct.unpack_from("<H", d, pe + 6)
 optsz, = struct.unpack_from("<H", d, pe + 20)
+symptr, nsyms = struct.unpack_from("<II", d, pe + 12)
+strtab = symptr + 18 * nsyms
 out = b""
 for i in range(nsec):
     name, vsize, _, rawsize, rawptr = struct.unpack_from("<8sIIII", d, pe + 24 + optsz + 40 * i)
-    if name.rstrip(b"\0") == b".vendor_cert":
+    name = name.rstrip(b"\0")
+    if name.startswith(b"/") and name[1:].isdigit() and symptr:  # long name: offset into the COFF string table
+        start = strtab + int(name[1:])
+        name = d[start:d.index(b"\0", start)]
+    if name == b".vendor_cert":
         out = d[rawptr:rawptr + min(rawsize, vsize) if vsize else rawptr + rawsize]
 open(sys.argv[2], "wb").write(out)
 EOF
