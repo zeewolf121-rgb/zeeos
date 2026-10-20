@@ -98,7 +98,9 @@ vendor_subject="$(openssl x509 -in "$work/vendor.pem" -noout -subject -nameopt R
 verify_any() { # label image anchor-pem... ; prints one line per signature, returns 0 if any verifies
   local label="$1" img="$2" n i a ok=1 line
   shift 2
-  n="$(python3 -I "$here/pe-split-signatures.py" "$img" "$work/split-$label")"
+  # A malformed table (e.g. data after it, which shim rejects) fails here rather than reading as unsigned.
+  n="$(python3 -I "$here/pe-split-signatures.py" "$img" "$work/split-$label")" \
+    || { echo "  $label: malformed certificate table (shim would reject it)"; return 1; }
   (( n > 0 )) || { echo "  $label: UNSIGNED"; return 1; }
   for ((i = 1; i <= n; i++)); do
     line="  $label signature $i/$n: no trusted chain"

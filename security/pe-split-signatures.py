@@ -58,6 +58,12 @@ def main():
     if not offset or not size:
         print(0)
         return
+    # shim rejects data after the certificate table (pe.c generate_hash). Splitting would drop
+    # those bytes and make a tampered image look identical to the signed one, so refuse it.
+    if offset + size > len(img):
+        raise ValueError(f"certificate table ends at {offset + size:#x}, past the end of the file")
+    if offset + size < len(img):
+        raise ValueError(f"{len(img) - offset - size} bytes after the certificate table")
     certs = list(certificates(img, offset, size))
     body = img[:offset]
     for i, cert in enumerate(certs, 1):
