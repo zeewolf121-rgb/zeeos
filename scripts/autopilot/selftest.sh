@@ -169,6 +169,16 @@ gates merge 5 >/dev/null || true
 ok "merge resolves the superseded thread" 'grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T1" "$CALLS"'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) live"}]}}]}}}}}' | fx graphql
 ok "a P1 thread that still applies keeps blocking" '! gates cross-review 5 >/dev/null'
+# Non-blocking threads (Codex P2) never held the gate, but GitHub's required conversation
+# resolution would hold the merge (#101, #114): the gate replies and resolves them.
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T3","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> live nit"}]}}]}}}}}' | fx graphql
+ok "a live P2 thread doesn't block" 'gates cross-review 5 >/dev/null'
+: >"$CALLS"; gates merge 5 >/dev/null || true
+ok "merge replies on the P2 thread, then resolves it" 'grep -q "addPullRequestReviewThreadReply" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T3" "$CALLS"'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T4","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"someone"},"body":"human question"}]}}]}}}}}' | fx graphql
+: >"$CALLS"; gates merge 5 >/dev/null || true
+ok "the gate never resolves a thread the reviewer didn't open" '! grep -q "id=T4" "$CALLS"'
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) live"}]}}]}}}}}' | fx graphql
 
 # The review-fix marker is written only after the dispatch succeeded.
 : >"$CALLS"; FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null || true
