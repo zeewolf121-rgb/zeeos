@@ -124,7 +124,7 @@ if kill -0 "$qpid" 2>/dev/null; then
   elif [ "$result" = pass ] && { [ "$has_theme" = 1 ] || [ "$has_layout" = 1 ]; }; then
     # Phase-2 theme check: light and dark markers. Phase-3 layout check: one per mode, then RTL.
     # Each step is "<grep pattern>|<name>"; its screenshot is screenshot-<name>.ppm.
-    [ "$has_theme" = 0 ] || { theme=ok; steps+=("ZEEOS_THEME_OK light|light" "ZEEOS_DARK_READY dark|dark"); }
+    [ "$has_theme" = 0 ] || { theme=ok; steps+=("ZEEOS_THEME_OK|light" "ZEEOS_DARK_READY|dark"); }
     [ "$has_layout" = 0 ] || { layout=ok; steps+=("ZEEOS_LAYOUT_OK mode=windows|windows" "ZEEOS_LAYOUT_OK mode=mac|mac" \
       "ZEEOS_LAYOUT_OK mode=hybrid|hybrid" "ZEEOS_RTL_OK|rtl"); }
     failed=""
