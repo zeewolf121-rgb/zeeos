@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Same defaults as org.zeeos.base (scheme, wallpaper), plus the Mac window button order (left: close, min, max).
+[kdeglobals][General]
+ColorScheme=ZeeOSLight
+
+[kdeglobals][KDE]
+widgetStyle=Breeze
+
+[kwinrc][org.kde.kdecoration2]
+ButtonsOnLeft=XIA
+ButtonsOnRight=
+
+[Wallpaper]
+Image=/usr/share/wallpapers/ZeeOS
