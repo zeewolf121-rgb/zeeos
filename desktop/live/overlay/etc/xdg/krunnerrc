@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ZeeOS KRunner defaults (P3-5): centered on screen rather than docked to the top edge.
+[General]
+FreeFloating=true
