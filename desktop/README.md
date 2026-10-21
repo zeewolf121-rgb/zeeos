@@ -69,5 +69,21 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - Meta+T is also Plasma's built-in "Toggle Tiles Editor"; the conflict must be resolved in the keymap profiles (P3-3).
 - Untested in a guest: the boot-test CI run and screenshots are the evidence, and none exists yet.
 
+## Layout switcher (issue #132, P3-3)
+
+- `usr/bin/zee-layout`: `get [mode|keymap]`, `set windows|mac|hybrid [--dry-run] [--swap-ctrl-meta]`. `set` runs
+  `plasma-apply-lookandfeel --apply org.zeeos.<mode> --resetLayout`, then writes the keymap profile
+  (`kglobalshortcutsrc` via `kwriteconfig6`, `kxkbrc` Options) and the state (`~/.config/zeeosrc` `[Layout]`).
+  `--dry-run` prints every command and writes nothing. Ctrl/Meta swap is mac-only and off unless asked.
+- Profiles: `win` (windows, hybrid; hybrid adds Meta+Space KRunner) and `mac`, per docs/phases/phase-3.md "Layout spec".
+  Meta+T stays the ZeeOS tiling toggle in every profile: Plasma's "Edit Tiles" moves to Meta+Shift+T.
+- `usr/share/applications/zeeos-layout.desktop`: "Layout Mode" in the Settings category with one action per mode.
+  Deviation: a real page inside System Settings is a KCM (compiled code), so this is a launcher entry in the Settings
+  menu and KRunner, not a sidebar page. The Global Theme page still lists the three packages. Owner decision needed
+  if a sidebar page is required (`decision` issue).
+- The shortcut action names (`Window Quick Tile Left`, `Edit Tiles`, `activate application launcher`, KRunner `_launch`)
+  are from Plasma 6 as remembered, not checked against 6.7 in a guest. Untested in a guest; the boot-test run
+  and `zeeos-layout-check` (P3-6) are the evidence.
+
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.
