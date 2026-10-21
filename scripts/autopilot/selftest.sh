@@ -281,6 +281,16 @@ echo '{"commit":{"committer":{"date":"2026-10-16T02:30:00Z"}}}' | fx commits_c0f
 "$here/dispatch.sh" 2>/dev/null
 ok "pauses with commits in between keep resuming" 'grep -q "issue=7" "$CALLS"'
 
+# close-linked: GITHUB_TOKEN merges don't apply "Closes #N"; the sweep closes open issues only.
+reset
+echo '[{"number":40,"body":"Closes #7, fixes #8 and refs #9"},{"number":41,"body":"Closes #12"}]' | fx pr_list
+echo '{"state":"open"}' | fx issues_7
+echo '{"state":"closed"}' | fx issues_8
+echo '{"state":"open"}' | fx issues_9
+echo '{"state":"open","pull_request":{}}' | fx issues_12
+"$here/close-linked.sh" 2>/dev/null
+ok "close-linked closes the open linked issue only" 'grep -q "issue close 7 " "$CALLS" && ! grep -qE "issue close (8|9|12) " "$CALLS"'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones
