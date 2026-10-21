@@ -1,0 +1,8 @@
+secureboot: Secure boot disabled
+ZEEOS_THEME_CHECK
+ZEEOS_LAYOUT_CHECK
+ZEEOS_DESKTOP_READY
+ZEEOS_THEME_OK light
+ZEEOS_DARK_READY dark
+ZEEOS_LAYOUT_OK mode=windows panels=1 keymap=win
+ZEEOS_LAYOUT_FAIL mac: panels=1, want 2

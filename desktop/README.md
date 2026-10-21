@@ -27,6 +27,8 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 ## GTK consistency (issue #95, P2-3)
 
 - `etc/gtk-3.0/settings.ini`, `etc/gtk-4.0/settings.ini`: `adw-gtk3` theme (GTK3), Breeze icons/cursor, Noto Sans.
+- `etc/skel/.config/gtk-3.0/settings.ini`: names `adw-gtk3` per user, because kde-gtk-config's first-login update
+  writes `Breeze` into `~/.config/gtk-3.0/settings.ini` when that file names no theme (#143).
 - `etc/xdg/xdg-desktop-portal/plasma-portals.conf`: KDE portal first, so libadwaita gets colour-scheme and accent
   from `kdeglobals` (`ColorScheme`, `AccentColor`). Switching Plasma to ZeeOS Dark flips libadwaita (GTK4) apps;
   GTK3 apps stay light until kde-gtk-config is in the image (#118).
@@ -41,6 +43,19 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - Both units are pulled in by `Wants=` in `zeeos-desktop-ready.service`, so `build/` needs no change.
 - Dark GTK3 is set by the script (`adw-gtk3-dark` in the user's `settings.ini`) until kde-gtk-config lands (#118).
 - `DRY_RUN=1` prints without touching the serial tty. Not run in a guest yet; the boot-test CI run is the evidence.
+
+## Layout packages (issue #128, P3-2)
+
+- `usr/share/plasma/look-and-feel/org.zeeos.{windows,mac,hybrid}`: Look-and-Feel packages. Each has
+  `contents/defaults` (same scheme and wallpaper as `org.zeeos.base`, plus `[kwinrc][org.kde.kdecoration2]` button
+  order) and `contents/layouts/org.kde.plasma.desktop-layout.js` (panels, per docs/phases/phase-3.md "Layout spec").
+- windows: one bottom panel (Kickoff, centered Icons-only Task Manager, tray, clock); buttons right (min, max, close).
+- mac: top panel (Kickoff, Global Menu, tray, clock) plus a floating bottom dock (Icons-only Task Manager, no
+  magnification yet); buttons left (close, min, max).
+- hybrid (default): top panel (Global Menu, tray, clock) plus a floating bottom panel (Kickoff, centered Icons-only
+  Task Manager); buttons left. `etc/xdg/kdeglobals` sets `LookAndFeelPackage=org.zeeos.hybrid`.
+- `org.zeeos.base` stays as the defaults reference. Keymaps and switching belong to `zee-layout` (P3-3).
+- Not verified in a guest yet: the layout scripts are untested until the boot-test CI run shows the hybrid panels.
 
 Needs from image-builder: packages (`plasma-desktop`, `sddm`, `kwin`), a `liveuser` account, `graphical.target` as default,
 `systemctl enable sddm zeeos-desktop-ready`, and this overlay installed. Not yet wired, so no boot evidence exists yet.

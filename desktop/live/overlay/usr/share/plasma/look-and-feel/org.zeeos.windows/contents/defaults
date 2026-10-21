@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Same defaults as org.zeeos.base (scheme, wallpaper), plus the Windows window button order (right: min, max, close).
+[kdeglobals][General]
+ColorScheme=ZeeOSLight
+
+[kdeglobals][KDE]
+widgetStyle=Breeze
+
+[kwinrc][org.kde.kdecoration2]
+ButtonsOnLeft=
+ButtonsOnRight=IAX
+
+[Wallpaper]
+Image=/usr/share/wallpapers/ZeeOS

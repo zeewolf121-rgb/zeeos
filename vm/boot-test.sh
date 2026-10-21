@@ -4,6 +4,7 @@
 # Env: ARCH=x86_64|aarch64  SECUREBOOT=on|off  ISO=<path>  DISK=<seed image, optional>
 #      OUT=<result dir>  TIMEOUT=<seconds>  MARKER=<serial string>  DRY_RUN=1 (print command only)
 #      SCREENSHOT_DELAY=<seconds after the marker; default 0, 90 under TCG>
+#      QEMU_BIN / FW_CODE / FW_VARS override the emulator and firmware (offline tests/selftest.sh)
 # Writes OUT/{serial.log,screenshot.ppm,junit.xml,accel}. DISK is attached through a qcow2
 # overlay, so the seed image is never modified.
 set -euo pipefail
@@ -45,6 +46,7 @@ case $ARCH in
     fi ;;
   *) echo "unsupported ARCH=$ARCH" >&2; exit 2;;
 esac
+qemu=${QEMU_BIN:-$qemu}; code=${FW_CODE:-${code:-}}; vars=${FW_VARS:-${vars:-}}
 
 if [ "$DRY_RUN" != 1 ]; then
   command -v "$qemu" >/dev/null || { echo "$qemu not installed" >&2; exit 2; }
@@ -84,18 +86,18 @@ rm -f "$OUT"/screenshot*.ppm
 qpid=$!
 trap 'kill "$qpid" 2>/dev/null || true' EXIT
 shot() { python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$1\"}" >/dev/null; }
-# Wait up to $2 s for a serial line matching $1. 0 = found, 1 = ZEEOS_THEME_FAIL seen, 2 = timeout/QEMU gone.
+# Wait up to $2 s for a serial line matching $1. 0 = found, 1 = a ZEEOS_*_FAIL line seen, 2 = timeout/QEMU gone.
 wait_for() {
   local t=$SECONDS
   while (( SECONDS - t < $2 )); do
     grep -aq -- "$1" "$OUT/serial.log" && return 0
-    grep -aq '^ZEEOS_THEME_FAIL' "$OUT/serial.log" && return 1
+    grep -aq -e '^ZEEOS_THEME_FAIL' -e '^ZEEOS_LAYOUT_FAIL' -e '^ZEEOS_RTL_FAIL' "$OUT/serial.log" && return 1
     kill -0 "$qpid" 2>/dev/null || return 2
     sleep 2
   done
   return 2
 }
-theme=none
+theme=none; layout=none; steps=(); declare -A stepres=()
 start=$SECONDS; result=timeout
 while (( SECONDS - start < TIMEOUT )); do
   if grep -aq -- "$MARKER" "$OUT/serial.log"; then result=pass; break; fi
@@ -108,28 +110,43 @@ if kill -0 "$qpid" 2>/dev/null; then
   # Under TCG, Plasma's software rendering needs well over a minute to paint after the marker;
   # an immediate screendump is black (aarch64, run 39021393078). Only delay on a pass.
   shot_delay=${SCREENSHOT_DELAY:-0}; [ "$accel" = tcg ] && shot_delay=${SCREENSHOT_DELAY:-90}
-  # With the theme check, the per-marker delays below replace this one: sleeping here too would eat
-  # into the guest's light-mode window, and the "light" screenshot would show dark mode.
+  # With the theme or layout check, the per-marker delays below replace this one: sleeping here too would
+  # eat into the guest's light-mode window, and the "light" screenshot would show dark mode.
   has_theme=0; grep -aq '^ZEEOS_THEME_CHECK' "$OUT/serial.log" && has_theme=1
-  [ "$result" = pass ] && [ "$has_theme" = 0 ] && sleep "$shot_delay"
+  has_layout=0; grep -aq '^ZEEOS_LAYOUT_CHECK' "$OUT/serial.log" && has_layout=1
+  [ "$result" = pass ] && [ "$has_theme" = 0 ] && [ "$has_layout" = 0 ] && sleep "$shot_delay"
   # The guest may have crashed or rebooted during the delay: recheck, and fail without a screenshot.
   if ! kill -0 "$qpid" 2>/dev/null; then
     [ "$result" != pass ] || result=qemu-exited-before-screenshot
   elif ! shot "$OUT/screenshot.ppm"; then
     echo "screendump failed" >&2
     [ "$result" != pass ] || result=screendump-failed
-  elif [ "$result" = pass ] && [ "$has_theme" = 1 ]; then
-    # The image carries the phase-2 theme check: light and dark markers are required too.
-    theme=ok
-    for step in "ZEEOS_THEME_OK light" "ZEEOS_DARK_READY dark"; do
-      mk=${step% *}; nm=${step#* }
-      rc=0; wait_for "^$mk" "${THEME_TIMEOUT:-600}" || rc=$?
-      if [ "$rc" = 1 ]; then theme=fail-$nm; break; fi
-      if [ "$rc" != 0 ]; then theme=timeout-$nm; break; fi
-      sleep "$shot_delay"
-      if ! kill -0 "$qpid" 2>/dev/null || ! shot "$OUT/screenshot-$nm.ppm"; then theme=screenshot-$nm; break; fi
+  elif [ "$result" = pass ] && { [ "$has_theme" = 1 ] || [ "$has_layout" = 1 ]; }; then
+    # Phase-2 theme check: light and dark markers. Phase-3 layout check: one per mode, then RTL.
+    # Each step is "<grep pattern>|<name>"; its screenshot is screenshot-<name>.ppm.
+    [ "$has_theme" = 0 ] || { theme=ok; steps+=("ZEEOS_THEME_OK|light" "ZEEOS_DARK_READY|dark"); }
+    [ "$has_layout" = 0 ] || { layout=ok; steps+=("ZEEOS_LAYOUT_OK mode=windows|windows" "ZEEOS_LAYOUT_OK mode=mac|mac" \
+      "ZEEOS_LAYOUT_OK mode=hybrid|hybrid" "ZEEOS_RTL_OK|rtl"); }
+    failed=""
+    for step in "${steps[@]}"; do
+      pat=${step%|*}; nm=${step#*|}
+      if [ -n "$failed" ]; then stepres[$nm]=skipped; continue; fi
+      kind=theme; case $nm in windows|mac|hybrid|rtl) kind=layout;; esac
+      st=; rc=0
+      wait_for "^$pat" "${THEME_TIMEOUT:-600}" || rc=$?
+      if [ "$rc" = 1 ]; then st=fail; elif [ "$rc" != 0 ]; then st=timeout; fi
+      if [ -z "$st" ]; then
+        sleep "$shot_delay"
+        if ! kill -0 "$qpid" 2>/dev/null || ! shot "$OUT/screenshot-$nm.ppm"; then st=screenshot; fi
+      fi
+      if [ -n "$st" ]; then
+        stepres[$nm]=$st; failed=$kind-$st-$nm
+        if [ "$kind" = theme ]; then theme=$st-$nm; else layout=$st-$nm; fi
+      else
+        stepres[$nm]=ok
+      fi
     done
-    [ "$theme" = ok ] || result=theme-$theme
+    [ -z "$failed" ] || result=$failed
     # screenshot.ppm was taken before the desktop painted; the light capture is the real one.
     [ ! -s "$OUT/screenshot-light.ppm" ] || cp "$OUT/screenshot-light.ppm" "$OUT/screenshot.ppm"
   fi
@@ -153,9 +170,12 @@ name="boot.$ARCH.sb-$SECUREBOOT"
 fail=1; [ "$result" = pass ] && fail=0
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
-  printf '<testsuite name="zeeos-boot" tests="1" failures="%d" time="%d">\n' "$fail" "$elapsed"
+  # One extra testcase per theme/layout step; a failed step counts as a failure of its own.
+  nfail=$fail; for nm in "${!stepres[@]}"; do [ "${stepres[$nm]}" = ok ] || [ "${stepres[$nm]}" = skipped ] || nfail=$((nfail + 1)); done
+  printf '<testsuite name="zeeos-boot" tests="%d" failures="%d" time="%d">\n' "$((1 + ${#steps[@]}))" "$nfail" "$elapsed"
   printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$SECUREBOOT"
   printf '<property name="theme_check" value="%s"/><property name="boot_seconds" value="%d"/>' "$theme" "$elapsed"
+  printf '<property name="layout_check" value="%s"/>' "$layout"
   for k in total_kb available_kb used_kb; do
     v=$(memkv "$k"); [ -z "$v" ] || printf '<property name="idle_%s" value="%s"/>' "$k" "$v"
   done
@@ -163,7 +183,14 @@ fail=1; [ "$result" = pass ] && fail=0
   echo '</properties>'
   printf '<testcase classname="boot" name="%s" time="%d">' "$name" "$elapsed"
   [ "$fail" = 0 ] || printf '<failure message="marker %s: %s"/>' "$MARKER" "$result"
-  echo '</testcase></testsuite>'
+  echo '</testcase>'
+  for step in "${steps[@]}"; do
+    nm=${step#*|}; r=${stepres[$nm]:-skipped}
+    printf '<testcase classname="boot.step" name="%s.%s">' "$name" "$nm"
+    case $r in ok) ;; skipped) printf '<skipped/>';; *) printf '<failure message="step %s: %s"/>' "$nm" "$r";; esac
+    echo '</testcase>'
+  done
+  echo '</testsuite>'
 } > "$OUT/junit.xml"
 echo "$name: $result after ${elapsed}s (accel=$accel); results in $OUT"
 exit "$fail"
