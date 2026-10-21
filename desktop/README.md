@@ -27,6 +27,8 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 ## GTK consistency (issue #95, P2-3)
 
 - `etc/gtk-3.0/settings.ini`, `etc/gtk-4.0/settings.ini`: `adw-gtk3` theme (GTK3), Breeze icons/cursor, Noto Sans.
+- `etc/skel/.config/gtk-3.0/settings.ini`: names `adw-gtk3` per user, because kde-gtk-config's first-login update
+  writes `Breeze` into `~/.config/gtk-3.0/settings.ini` when that file names no theme (#143).
 - `etc/xdg/xdg-desktop-portal/plasma-portals.conf`: KDE portal first, so libadwaita gets colour-scheme and accent
   from `kdeglobals` (`ColorScheme`, `AccentColor`). Switching Plasma to ZeeOS Dark flips libadwaita (GTK4) apps;
   GTK3 apps stay light until kde-gtk-config is in the image (#118).
