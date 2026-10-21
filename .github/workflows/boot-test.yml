@@ -75,6 +75,11 @@ jobs:
             echo '```'; tail -n 40 "$OUT/serial.log" 2>/dev/null || echo "(no serial log)"; echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
           if [[ -n "$used" ]] && (( used > 1258291 )); then echo "::warning::idle RAM $(mib "$used") is above 1.2 GB"; fi
+          # The guest's markers in the job log too: the summary and artifact aren't readable
+          # everywhere the log is, and a theme-check failure names its reason only here.
+          grep -a -E '^ZEEOS_|secureboot: Secure boot' "$OUT/serial.log" 2>/dev/null || echo "(no guest markers in serial log)"
+          fail="$(grep -a -m1 '^ZEEOS_THEME_FAIL' "$OUT/serial.log" 2>/dev/null || true)"
+          if [[ -n "$fail" ]]; then echo "::error::$fail"; fi
       - name: Upload serial log, light/dark screenshots and JUnit
         if: always()
         uses: actions/upload-artifact@v6
