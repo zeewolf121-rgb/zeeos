@@ -3,3 +3,12 @@
 [Plugins]
 zeeos-snap-layoutsEnabled=true
 zeeos-tilingEnabled=true
+# Design-language effects (P3-5): blur behind translucent panels, menus and KRunner.
+blurEnabled=true
+slidingpopupsEnabled=true
+squashEnabled=true
+fadeEnabled=true
+
+[Effect-blur]
+BlurStrength=8
+NoiseStrength=4

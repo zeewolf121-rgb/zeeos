@@ -57,6 +57,16 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - `org.zeeos.base` stays as the defaults reference. Keymaps and switching belong to `zee-layout` (P3-3).
 - Not verified in a guest yet: the layout scripts are untested until the boot-test CI run shows the hybrid panels.
 
+## Design-language effects (issue #133, P3-5)
+
+- `etc/xdg/kwinrc`: blur effect on (strength 8, noise 4), plus fade, squash and sliding-popup animations.
+- `etc/xdg/kdeglobals`: `AnimationDurationFactor=0.75` (animations 25% faster).
+- `etc/xdg/krunnerrc`: `FreeFloating=true` centers KRunner.
+- Rounded corners and panel/menu translucency come from the Breeze style and Plasma theme defaults; blur applies to
+  them. No per-panel opacity is forced in the layout scripts.
+- Untested in a guest: boot-test screenshots from CI are the evidence, and none exists yet. The key names follow
+  KWin/Plasma 6 and need confirming against the screenshots.
+
 ## Snap layouts and tiling toggle (issue #129, P3-4)
 
 - `usr/share/kwin/scripts/zeeos-snap-layouts`: QML picker (Meta+Z) with five zone layouts; clicking a zone snaps the
