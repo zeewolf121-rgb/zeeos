@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=Layout Mode
+GenericName=ZeeOS layout switcher
+Comment=Switch between the Windows, Mac and Hybrid layouts
+Exec=zee-layout set hybrid
+Icon=preferences-desktop-theme-global
+Categories=Qt;KDE;Settings;DesktopSettings;
+Keywords=layout;windows;mac;hybrid;panel;dock;keymap;
+Actions=Windows;Mac;Hybrid;
+
+[Desktop Action Windows]
+Name=Windows layout
+Exec=zee-layout set windows
+
+[Desktop Action Mac]
+Name=Mac layout
+Exec=zee-layout set mac
+
+[Desktop Action Hybrid]
+Name=Hybrid layout (default)
+Exec=zee-layout set hybrid
