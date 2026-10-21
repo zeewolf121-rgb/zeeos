@@ -29,17 +29,17 @@ function layout(output, desktop) {
     list.forEach(function (w, i) {
         if (!saved[key(w)]) {
             var f = w.frameGeometry;
-            saved[key(w)] = Qt.rect(f.x, f.y, f.width, f.height);
+            saved[key(w)] = { x: f.x, y: f.y, width: f.width, height: f.height };
         }
         w.setMaximize(false, false);
         var g;
         if (list.length === 1) {
             g = area;
         } else if (i === 0) {
-            g = Qt.rect(area.x, area.y, half, area.height);
+            g = { x: area.x, y: area.y, width: half, height: area.height };
         } else {
             var h = Math.floor(area.height / (list.length - 1));
-            g = Qt.rect(area.x + half, area.y + (i - 1) * h, area.width - half, h);
+            g = { x: area.x + half, y: area.y + (i - 1) * h, width: area.width - half, height: h };
         }
         w.frameGeometry = g;
     });
