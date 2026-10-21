@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Id": "zeeos-snap-layouts",
+    "Name": "ZeeOS Snap Layouts",
+    "Description": "Snap-layout picker: choose a layout zone and the active window snaps into it",
+    "License": "GPL-3.0-or-later",
+    "Authors": [{"Name": "ZeeOS contributors"}],
+    "Version": "0.1"
+  },
+  "KPackageStructure": "KWin/Script",
+  "X-Plasma-API": "declarativescript",
+  "X-Plasma-MainScript": "ui/main.qml"
+}

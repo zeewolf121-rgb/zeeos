@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Id": "zeeos-tiling",
+    "Name": "ZeeOS Tiling Toggle",
+    "Description": "Meta+T toggles master-stack auto-tiling of the windows on the current screen and desktop",
+    "License": "GPL-3.0-or-later",
+    "Authors": [{"Name": "ZeeOS contributors"}],
+    "Version": "0.1"
+  },
+  "KPackageStructure": "KWin/Script",
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "code/main.js"
+}
