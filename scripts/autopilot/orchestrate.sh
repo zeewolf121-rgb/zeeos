@@ -25,6 +25,7 @@ for pr in $(gh pr list --repo "$REPO" --state open --limit 100 --json number,isD
 done
 "$here/gates.sh" push-workflows || log "push-workflows sweep failed"   # main's lint + merge-audit
 
+"$here/close-linked.sh" || log "close-linked failed"   # GITHUB_TOKEN merges don't apply "Closes #N"
 "$here/phase.sh" mark-ready
 "$here/dispatch.sh"   # paused issues first, then ready ones, one shared cap
 
