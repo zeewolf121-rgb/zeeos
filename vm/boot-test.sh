@@ -85,7 +85,11 @@ rm -f "$OUT"/screenshot*.ppm
 "$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
 qpid=$!
 trap 'kill "$qpid" 2>/dev/null || true' EXIT
-shot() { python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$1\"}" >/dev/null; }
+# QEMU resolves the screendump path in its own cwd: always pass it an absolute one (OUT may be either).
+shot() {
+  local f=$1; case $f in /*) ;; *) f=$PWD/$f;; esac
+  python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$f\"}" >/dev/null
+}
 # Wait up to $2 s for a serial line matching $1. 0 = found, 1 = a ZEEOS_*_FAIL line seen, 2 = timeout/QEMU gone.
 wait_for() {
   local t=$SECONDS
@@ -97,7 +101,9 @@ wait_for() {
   done
   return 2
 }
-theme=none; layout=none; steps=(); declare -A stepres=()
+# stepres[i] is the result of steps[i]. Indexed arrays only, and every expansion of a maybe-empty array is
+# guarded: the macOS runner's bash is 3.2 (no declare -A, and "${a[@]}" of an empty array trips set -u).
+theme=none; layout=none; steps=(); stepres=()
 start=$SECONDS; result=timeout
 while (( SECONDS - start < TIMEOUT )); do
   if grep -aq -- "$MARKER" "$OUT/serial.log"; then result=pass; break; fi
@@ -128,9 +134,9 @@ if kill -0 "$qpid" 2>/dev/null; then
     [ "$has_layout" = 0 ] || { layout=ok; steps+=("ZEEOS_LAYOUT_OK mode=windows|windows" "ZEEOS_LAYOUT_OK mode=mac|mac" \
       "ZEEOS_LAYOUT_OK mode=hybrid|hybrid" "ZEEOS_RTL_OK|rtl"); }
     failed=""
-    for step in "${steps[@]}"; do
-      pat=${step%|*}; nm=${step#*|}
-      if [ -n "$failed" ]; then stepres[$nm]=skipped; continue; fi
+    for i in "${!steps[@]}"; do
+      step=${steps[$i]}; pat=${step%|*}; nm=${step#*|}
+      if [ -n "$failed" ]; then stepres[i]=skipped; continue; fi
       kind=theme; case $nm in windows|mac|hybrid|rtl) kind=layout;; esac
       st=; rc=0
       wait_for "^$pat" "${THEME_TIMEOUT:-600}" || rc=$?
@@ -140,10 +146,10 @@ if kill -0 "$qpid" 2>/dev/null; then
         if ! kill -0 "$qpid" 2>/dev/null || ! shot "$OUT/screenshot-$nm.ppm"; then st=screenshot; fi
       fi
       if [ -n "$st" ]; then
-        stepres[$nm]=$st; failed=$kind-$st-$nm
+        stepres[i]=$st; failed=$kind-$st-$nm
         if [ "$kind" = theme ]; then theme=$st-$nm; else layout=$st-$nm; fi
       else
-        stepres[$nm]=ok
+        stepres[i]=ok
       fi
     done
     [ -z "$failed" ] || result=$failed
@@ -171,7 +177,7 @@ fail=1; [ "$result" = pass ] && fail=0
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   # One extra testcase per theme/layout step; a failed step counts as a failure of its own.
-  nfail=$fail; for nm in "${!stepres[@]}"; do [ "${stepres[$nm]}" = ok ] || [ "${stepres[$nm]}" = skipped ] || nfail=$((nfail + 1)); done
+  nfail=$fail; for r in ${stepres[@]+"${stepres[@]}"}; do [ "$r" = ok ] || [ "$r" = skipped ] || nfail=$((nfail + 1)); done
   printf '<testsuite name="zeeos-boot" tests="%d" failures="%d" time="%d">\n' "$((1 + ${#steps[@]}))" "$nfail" "$elapsed"
   printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$SECUREBOOT"
   printf '<property name="theme_check" value="%s"/><property name="boot_seconds" value="%d"/>' "$theme" "$elapsed"
@@ -184,8 +190,8 @@ fail=1; [ "$result" = pass ] && fail=0
   printf '<testcase classname="boot" name="%s" time="%d">' "$name" "$elapsed"
   [ "$fail" = 0 ] || printf '<failure message="marker %s: %s"/>' "$MARKER" "$result"
   echo '</testcase>'
-  for step in "${steps[@]}"; do
-    nm=${step#*|}; r=${stepres[$nm]:-skipped}
+  for i in ${steps[@]+"${!steps[@]}"}; do
+    nm=${steps[$i]#*|}; r=${stepres[i]:-skipped}
     printf '<testcase classname="boot.step" name="%s.%s">' "$name" "$nm"
     case $r in ok) ;; skipped) printf '<skipped/>';; *) printf '<failure message="step %s: %s"/>' "$nm" "$r";; esac
     echo '</testcase>'

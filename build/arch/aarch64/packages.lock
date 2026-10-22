@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name
 # release=44
 # arch=aarch64
-# resolved=2026-10-17T19:55:50Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:d8966131a1026bd2cae08880a66a89000b38e05b651c7602e225236f9ffa3048
+# resolved=2026-10-20T15:18:27Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:6374ef8187b737391031f900a7dc21b4ce0af7fe59479dd5050875fb7f45af84
 LibRaw 0:0.22.2-1.fc44.aarch64 e92b9744b717843d7028ea5e9dfc9fbf1641c7dbf9d43e63345087ad41a08793 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.aarch64 bfac5045a95b38089bf606e56fed9b3f030011eb1837004ec6b5aa83f871d322 ModemManager
 NetworkManager 1:1.56.1-2.fc44.aarch64 2417739e89469a05c597ce6d087090c1960d10c46cfca97f786fc670db4c31df NetworkManager
@@ -38,6 +38,7 @@ bash 0:5.3.9-3.fc44.aarch64 884b530ed43c9b460fae5985009845419d997df1d1ce7b9f473b
 bc 0:1.08.2-4.fc44.aarch64 47375c407ef7435e4439cd2c0e3de8667a2af1a72fa199a425c8f408573d2f22 bc
 bluez-libs 0:5.87+1.git8750129efca8-1.fc44.aarch64 d08a50fc0bfe42460d0e057847f264fe186273216cd60620b3e903a96ee2be95 bluez
 breeze-cursor-theme 0:6.7.5-1.fc44.noarch 27d8b3647b3d887d0e8f5358d6c3d7b4865baf7be6586241e434800b5b76a8b2 plasma-breeze
+breeze-gtk-common 0:6.7.5-1.fc44.noarch 03a0b47910c822d1f3ac9319d83c3d0df1fca9021998e0a6fb0cb50ec172ce77 breeze-gtk
 breeze-icon-theme 0:6.31.0-1.fc44.noarch 3b81eaa7cecbd4cb9aa711587aaf02ac57d6a77efccabd980f3c740c6720a7d1 kf6-breeze-icons
 btrfs-progs 0:7.1-1.fc44.aarch64 dc63e0f8aa31f91bf1e8db2bf82f09c159d6272573504d3ad10b721d231ff277 btrfs-progs
 bubblewrap 0:0.12.0-1.fc44.aarch64 63a4480ed278cf0b080699c87c3774aa567a50b7f62e813ed7d794468ccb8298 bubblewrap
@@ -75,7 +76,7 @@ device-mapper 0:1.02.212-2.fc44.aarch64 7c6451fbfeef3fe0ac6e1f72ad24d834229fd323
 device-mapper-event 0:1.02.212-2.fc44.aarch64 a62ff64c13eabac11219334d70796f9216ae6cf05458fbb090cbb887b49bc1be lvm2
 device-mapper-event-libs 0:1.02.212-2.fc44.aarch64 437aeba4a2a6e15dd89627477f5c618ccc12012a3b51788455a78b20e5969574 lvm2
 device-mapper-libs 0:1.02.212-2.fc44.aarch64 242ff5b8b2c1d4568bd4459edbab2c16fba4e88d80f9d72f8c2ddae05791ee1b lvm2
-device-mapper-persistent-data 0:1.3.3-1.fc44.aarch64 2445cf83e48d8e5fd22ef00e57feb6df2dbceb97413bd14ceeea8ac1f7adafb4 device-mapper-persistent-data
+device-mapper-persistent-data 0:1.3.4-1.fc44.aarch64 8574711acaf60fc711a16e0f6ac4fbaf7cbd7d8af32fe910a86970be6e4ef134 device-mapper-persistent-data
 dialog 0:1.3-57.20250116.fc44.aarch64 85e3a9c2374a44b0ae434fb86fb1288e3a690f4f5d4a8b251ee85a88161f1e18 dialog
 diffutils 0:3.12-5.fc44.aarch64 12df6c24339f01dcb4670d492af2ee46e82ad141bdb316ad798953f138c44df7 diffutils
 dnf5 0:5.4.6.0-1.fc44.aarch64 8d53d517cd062e6911b7f55cef01894a98d6ca826d91d06009526893ef7a8a7e dnf5
@@ -143,6 +144,7 @@ glib2 0:2.88.4-1.fc44.aarch64 d0071970d49f7a5851f4e4b828c316cd14f5ee9e3d0aa9de5e
 glibc 0:2.43-9.fc44.aarch64 e650d99736f270179024cbf73bb603613a5e79f44e1c57779cb098c9dc3fb343 glibc
 glibc-common 0:2.43-9.fc44.aarch64 0db971a6145b9fa8a6ddc3809df08fed872aeaf7303a0b838f0a5039268e4892 glibc
 glibc-gconv-extra 0:2.43-9.fc44.aarch64 6e79333db969927384e52a8e9f6c2082f761d3b4c9a5e7b1e7031dbd47bb2f1e glibc
+glibc-langpack-ar 0:2.43-9.fc44.aarch64 78594186dd1b1bc02bd1b7c604877dfb5990144cb221388d5a77478253042c20 glibc
 glibc-langpack-en 0:2.43-9.fc44.aarch64 4b2940b118fa1d711e1bc5e17722d45070ff5f8bf039da453ec090b4601f0289 glibc
 glibc-minimal-langpack 0:2.43-9.fc44.aarch64 4bb4f0df14eb7150b53bde7045b062fc8944af576e0de00b34024c1d84fece0a glibc
 glx-utils 0:9.0.0-11.fc44.aarch64 11e85732e87c1ea98175a98b309a24388e420163be502b469fe156c5e3fb563b mesa-demos
@@ -160,6 +162,8 @@ gnutls 0:3.8.13-1.fc44.aarch64 45ba27b248c7901dcab3a6b56bd3b11bd71fd48f83de4f148
 gobject-introspection 0:1.86.0-3.fc44.aarch64 a5db16f0cd858b656c5b18ce11b2251b3f4791a945b635426a3bec825d4e74b9 gobject-introspection
 google-noto-color-emoji-fonts 0:20260921-1.fc44.noarch aa360c7ba84bd1f6c822058fe807dab2e67c7a28c5d1f8b4c1acfb8bd80360b0 google-noto-emoji-fonts
 google-noto-fonts-common 0:20251201-2.fc44.noarch 1da1dedae72ffbab654de2f5fa465d07f334e3e1929bf5967e32c53ec4d96f66 google-noto-fonts
+google-noto-naskh-arabic-vf-fonts 0:20251201-2.fc44.noarch ddeaace945c72ad55bef9dde7c28ac713f6d90f4e8b15e9710dd7e8ec8ca4df2 google-noto-fonts
+google-noto-sans-arabic-vf-fonts 0:20251201-2.fc44.noarch 38ceb33f82e020cfe487940592538fefdb32cde770e7150eb5544409ad2cf016 google-noto-fonts
 google-noto-sans-fonts 0:20251201-2.fc44.noarch d1806cb29ab8f30a91ed34dbfd84ac0e886c9962cce2815855b70132678152c1 google-noto-fonts
 google-noto-sans-mono-fonts 0:20251201-2.fc44.noarch 4abb9e17f27acc7efcc8798fd3c4a96779aea140bbd98a87a5e64835b8448b2f google-noto-fonts
 google-noto-sans-vf-fonts 0:20251201-2.fc44.noarch f1d4ddf1e251649ab1f2b8772222999b0cdc3f4ccd40aa6ad999a5f41b9e5762 google-noto-fonts
@@ -216,6 +220,7 @@ kbd-misc 0:2.9.0-4.fc44.noarch 9b17d0f1c4955af2112333fb359462d2e2e653c5a436becdc
 kcm-plasma-keyboard 1:6.7.5-1.fc44.aarch64 073f1c1e3b55f04d3e01b7025bcc4ed306020549bc5f3e588a253a9cf1fb3587 plasma-keyboard
 kde-cli-tools 0:6.7.5-1.fc44.aarch64 2c6670a6336e16e4089a37d62dd3cb60b325847a2f8511009b8d31b24e49276e kde-cli-tools
 kde-filesystem 0:5-7.fc44.aarch64 2c3134dea2cb08d35c273b944879f4dc082e6b5256c870a60de4415a4cd21665 kde-filesystem
+kde-gtk-config 0:6.7.5-1.fc44.aarch64 59ebe20de385896a0b2250451dc22b67b039ec76143d44cf48794b6648b93b7f kde-gtk-config
 kde-settings 0:44.0-1.fc44.noarch 8edf284b527e16f5b490ffb76bfd071e0e60356fdc79d4faa8862e179cc4da30 kde-settings
 kde-settings-plasma 0:44.0-1.fc44.noarch 9d8eee0afaf387e8eaa9014e92dd848c9b9e05a45aaf29d0f28c376ec96b72a6 kde-settings
 kde-settings-sddm 0:44.0-1.fc44.noarch d61f7e36763caa5b8e41aa739f96de000bf3cf9ba1096a67c822c63b04a34ebe kde-settings
@@ -351,7 +356,7 @@ libaccounts-glib 0:1.25-24.fc44.aarch64 194dcd15c4370219c62e7aa56aa1d112df426b2d
 libaccounts-qt6 0:1.17-4.fc44.aarch64 84d65f6395cc31ca5ac1d428ea414ec5908207cbe7cf5de28cd7ee96dd402c0f libaccounts-qt
 libacl 0:2.4.0-1.fc44.aarch64 a9b2a1c686c1e2fb70a07b7f4bdc94b5f9193595ec9a5a1e59d9a9bd6529bdf6 acl
 libaio 0:0.3.111-23.fc44.aarch64 1d7eeec228a3479ca3d4dd392aa253e7e9b07b5fe7046ae8590d644cf4f66118 libaio
-libaom 0:3.13.3-1.fc44.aarch64 484827af7024d9a8b9d20537df7d3703a4f4871711d1ef0b3a915dec0d583310 aom
+libaom 0:3.15.2-1.fc44.aarch64 64ae78022e7cf5f332715597752d9b3b3be98349992585642d6477db1d7c4967 aom
 libarchive 0:3.8.7-1.fc44.aarch64 ceb09242a6030623b50b52cc0434afc169e950caad91b23d3e0aa0e26a2c93a4 libarchive
 libaribcaption 0:1.1.1-4.fc44.aarch64 c855fdf8180acbb0f12dfe8dbebaa8b2128c6175caae02f1eabe59744fa42489 libaribcaption
 libass 0:0.17.4-2.fc44.aarch64 1a163a59388ee7ebfc3bbca7c468bea08b62a4f7a576fc6bc76af86fbc86ca4d libass
@@ -413,7 +418,7 @@ libgomp 0:16.2.1-2.fc44.aarch64 704950e8d428c053624d75ec66facfd512b9d0e187f27100
 libgpg-error 0:1.58-2.fc44.aarch64 f7e2c7ae25432117f80df4251df3a047c90fa6769a6dcbfe34c2d543a2fe4379 libgpg-error
 libgudev 0:238-9.fc44.aarch64 7692a356966b1526114a85e4af18bbe5dada2f3520ab37d3187ab9e1dd977a8b libgudev
 libgusb 0:0.4.9-5.fc44.aarch64 bc9b8d4d40272ef69d503e30a0a8031148b31b7b8fb21967d4523e931b028daa libgusb
-libheif 0:1.23.5-3.fc44.aarch64 40c7103fa5670f52f9ce54e2aed1f25f3a2e6324dfb84bb785b0b149e9ba50df libheif
+libheif 0:1.23.6-1.fc44.aarch64 d8f6cec4c5743600e725c886260bc78982743d72f9c3f42b193a4a790dc4fffd libheif
 libi2c 0:4.4-4.fc44.aarch64 0d7e5e06a2d18f02bf2b44a1087bc08fd7f7ef485666b2a72312d9fe285c2bc6 i2c-tools
 libibverbs 0:61.1^20260812git975bdaf-1.fc44.aarch64 36e98e3145bddc344f0960fab1933092dfe0090e93da53caff63bdcb91611206 rdma-core
 libicu 0:77.1-3.fc44.aarch64 dbaab0294f385e7db2a9f162189815491ffc65925a469e6f68383e52bd543d95 icu
@@ -500,7 +505,7 @@ libtevent 0:0.17.1-4.fc44.aarch64 afef01a1c20dc8af7d67389fe10ef16b2501656fd87b64
 libtextstyle 0:0.26-5.fc44.aarch64 df6c05d274338a715954cae17ce4745e7369ba8295022017bfc1b366f3016b24 gettext
 libthai 0:0.1.30-2.fc44.aarch64 e2e9a3e3122d4b0ebc3155d190510d9e74ea3fa533ecfc123f810d78341daf50 libthai
 libtheora 1:1.1.1-41.fc44.aarch64 e5f1fca0a7e3833996cf4a1fcffb634099a45cf19d7553f57ca7cbea186baa63 libtheora
-libtiff 0:4.7.2-1.fc44.aarch64 4db873297b03136936ad4206dc12c5a77bf05fffd15fe7fada6d02536483bb97 libtiff
+libtiff 0:4.7.2-3.fc44.aarch64 bbe917ea4e381fb5db8c49f0179e0e961a85e0b622f0f6a416b29ef762828c73 libtiff
 libtinysparql 0:3.11.1-1.fc44.aarch64 a272d3a9953392324a3568d6de9bf86f44d74ab24de887565eb0f113466e0ade tinysparql
 libtirpc 0:1.3.8-0.fc44.aarch64 8c9e09bf0967420e223e6f424337239b3027a7a4c206a5c34e4052ea89f2f74e libtirpc
 libtool-ltdl 0:2.5.4-10.fc44.aarch64 d0e6f372a3fbdd0ef168aa3c264dc2ea48d876a54c48320483f14a138320bb6d libtool
@@ -723,12 +728,12 @@ sratom 0:0.6.22-1.fc44.aarch64 1e355680ffe092cd2e27a85a5d8010af19c41bb014dd58b57
 srt-libs 0:1.5.7-1.fc44.aarch64 e847a175d72ed5adde55edf2c0f49270b2e2eb8cbb6cfca8ec85477691883b0a srt
 sudo 0:1.9.17-10.p2.fc44.aarch64 a00a299c79ec98313100f2283e10b845751802082bd511425ab2ef6a9cdc7217 sudo
 svt-av1-libs 0:3.1.2-2.fc44.aarch64 84ac273ff88834ac35b287076c70f0851d5294b4475294b9eacb181e2c250372 svt-av1
-systemd 0:259.9-1.fc44.aarch64 b35f3350e8b1d5e66b6ab23d84027cc1041dfc303b2d3453f128dfcd0e0c696a systemd
-systemd-libs 0:259.9-1.fc44.aarch64 143398295a7a4c76fba16443c3cdc47c2ac1cebf1c92e806578c8d8d41d9277c systemd
-systemd-pam 0:259.9-1.fc44.aarch64 0ed45f2e175097cb59083b7a7a0d4511e147ac62f91fe0524b0681e2d33429e8 systemd
-systemd-shared 0:259.9-1.fc44.aarch64 15855881f3760c8a9d2ff36840fab0051611db9a221fad48945f68991f0dcf45 systemd
-systemd-standalone-sysusers 0:259.9-1.fc44.aarch64 44f779f58de99675d026a095425ce31f3479d4094126688ec5180650ee8a77a5 systemd
-systemd-udev 0:259.9-1.fc44.aarch64 b1c71b2036cdedfa2ba5df9b271b68e7c4ce5cf11091a0826ef772c915f84dde systemd
+systemd 0:259.10-1.fc44.aarch64 4d7f64e3958c10a94ff7ed2113ccc287b7c78eff6999a14bce33bfee0b9a1440 systemd
+systemd-libs 0:259.10-1.fc44.aarch64 4b59f44e5a4bdf2e538ea229da520b8592702cc904a628d40ffa2de76b91a127 systemd
+systemd-pam 0:259.10-1.fc44.aarch64 ed726112e6bf524f69bfd2be9b83c45204be71a2e61ab79e1a9cfa8f8dbdfbac systemd
+systemd-shared 0:259.10-1.fc44.aarch64 3822b20b547df2f7c14e9dfd1553734080193ef979e084f728925305f45f3d1c systemd
+systemd-standalone-sysusers 0:259.10-1.fc44.aarch64 3a906b7a1c59622cf779c0dd8975fa8da37ba49ed638053c0e905c0d86bd7e21 systemd
+systemd-udev 0:259.10-1.fc44.aarch64 ee0bc33dc0f5929fa64dfe6b6b645145469a2fd82dcee07242c69b67898914bf systemd
 taglib 0:2.3-2.fc44.aarch64 09b2f4f5dbfbaffe1d92fc649df83f41a5b3cbabe275f1212d8127c510fa5c71 taglib
 tar 2:1.35-9.fc44.aarch64 8c47261bf001d5d10f7ba93e4934b0d6d47756001256bcbce0a88aa09bc30528 tar
 tesseract-common 0:5.5.3-2.fc44.noarch d5234a1632c0c37014605006c9f3fd3368d64c203879332e9eb5563dfbdaa896 tesseract
@@ -745,8 +750,8 @@ userspace-rcu 0:0.15.6-1.fc44.aarch64 beab142209f298fa23a68a3817272a9a8b99be3c77
 util-linux 0:2.41.5-1.fc44.aarch64 3143fc9cc51988af60c506ea352d8944afe1eee67d1c6902d7c22332d0f2795d util-linux
 util-linux-core 0:2.41.5-1.fc44.aarch64 fe72652bf773da6d3a65df8fb0f22716ea49313a7634267f0e601b1b9efc68c2 util-linux
 vid.stab 0:1.1.1-8.fc44.aarch64 ba83d5887c77429b5c21c61e97d889aea8166aa1f46e559bb2780d2a20de8334 vid.stab
-vim-data 2:9.2.1129-1.fc44.noarch 772923be2e91ad0c32b12722550d359ec32ac1aefd4b22d0001f1dc8eef338b1 vim
-vim-minimal 2:9.2.1129-1.fc44.aarch64 516519c622ac87d8362edbe296ff36ed20bbb27e24f2fd0b7658b4889ba4591a vim
+vim-data 2:9.2.1202-1.fc44.noarch 3fe0e06adfe0d74774d67c383a822d8cb0cafefdb6a010511d98098befdcd2f9 vim
+vim-minimal 2:9.2.1202-1.fc44.aarch64 9e09d2a3b9ea251154e81c6ba8e47c5801a9c5c11d4ea9e2592489be1eb9eb13 vim
 vo-amrwbenc 0:0.1.3-24.fc44.aarch64 b24d18da69d6e3e62f64473fbdeca2b4067d6eea987946728c66dc4f2f355f9f vo-amrwbenc
 vulkan-loader 0:1.4.341.0-1.fc44.aarch64 239a910999eac316251e43873c54f1b8cc0bee377350cf8e815368136f833f78 vulkan-loader
 webrtc-audio-processing 0:2.1-5.fc44.aarch64 21fa51e521048a9dfecfe64ac118cf8d366fc43d447049d5016d341c67aca2a9 webrtc-audio-processing

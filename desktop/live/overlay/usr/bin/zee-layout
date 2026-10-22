@@ -1,0 +1,136 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# zee-layout: show or switch the ZeeOS layout mode (windows, mac, hybrid) for the current user.
+#   zee-layout get [mode|keymap]      print the active mode (default) or keymap profile (win|mac)
+#   zee-layout set <mode> [--dry-run] [--swap-ctrl-meta]
+# `set` applies the org.zeeos.<mode> Look-and-Feel package (resetting the panel layout), then the
+# mode's keymap profile (kglobalshortcutsrc, kxkbrc). --dry-run prints every command and writes nothing.
+# --swap-ctrl-meta (mac only) also swaps Ctrl and Meta in kxkbrc; it is off by default.
+# Not an installer-disk tool: it touches only the user's ~/.config.
+set -u
+
+STATE_FILE=zeeosrc   # ~/.config/zeeosrc, group [Layout]: Mode, Keymap
+DEFAULT_MODE=hybrid
+DRY_RUN=0
+SWAP=0
+TAB=$'\t'
+
+die() { echo "zee-layout: $*" >&2; exit 1; }
+usage() { sed -n '3,7p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+
+# run <cmd...>: execute, or only print under --dry-run.
+run() {
+    if [ "$DRY_RUN" = 1 ]; then
+        printf '+'; printf ' %q' "$@"; printf '\n'
+    else
+        "$@"
+    fi
+}
+
+# best_effort <cmd...>: like run, but a failure (no session bus, service absent) is not fatal.
+best_effort() { run "$@" 2>/dev/null || true; }
+
+valid_mode() { case "$1" in windows | mac | hybrid) return 0 ;; *) return 1 ;; esac; }
+
+keymap_of() { case "$1" in mac) echo mac ;; *) echo win ;; esac; }
+
+# shortcut <group> <action> <keys> <friendly>: one kglobalshortcutsrc entry, "current,default,friendly".
+# Several keys are tab-separated; "none" clears. The default field equals current so that the
+# System Settings reset button returns to the profile, not to Plasma's stock binding.
+shortcut() {
+    local value="$3"
+    [ "$value" = none ] && value=
+    run kwriteconfig6 --file kglobalshortcutsrc --group "$1" --key "$2" "${value},${value},$4"
+}
+
+apply_keymap_win() {
+    local mode=$1
+    shortcut plasmashell "activate application launcher" "Meta" "Activate Application Launcher"
+    shortcut kwin "Window Quick Tile Left" "Meta+Left" "Quick Tile Window to the Left"
+    shortcut kwin "Window Quick Tile Right" "Meta+Right" "Quick Tile Window to the Right"
+    shortcut kwin "Window Quick Tile Top" "Meta+Up" "Quick Tile Window to the Top"
+    shortcut kwin "Window Quick Tile Bottom" "Meta+Down" "Quick Tile Window to the Bottom"
+    shortcut kwin "Walk Through Windows" "Alt+Tab" "Walk Through Windows"
+    shortcut kwin "Walk Through Windows (Reverse)" "Alt+Shift+Tab" "Walk Through Windows (Reverse)"
+    shortcut kwin "Window Close" "Alt+F4" "Close Window"
+    if [ "$mode" = hybrid ]; then
+        shortcut org.kde.krunner.desktop "_launch" "Meta+Space${TAB}Alt+F2${TAB}Alt+Space" "KRunner"
+    else
+        shortcut org.kde.krunner.desktop "_launch" "Alt+F2${TAB}Alt+Space" "KRunner"
+    fi
+}
+
+apply_keymap_mac() {
+    shortcut plasmashell "activate application launcher" none "Activate Application Launcher"
+    shortcut org.kde.krunner.desktop "_launch" "Meta+Space${TAB}Alt+F2" "KRunner"
+    shortcut kwin "Window Close" "Meta+Q${TAB}Alt+F4" "Close Window"
+    shortcut kwin "Walk Through Windows" "Meta+Tab" "Walk Through Windows"
+    shortcut kwin "Walk Through Windows (Reverse)" "Meta+Shift+Tab" "Walk Through Windows (Reverse)"
+    shortcut kwin "Window Quick Tile Left" "Meta+Ctrl+Left" "Quick Tile Window to the Left"
+    shortcut kwin "Window Quick Tile Right" "Meta+Ctrl+Right" "Quick Tile Window to the Right"
+    shortcut kwin "Window Quick Tile Top" "Meta+Ctrl+Up" "Quick Tile Window to the Top"
+    shortcut kwin "Window Quick Tile Bottom" "Meta+Ctrl+Down" "Quick Tile Window to the Bottom"
+}
+
+# kxkbrc [Layout] Options: drop any ctrl:swap_lwin_lctl, then add it back only when asked (mac).
+apply_kxkb() {
+    local want_swap=$1 current kept="" opt
+    current=$(kreadconfig6 --file kxkbrc --group Layout --key Options 2>/dev/null || true)
+    local IFS=,
+    for opt in $current; do
+        [ "$opt" = ctrl:swap_lwin_lctl ] || kept=${kept:+$kept,}$opt
+    done
+    [ "$want_swap" = 1 ] && kept=${kept:+$kept,}ctrl:swap_lwin_lctl
+    run kwriteconfig6 --file kxkbrc --group Layout --key ResetOldOptions --type bool true
+    run kwriteconfig6 --file kxkbrc --group Layout --key Options "$kept"
+}
+
+# Meta+T belongs to the ZeeOS tiling toggle in every profile; move Plasma's tile editor away.
+apply_common() {
+    shortcut kwin "Edit Tiles" "Meta+Shift+T" "Toggle Tiles Editor"
+}
+
+cmd_get() {
+    local what=${1:-mode} mode keymap
+    mode=$(kreadconfig6 --file "$STATE_FILE" --group Layout --key Mode --default "$DEFAULT_MODE")
+    valid_mode "$mode" || mode=$DEFAULT_MODE
+    keymap=$(kreadconfig6 --file "$STATE_FILE" --group Layout --key Keymap --default "$(keymap_of "$mode")")
+    case "$what" in
+        mode) echo "$mode" ;;
+        keymap) echo "$keymap" ;;
+        *) usage ;;
+    esac
+}
+
+cmd_set() {
+    local mode=${1:-} arg keymap
+    shift || true
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) DRY_RUN=1 ;;
+            --swap-ctrl-meta) SWAP=1 ;;
+            *) usage ;;
+        esac
+    done
+    valid_mode "$mode" || usage
+    if [ "$SWAP" = 1 ] && [ "$mode" != mac ]; then die "--swap-ctrl-meta only applies to mac"; fi
+    keymap=$(keymap_of "$mode")
+
+    if [ "$DRY_RUN" = 1 ]; then echo "# zee-layout set $mode (keymap $keymap, dry run: nothing is written)"; fi
+    run plasma-apply-lookandfeel --apply "org.zeeos.$mode" --resetLayout
+    if [ "$keymap" = mac ]; then apply_keymap_mac; else apply_keymap_win "$mode"; fi
+    apply_common
+    apply_kxkb "$SWAP"
+    run kwriteconfig6 --file "$STATE_FILE" --group Layout --key Mode "$mode"
+    run kwriteconfig6 --file "$STATE_FILE" --group Layout --key Keymap "$keymap"
+    # Make running components re-read their config; a failure only delays the change to next login.
+    best_effort systemctl --user restart plasma-kglobalaccel.service
+    best_effort dbus-send --session --type=signal /Layouts org.kde.keyboard.reloadConfig
+    best_effort qdbus6 org.kde.KWin /KWin reconfigure
+}
+
+case "${1:-}" in
+    get) shift; cmd_get "$@" ;;
+    set) shift; cmd_set "$@" ;;
+    *) usage ;;
+esac

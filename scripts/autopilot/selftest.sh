@@ -294,6 +294,12 @@ echo '{"state":"open","pull_request":{}}' | fx issues_12
 ok "close-linked closes the open linked issue only" 'grep -q "issue close 7 " "$CALLS" && ! grep -qE "issue close (8|9|12) " "$CALLS"'
 ok "close-linked leaves an issue reopened after the merge alone" '! grep -q "issue close 13 " "$CALLS"'
 
+# A label event only queues the issue (ready); it never starts an agent itself.
+reset
+printf '%s\n' '{"labels":[{"name":"model:claude"},{"name":"agent:desktop-shell"},{"name":"blocked-by:#1"}],"body":"## Turn budget\nmedium 40"}' | fx issue_view_9
+out="$(cd "$here/../.." && "$here/route.sh" 9 --from-label 2>/dev/null)" || out="exit $?"
+ok "label event: no agent started, issue queued ready" 'grep -qx "model=" <<<"$out" && grep -q "issue edit 9 --repo o/r --add-label ready" "$CALLS" && ! grep -q "add-label in-progress" "$CALLS"'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones
