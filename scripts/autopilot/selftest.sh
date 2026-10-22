@@ -31,6 +31,7 @@ case "$1 $2" in
     for ((j=0; j<${#args[@]}; j++)); do
       [[ "${args[j]}" == --label ]] && key+="_${args[j+1]}"
       [[ "${args[j]}" == --milestone ]] && key+="_ms"
+      [[ "${args[j]}" == --base ]] && key+="_base_${args[j+1]}"
     done ;;
   "run list") key=runs ;;
   "repo view") echo o/r; exit 0 ;;
@@ -87,14 +88,14 @@ ok "merged PR dispatches lint + merge-audit for its merge commit" 'gates merge 5
 : >"$CALLS"
 ok "a failed dispatch doesn't fail the merge" 'FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null && grep -q "pr merge 5" "$CALLS"'
 reset
-echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list_base_main
 ok "sweep dispatches for an autopilot merge with no audit run, not for owner merges" 'gates push-workflows >/dev/null
   grep -q "merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS" && ! grep -q "sha=2222" "$CALLS"'
 : >"$CALLS"; echo "[{\"displayTitle\":\"merge-audit $msha\",\"headSha\":\"ffff\",\"event\":\"workflow_dispatch\"}]" | fx runs
 ok "sweep skips a merge that already has its merge-audit run" 'gates push-workflows >/dev/null && ! grep -q "workflow run" "$CALLS"'
 reset; claude_pr; codex_done
 echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
-echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list_base_main
 export AUTOPILOT_LOG="$tmp/autopilot.log"; : >"$AUTOPILOT_LOG"
 gates merge 5 >/dev/null || true; gates push-workflows >/dev/null || true
 unset AUTOPILOT_LOG
@@ -283,7 +284,7 @@ ok "pauses with commits in between keep resuming" 'grep -q "issue=7" "$CALLS"'
 
 # close-linked: GITHUB_TOKEN merges don't apply "Closes #N"; the sweep closes open issues only.
 reset
-echo '[{"number":40,"mergedAt":"2026-10-20T10:00:00Z","body":"Closes #7, fixes #8 and refs #9, closes #13"},{"number":41,"mergedAt":"2026-10-20T10:00:00Z","body":"Closes #12"}]' | fx pr_list
+echo '[{"number":40,"mergedAt":"2026-10-20T10:00:00Z","body":"Closes #7, fixes #8 and refs #9, closes #13"},{"number":41,"mergedAt":"2026-10-20T10:00:00Z","body":"Closes #12"}]' | fx pr_list_base_main
 echo '{"state":"open"}' | fx issues_13
 echo '[{"event":"reopened","created_at":"2026-10-20T12:00:00Z"}]' | fx issues_13_events
 echo '{"state":"open"}' | fx issues_7
@@ -291,7 +292,7 @@ echo '{"state":"closed"}' | fx issues_8
 echo '{"state":"open"}' | fx issues_9
 echo '{"state":"open","pull_request":{}}' | fx issues_12
 "$here/close-linked.sh" 2>/dev/null
-ok "close-linked closes the open linked issue only" 'grep -q "issue close 7 " "$CALLS" && ! grep -qE "issue close (8|9|12) " "$CALLS"'
+ok "close-linked closes the open linked issue only (PRs merged into main)" 'grep -q "issue close 7 " "$CALLS" && ! grep -qE "issue close (8|9|12) " "$CALLS"'
 ok "close-linked leaves an issue reopened after the merge alone" '! grep -q "issue close 13 " "$CALLS"'
 
 # A label event only queues the issue (ready); it never starts an agent itself.

@@ -4,7 +4,8 @@
 # Close the issues that recently merged PRs say they close ("Closes/Fixes/Resolves #N").
 # GitHub ignores closing keywords on PRs merged with GITHUB_TOKEN, which is every autopilot
 # merge, so linked issues stayed open and held up their dependents (#55, #96, #125, #128, #130).
-# Only open *issues* are closed, never PRs, and never an issue reopened after the PR merged:
+# Only PRs merged into main count (a PR into another branch hasn't landed yet). Only open *issues*
+# are closed, never PRs, and never an issue reopened after the PR merged:
 # that's a deliberate "the fix wasn't enough" (e.g. #90). Run by orchestrate.sh before mark-ready.
 # Usage: scripts/autopilot/close-linked.sh [how-many-recent-merged-PRs]
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,7 +13,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/lib.sh"
 
 limit="${1:-30}"
-gh pr list --repo "$REPO" --state merged --limit "$limit" --json number,mergedAt,body \
+gh pr list --repo "$REPO" --state merged --base main --limit "$limit" --json number,mergedAt,body \
   --jq '.[] | "\(.number) \(.mergedAt) \((.body // "") | [scan("(?i)\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?) #([0-9]+)")[]] | join(" "))"' \
   | while read -r pr merged nums; do
       for n in $nums; do
