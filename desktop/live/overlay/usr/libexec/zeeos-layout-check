@@ -51,9 +51,9 @@ for w in "${words[@]}"; do
 done
 [[ $layout_delay =~ ^[0-9]+$ ]] || layout_delay=150
 
-# Plasma scripting: "<edge>:<applet>,<applet>;..." for every panel, sorted. Applets are plugin ids,
+# Plasma scripting (evaluateScript returns what print() wrote, not the last value): "<edge>:<applet>,<applet>;..." for every panel, sorted. Applets are plugin ids,
 # spacers included.
-PANELS_JS='var o=[];var ps=panels();for(var i=0;i<ps.length;i++){var p=ps[i];var w=[];for(var j=0;j<p.widgetIds.length;j++){w.push(p.widgetById(p.widgetIds[j]).type);}o.push(p.location+":"+w.join(","));}o.sort();o.join(";");'
+PANELS_JS='var o=[];var ps=panels();for(var i=0;i<ps.length;i++){var p=ps[i];var w=[];for(var j=0;j<p.widgetIds.length;j++){w.push(p.widgetById(p.widgetIds[j]).type);}o.push(p.location+":"+w.join(","));}o.sort();print(o.join(";"));'
 read_panels() {
     as_user qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$PANELS_JS" 2>/dev/null
 }
