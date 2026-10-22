@@ -12,8 +12,16 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 n="${1:?usage: route.sh <issue> [--from-label]}"
 model="$(issue_model "$n")"; agent="$(issue_agent "$n")"
-if [[ "${2:-}" == --from-label ]] && has_label "$n" in-progress; then
-  log "#$n already in progress; not starting another agent"; model=""
+if [[ "${2:-}" == --from-label ]]; then
+  # A label event only queues the issue. dispatch.sh (orchestrator) starts agents in dependency
+  # order and within the caps; creating twelve labelled issues used to start twelve agents,
+  # blocked ones included (Phase 3, 2026-10-20).
+  if [[ -n "$model" && -n "$agent" ]] && ! has_label "$n" in-progress \
+      && ! has_label "$n" needs-human && ! has_label "$n" ready; then
+    w gh issue edit "$n" --repo "$REPO" --add-label ready >/dev/null
+    log "#$n queued (ready) for dispatch.sh"
+  fi
+  model=""
 fi
 budget="$(gh issue view "$n" --repo "$REPO" --json body --jq .body \
   | sed -n '/^## Turn budget/,$p' | grep -oE 'small|medium|large' | head -n1 || true)"

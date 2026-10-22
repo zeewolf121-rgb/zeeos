@@ -281,6 +281,12 @@ echo '{"commit":{"committer":{"date":"2026-10-16T02:30:00Z"}}}' | fx commits_c0f
 "$here/dispatch.sh" 2>/dev/null
 ok "pauses with commits in between keep resuming" 'grep -q "issue=7" "$CALLS"'
 
+# A label event only queues the issue (ready); it never starts an agent itself.
+reset
+printf '%s\n' '{"labels":[{"name":"model:claude"},{"name":"agent:desktop-shell"},{"name":"blocked-by:#1"}],"body":"## Turn budget\nmedium 40"}' | fx issue_view_9
+out="$(cd "$here/../.." && "$here/route.sh" 9 --from-label 2>/dev/null)" || out="exit $?"
+ok "label event: no agent started, issue queued ready" 'grep -qx "model=" <<<"$out" && grep -q "issue edit 9 --repo o/r --add-label ready" "$CALLS" && ! grep -q "add-label in-progress" "$CALLS"'
+
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
 echo '[{"number":2,"title":"Phase 1: Live","description":"[opened]"},{"number":3,"title":"Phase 2: Desk","description":""}]' | fx milestones
