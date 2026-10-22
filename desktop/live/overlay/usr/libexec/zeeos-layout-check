@@ -108,11 +108,13 @@ for cur_mode in windows mac hybrid; do
 
     km=$(as_user zee-layout get keymap)
     [ "$km" = "$keymap_want" ] || fail "keymap is '$km', want $keymap_want"
-    # The launcher binding is the profile's marker: Meta on win, cleared on mac.
+    # The launcher binding is the profile's marker: Meta on win, cleared on mac. The current keys are
+    # tab-separated, and Plasma may re-register its stock "Meta<TAB>Alt+F1" (aarch64, run 39853355519).
     launcher=$(as_user kreadconfig6 --file kglobalshortcutsrc --group plasmashell \
         --key "activate application launcher" 2>/dev/null)
-    case $km:${launcher%%,*} in
-        win:Meta | mac:) ;;
+    keys=$'\t'${launcher%%,*}$'\t'
+    case $km:$keys in
+        win:*$'\t'Meta$'\t'* | mac:$'\t\t' | mac:$'\t'none$'\t') ;;
         *) fail "launcher shortcut is '$launcher' for keymap $km" ;;
     esac
     [ "$(as_user zee-layout get)" = "$cur_mode" ] || fail "zee-layout get reports another mode"
