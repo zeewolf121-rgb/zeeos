@@ -54,10 +54,16 @@ done
 # Plasma scripting (evaluateScript returns what print() wrote, not the last value): "<edge>:<applet>,<applet>;..." for every panel, sorted. Applets are plugin ids,
 # spacers included.
 PANELS_JS='var o=[];var ps=panels();for(var i=0;i<ps.length;i++){var p=ps[i];var w=[];for(var j=0;j<p.widgetIds.length;j++){w.push(p.widgetById(p.widgetIds[j]).type);}o.push(p.location+":"+w.join(","));}o.sort();print(o.join(";"));'
+# gdbus (glib2), not qdbus6: Fedora installs Qt's qdbus as qdbus-qt6. gdbus prints the reply as a
+# GVariant tuple ('...',); plugin ids hold no quotes, so stripping the wrapper is enough.
 read_panels() {
-    as_user qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$PANELS_JS" 2>"$QDBUS_ERR"
+    local out
+    out=$(as_user gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+        --method org.kde.PlasmaShell.evaluateScript "$PANELS_JS" 2>"$DBUS_ERR") || return 0
+    out=${out#\(\'}
+    echo "${out%\',\)}"
 }
-QDBUS_ERR=$(mktemp)
+DBUS_ERR=$(mktemp)
 
 # expected_panels <mode>: what the mode's org.kde.plasma.desktop-layout.js builds.
 expected_panels() {
@@ -96,7 +102,7 @@ for cur_mode in windows mac hybrid; do
         (( SECONDS - start >= PANEL_WAIT )) && break
         sleep 2
     done
-    [ "$got" = "$want" ] || fail "panels are '$got', want '$want' (qdbus6 stderr: $(tr '\n' ' ' <"$QDBUS_ERR" | cut -c1-300))"
+    [ "$got" = "$want" ] || fail "panels are '$got', want '$want' (gdbus stderr: $(tr '\n' ' ' <"$DBUS_ERR" | cut -c1-300))"
     n=$(grep -o ';' <<<"$got" | wc -l)
     n=$((n + 1))
 
