@@ -283,13 +283,16 @@ ok "pauses with commits in between keep resuming" 'grep -q "issue=7" "$CALLS"'
 
 # close-linked: GITHUB_TOKEN merges don't apply "Closes #N"; the sweep closes open issues only.
 reset
-echo '[{"number":40,"body":"Closes #7, fixes #8 and refs #9"},{"number":41,"body":"Closes #12"}]' | fx pr_list
+echo '[{"number":40,"mergedAt":"2026-10-20T10:00:00Z","body":"Closes #7, fixes #8 and refs #9, closes #13"},{"number":41,"mergedAt":"2026-10-20T10:00:00Z","body":"Closes #12"}]' | fx pr_list
+echo '{"state":"open"}' | fx issues_13
+echo '[{"event":"reopened","created_at":"2026-10-20T12:00:00Z"}]' | fx issues_13_events
 echo '{"state":"open"}' | fx issues_7
 echo '{"state":"closed"}' | fx issues_8
 echo '{"state":"open"}' | fx issues_9
 echo '{"state":"open","pull_request":{}}' | fx issues_12
 "$here/close-linked.sh" 2>/dev/null
 ok "close-linked closes the open linked issue only" 'grep -q "issue close 7 " "$CALLS" && ! grep -qE "issue close (8|9|12) " "$CALLS"'
+ok "close-linked leaves an issue reopened after the merge alone" '! grep -q "issue close 13 " "$CALLS"'
 
 # Phase: milestone 1 opened with an open issue -> current 1; nothing for the LLM.
 reset
