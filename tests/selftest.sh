@@ -37,4 +37,5 @@ replay serial-layout-no-rtl.log fail 'timeout-rtl' 'name="boot.x86_64.sb-off.rtl
 replay serial-layout-fail.log fail 'layout-fail-mac' '<skipped/>'
 
 rm -rf "$tmp"
+tests/imgdiff_gate_test.sh
 echo "selftest ok"

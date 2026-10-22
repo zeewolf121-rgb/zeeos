@@ -167,6 +167,19 @@ if [ -s "$OUT/screenshot-light.ppm" ] && [ -s "$OUT/screenshot-dark.ppm" ]; then
   diffpct=$(python3 -I "$here/imgdiff.py" "$OUT/screenshot-light.ppm" "$OUT/screenshot-dark.ppm" || true)
 fi
 
+# Gating diff (P3-8): only steps that have a committed baseline are compared; no baselines = no gate.
+gate=skip
+base_dir=${BASELINES:-$here/../build/arch/$ARCH/baselines}
+if [ -d "$base_dir" ] && [ "$DRY_RUN" != 1 ]; then
+  rc=0; gate_out=$(python3 -I "$here/../tests/imgdiff_gate.py" "$base_dir" "$OUT" 2>&1) || rc=$?
+  echo "$gate_out" | sed 's/^/imgdiff_gate: /'
+  gate=pass
+  if [ "$rc" != 0 ]; then
+    gate=fail
+    if [ "$result" = pass ]; then result=imgdiff-gate; else result="$result,imgdiff-gate"; fi
+  fi
+fi
+
 # The guest kernel must report the Secure Boot state that was asked for, or the cell proves nothing.
 want=enabled; [ "$SECUREBOOT" = off ] && want=disabled
 got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$OUT/serial.log" | awk '{print $NF}' || true)
@@ -180,6 +193,7 @@ fail=1; [ "$result" = pass ] && fail=0
   nfail=$fail; for r in ${stepres[@]+"${stepres[@]}"}; do [ "$r" = ok ] || [ "$r" = skipped ] || nfail=$((nfail + 1)); done
   printf '<testsuite name="zeeos-boot" tests="%d" failures="%d" time="%d">\n' "$((1 + ${#steps[@]}))" "$nfail" "$elapsed"
   printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$SECUREBOOT"
+  printf '<property name="imgdiff_gate" value="%s"/>' "$gate"
   printf '<property name="theme_check" value="%s"/><property name="boot_seconds" value="%d"/>' "$theme" "$elapsed"
   printf '<property name="layout_check" value="%s"/>' "$layout"
   for k in total_kb available_kb used_kb; do

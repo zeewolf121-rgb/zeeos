@@ -20,6 +20,12 @@ at the desktop-ready marker). Without `ZEEOS_THEME_CHECK` nothing changes. junit
 `boot_seconds`, `idle_total_kb`/`idle_available_kb`/`idle_used_kb` (from `ZEEOS_MEM`), and `light_dark_diff_pct`
 (`imgdiff.py`, report-only).
 
+Gating diff (P3-8): after the run, `tests/imgdiff_gate.py` compares each `screenshot-<step>.ppm` with
+`build/arch/$ARCH/baselines/<step>.ppm` (override with `BASELINES`). Only steps with a baseline are compared; with no
+baseline directory or no matching file nothing is gated. Clock/cursor regions are masked via `masks.txt` in the
+baselines dir (`STEP|* X Y W H`, negative X/Y from the right/bottom edge); the threshold is 1.0 % of unmasked pixels
+(channel tolerance 8). A failure sets the result to `imgdiff-gate`; junit property `imgdiff_gate` is `pass|fail|skip`.
+
 Layout check (phase-3 marker protocol): if the guest prints `ZEEOS_LAYOUT_CHECK`, the harness also requires
 `ZEEOS_LAYOUT_OK mode=windows|mac|hybrid` and `ZEEOS_RTL_OK`, in that order after the theme steps, with the same
 `THEME_TIMEOUT` and settle delay, and screenshots after each (`screenshot-<mode>.ppm`, `screenshot-rtl.ppm`).
