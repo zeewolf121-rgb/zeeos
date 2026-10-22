@@ -55,8 +55,9 @@ done
 # spacers included.
 PANELS_JS='var o=[];var ps=panels();for(var i=0;i<ps.length;i++){var p=ps[i];var w=[];for(var j=0;j<p.widgetIds.length;j++){w.push(p.widgetById(p.widgetIds[j]).type);}o.push(p.location+":"+w.join(","));}o.sort();print(o.join(";"));'
 read_panels() {
-    as_user qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$PANELS_JS" 2>/dev/null
+    as_user qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$PANELS_JS" 2>"$QDBUS_ERR"
 }
+QDBUS_ERR=$(mktemp)
 
 # expected_panels <mode>: what the mode's org.kde.plasma.desktop-layout.js builds.
 expected_panels() {
@@ -95,7 +96,7 @@ for cur_mode in windows mac hybrid; do
         (( SECONDS - start >= PANEL_WAIT )) && break
         sleep 2
     done
-    [ "$got" = "$want" ] || fail "panels are '$got', want '$want'"
+    [ "$got" = "$want" ] || fail "panels are '$got', want '$want' (qdbus6 stderr: $(tr '\n' ' ' <"$QDBUS_ERR" | cut -c1-300))"
     n=$(grep -o ';' <<<"$got" | wc -l)
     n=$((n + 1))
 
