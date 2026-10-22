@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Pulled in by zeeos-desktop-ready.service (Wants=), so no separate enable step.
+[Unit]
+Description=ZeeOS layout check announcement (serial console)
+Before=zeeos-desktop-ready.service
+ConditionKernelCommandLine=rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zeeos-layout-check announce

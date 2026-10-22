@@ -1,0 +1,139 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Guest layout check (P3-6, marker protocol in docs/phases/phase-3.md). Modes:
+#   announce  print ZEEOS_LAYOUT_CHECK (runs before zeeos-desktop-ready)
+#   check     (default) after ZEEOS_DARK_READY: back to light, then for windows, mac, hybrid run
+#             `zee-layout set`, read back panels and keymap and print ZEEOS_LAYOUT_OK; then the RTL
+#             step and ZEEOS_RTL_OK. Any failure prints ZEEOS_LAYOUT_FAIL <mode>: <reason> or
+#             ZEEOS_RTL_FAIL <reason> and stops.
+# Root system unit: it needs the serial tty. It reaches the live session through its runtime dir.
+# Touches only the live user's ~/.config; not an installer-disk tool.
+set -u
+USER_NAME=${LIVE_USER:-liveuser}
+DRY_RUN=${DRY_RUN:-0}
+SETTLE=${SETTLE:-5}
+CMDLINE=${CMDLINE:-/proc/cmdline}
+LIGHT_GTK=${LIGHT_GTK:-adw-gtk3}
+RTL_LOCALE=${RTL_LOCALE:-ar_EG.UTF-8}
+PANEL_WAIT=${PANEL_WAIT:-60}
+
+ttys=()
+for t in ttyS0 ttyAMA0; do
+    read -r type <"/sys/class/tty/$t/type" 2>/dev/null && [ "$type" != 0 ] && [ -w "/dev/$t" ] \
+        && ttys+=("/dev/$t")
+done
+emit() {
+    if [ "$DRY_RUN" = 1 ]; then echo "$* (dry run)"; return 0; fi
+    echo "$*" | timeout -k 5 30 tee -- "${ttys[@]+"${ttys[@]}"}" /dev/console >/dev/null || true
+}
+
+mode=${1:-check}
+if [ "$mode" = announce ]; then emit ZEEOS_LAYOUT_CHECK; exit 0; fi
+
+cur_mode=setup
+fail() { emit "ZEEOS_LAYOUT_FAIL $cur_mode: $*"; exit 1; }
+rtl_fail() { emit "ZEEOS_RTL_FAIL $*"; exit 1; }
+
+uid=$(id -u "$USER_NAME" 2>/dev/null) || fail "no user $USER_NAME"
+home=$(getent passwd "$USER_NAME" | cut -d: -f6)
+rt=/run/user/$uid
+as_user() {
+    runuser -u "$USER_NAME" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY=wayland-0 \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" "$@"
+}
+
+# layout_delay: seconds between switches, from zeeos.layout_delay=<s> (default 150). It must stay
+# longer than the harness's settle delay: there is no harness-to-guest channel.
+layout_delay=150
+read -ra words <"$CMDLINE" 2>/dev/null || words=()
+for w in "${words[@]}"; do
+    case $w in zeeos.layout_delay=*) layout_delay=${w#*=} ;; esac
+done
+[[ $layout_delay =~ ^[0-9]+$ ]] || layout_delay=150
+
+# Plasma scripting: "<edge>:<applet>,<applet>;..." for every panel, sorted. Applets are plugin ids,
+# spacers included.
+PANELS_JS='var o=[];var ps=panels();for(var i=0;i<ps.length;i++){var p=ps[i];var w=[];for(var j=0;j<p.widgetIds.length;j++){w.push(p.widgetById(p.widgetIds[j]).type);}o.push(p.location+":"+w.join(","));}o.sort();o.join(";");'
+read_panels() {
+    as_user qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$PANELS_JS" 2>/dev/null
+}
+
+# expected_panels <mode>: what the mode's org.kde.plasma.desktop-layout.js builds.
+expected_panels() {
+    local k=org.kde.plasma
+    case $1 in
+        windows) echo "bottom:$k.kickoff,$k.panelspacer,$k.icontasks,$k.panelspacer,$k.systemtray,$k.digitalclock" ;;
+        mac) echo "bottom:$k.icontasks;top:$k.kickoff,$k.appmenu,$k.panelspacer,$k.systemtray,$k.digitalclock" ;;
+        hybrid) echo "bottom:$k.kickoff,$k.panelspacer,$k.icontasks,$k.panelspacer;top:$k.appmenu,$k.panelspacer,$k.systemtray,$k.digitalclock" ;;
+    esac
+}
+
+# Back to light (the theme check left the session dark) so layout screenshots match the light baseline.
+cur_mode=light
+as_user plasma-apply-colorscheme ZeeOSLight >/dev/null 2>&1 || fail "plasma-apply-colorscheme ZeeOSLight failed"
+as_user mkdir -p "$home/.config/gtk-3.0" "$home/.config/gtk-4.0"
+for v in 3 4; do
+    printf '[Settings]\ngtk-theme-name=%s\ngtk-application-prefer-dark-theme=0\n' "$LIGHT_GTK" \
+        | as_user tee "$home/.config/gtk-$v.0/settings.ini" >/dev/null
+done
+as_user gsettings set org.gnome.desktop.interface gtk-theme "$LIGHT_GTK" >/dev/null 2>&1 || true
+sleep "$SETTLE"
+scheme=$(as_user kreadconfig6 --file kdeglobals --group General --key ColorScheme 2>/dev/null)
+[ "$scheme" = ZeeOSLight ] || fail "plasma scheme is '$scheme', want ZeeOSLight"
+
+for cur_mode in windows mac hybrid; do
+    as_user zee-layout set "$cur_mode" || fail "zee-layout set failed"
+    want=$(expected_panels "$cur_mode")
+    keymap_want=win
+    [ "$cur_mode" = mac ] && keymap_want=mac
+
+    # The shell rebuilds its panels asynchronously after --resetLayout: poll.
+    start=$SECONDS got=
+    while :; do
+        got=$(read_panels)
+        [ "$got" = "$want" ] && break
+        (( SECONDS - start >= PANEL_WAIT )) && break
+        sleep 2
+    done
+    [ "$got" = "$want" ] || fail "panels are '$got', want '$want'"
+    n=$(grep -o ';' <<<"$got" | wc -l)
+    n=$((n + 1))
+
+    km=$(as_user zee-layout get keymap)
+    [ "$km" = "$keymap_want" ] || fail "keymap is '$km', want $keymap_want"
+    # The launcher binding is the profile's marker: Meta on win, cleared on mac.
+    launcher=$(as_user kreadconfig6 --file kglobalshortcutsrc --group plasmashell \
+        --key "activate application launcher" 2>/dev/null)
+    case $km:${launcher%%,*} in
+        win:Meta | mac:) ;;
+        *) fail "launcher shortcut is '$launcher' for keymap $km" ;;
+    esac
+    [ "$(as_user zee-layout get)" = "$cur_mode" ] || fail "zee-layout get reports another mode"
+
+    sleep "$SETTLE"   # let the repaint finish before the harness screenshots
+    emit "ZEEOS_LAYOUT_OK mode=$cur_mode panels=$n keymap=$km"
+    [ "$DRY_RUN" = 1 ] || sleep "$layout_delay"
+done
+
+# RTL step. glibc lists the locale as ar_EG.utf8.
+locale_re=${RTL_LOCALE%%.*}
+locale -a 2>/dev/null | grep -qiE "^${locale_re}\.(utf-?8)$" || rtl_fail "locale $RTL_LOCALE is not installed"
+font=$(fc-match -f '%{family}' ':lang=ar' 2>/dev/null)
+case $font in
+    Noto*) ;;
+    *) rtl_fail "fc-match :lang=ar gave '${font:-nothing}', want a Noto family" ;;
+esac
+as_user systemctl --user set-environment "LANG=$RTL_LOCALE" "LC_ALL=$RTL_LOCALE" \
+    || rtl_fail "could not set the session locale"
+as_user systemctl --user restart plasma-plasmashell.service || rtl_fail "plasmashell restart failed"
+start=$SECONDS pid=
+while :; do
+    pid=$(pgrep -u "$uid" -x plasmashell | head -n 1)
+    if [ -n "$pid" ] && tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qx "LC_ALL=$RTL_LOCALE"; then
+        break
+    fi
+    (( SECONDS - start >= PANEL_WAIT )) && rtl_fail "plasmashell is not running with $RTL_LOCALE"
+    sleep 2
+done
+sleep "$SETTLE"
+emit "ZEEOS_RTL_OK locale=$RTL_LOCALE font=$font"
