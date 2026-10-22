@@ -126,7 +126,7 @@ cmd_set() {
     # Make running components re-read their config; a failure only delays the change to next login.
     best_effort systemctl --user restart plasma-kglobalaccel.service
     best_effort dbus-send --session --type=signal /Layouts org.kde.keyboard.reloadConfig
-    best_effort qdbus6 org.kde.KWin /KWin reconfigure
+    best_effort gdbus call --session --dest org.kde.KWin --object-path /KWin --method org.kde.KWin.reconfigure
 }
 
 case "${1:-}" in

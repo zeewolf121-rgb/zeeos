@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Pulled in by zeeos-desktop-ready.service (Wants=), so no separate enable step.
+[Unit]
+Description=ZeeOS layout check (windows, mac, hybrid and RTL markers on the serial console)
+After=zeeos-theme-check.service
+Requires=zeeos-theme-check.service zeeos-desktop-ready.service
+ConditionKernelCommandLine=rd.live.image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zeeos-layout-check
+# 3 x (5 s settle + 150 s delay + panel wait), the RTL restart, with headroom
+TimeoutStartSec=900
