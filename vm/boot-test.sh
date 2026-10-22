@@ -85,7 +85,11 @@ rm -f "$OUT"/screenshot*.ppm
 "$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
 qpid=$!
 trap 'kill "$qpid" 2>/dev/null || true' EXIT
-shot() { python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$PWD/$1\"}" >/dev/null; }
+# QEMU resolves the filename against its own cwd: pass it absolute, without doubling an absolute OUT.
+shot() {
+  local f=$1; [ "${f#/}" != "$f" ] || f=$PWD/$f
+  python3 -I "$here/qmp.py" "$sock" screendump "{\"filename\":\"$f\"}" >/dev/null
+}
 # Wait up to $2 s for a serial line matching $1. 0 = found, 1 = a ZEEOS_*_FAIL line seen, 2 = timeout/QEMU gone.
 wait_for() {
   local t=$SECONDS
