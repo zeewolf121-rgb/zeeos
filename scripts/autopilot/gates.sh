@@ -45,16 +45,30 @@ head_reviewers() { # pr sha model: login prefixes of the models that reviewed th
   esac
   return 0
 }
-resolve_superseded() { # pr reviewer-login-prefix: resolve that reviewer's outdated open threads
+blocking_re() { # reviewer-login-prefix -> regex for a first comment that blocks the merge (§2)
+  if [[ "$1" == "$CODEX_BOT" ]]; then echo 'badge/P[01]-'; else echo '^[* ]*\[blocking\]'; fi
+}
+resolve_settled() { # pr reviewer-login-prefix: resolve that reviewer's threads that no longer block
   # Only the gate does this, only after the reviewer's review of the head commit came back
-  # clean; the fixer never resolves its reviewer's threads (no self-approval).
-  local id
-  for id in $(threads_json "$1" | jq -r --arg who "$2" '.[] | select((.isResolved | not) and .isOutdated
-      and (.comments.nodes[0].author.login | startswith($who))) | .id'); do
+  # clean; the fixer never resolves its reviewer's threads (no self-approval). Outdated threads
+  # are superseded by that review. Non-blocking ones (Codex P2/P3, Claude without [blocking])
+  # never held the gate, but GitHub's required conversation resolution would still hold the
+  # merge (#101, #114), so they get a one-line reply saying why before they are resolved.
+  local id outdated
+  while read -r id outdated; do
+    if [[ "$outdated" == false ]]; then
+      # shellcheck disable=SC2016  # GraphQL variables, not shell
+      w gh api graphql -F id="$id" -f body="Non-blocking finding (docs/AUTOPILOT.md §2) and the reviewer's review of the head commit is clean, so the merge gate resolves this thread. Reopen it if it should block, or track it in an issue." \
+        -f query='mutation($id:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id,body:$body}){comment{id}}}' >/dev/null
+    fi
     # shellcheck disable=SC2016  # GraphQL variables, not shell
     w gh api graphql -F id="$id" -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id}}}' >/dev/null
-    log "#$1: resolved superseded review thread $id"
-  done
+    if [[ "$outdated" == true ]]; then log "#$1: resolved superseded review thread $id"
+    else log "#$1: resolved non-blocking review thread $id"; fi
+  done < <(threads_json "$1" | jq -r --arg who "$2" --arg re "$(blocking_re "$2")" '.[]
+      | select((.isResolved | not) and (.comments.nodes[0].author.login | startswith($who)))
+      | select(.isOutdated or (.comments.nodes[0].body | test($re) | not))
+      | "\(.id) \(.isOutdated)"')
 }
 reviews_by() { # login-prefix -> commit ids of their reviews
   gh api --paginate "repos/$REPO/pulls/$1/reviews" \
@@ -280,10 +294,10 @@ merge() {
     fi
     echo "#$pr cross-review: $out"; return 1
   fi
-  # The reviewer's latest review of the head is clean: clear its superseded (outdated) threads,
-  # which GitHub's required conversation resolution would otherwise block on.
+  # The reviewer's latest review of the head is clean: clear its outdated and non-blocking
+  # threads, which GitHub's required conversation resolution would otherwise block on.
   local who
-  for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_superseded "$pr" "$who"; done
+  for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_settled "$pr" "$who"; done
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
     # Hard stop: never merged by autopilot. Ping the owner once per commit.

@@ -1,0 +1,5 @@
+secureboot: Secure boot disabled
+ZEEOS_THEME_CHECK
+ZEEOS_DESKTOP_READY
+ZEEOS_THEME_OK light
+ZEEOS_DARK_READY dark

@@ -12,15 +12,20 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/lib.sh"
 
 report="${1:?usage: orchestrate.sh <state-report-file>}"
+merge_err="$(mktemp)"; trap 'rm -f "$merge_err"' EXIT
 
 { # side effects only; stdout is reserved for the key=value status
 for pr in $(gh pr list --repo "$REPO" --state open --limit 100 --json number,isDraft,labels \
     --jq '.[] | select((.isDraft | not) and all(.labels[]; .name != "needs-human")) | .number'); do
   "$here/gates.sh" status "$pr" || log "#$pr: status failed"
-  out="$("$here/gates.sh" merge "$pr" 2>/dev/null)" || log "${out:-#$pr not merged}"
+  # stdout names the gate that held the PR. Empty means gates.sh itself failed (e.g. GitHub
+  # refused `gh pr merge`): log its last stderr line, not a bare "not merged" (#114).
+  out="$("$here/gates.sh" merge "$pr" 2>"$merge_err")" \
+    || log "${out:-#$pr not merged: $(tail -n1 "$merge_err")}"
 done
 "$here/gates.sh" push-workflows || log "push-workflows sweep failed"   # main's lint + merge-audit
 
+"$here/close-linked.sh" || log "close-linked failed"   # GITHUB_TOKEN merges don't apply "Closes #N"
 "$here/phase.sh" mark-ready
 "$here/dispatch.sh"   # paused issues first, then ready ones, one shared cap
 
