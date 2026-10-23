@@ -35,6 +35,9 @@ done
 # Announced but a marker never arrives: the cell fails and names the step.
 replay serial-layout-no-rtl.log fail 'timeout-rtl' 'name="boot.x86_64.sb-off.rtl"'
 replay serial-layout-fail.log fail 'layout-fail-mac' '<skipped/>'
+# PID 1 froze in early boot: the harness boots once more; a second freeze ends in a timeout.
+replay serial-freeze.log fail 'boot_retry" value="1"' 'marker ZEEOS_DESKTOP_READY: timeout'
+[ -s "$tmp/out-serial-freeze/serial-attempt1.log" ] || { echo "FAIL: no serial-attempt1.log" >&2; exit 1; }
 
 rm -rf "$tmp"
 bash tests/imgdiff_gate_test.sh
