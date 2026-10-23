@@ -1,4 +1,4 @@
-# ADR-0009: Scope of the Wayland-only rule for packaged X11 helpers
+# ADR-0010: Scope of the Wayland-only rule for packaged X11 helpers
 
 - Status: Proposed
 - Date: 2026-10-23
