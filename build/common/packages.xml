@@ -3,6 +3,16 @@
 <!-- Shared package set: minimal base plus the live Plasma desktop (Wayland only). Arch packages live in build/arch/<arch>/. -->
 <image>
 <packages type="image">
+  <!-- Phase 4 installer packages: verified with Fedora 44 dnf5 repoquery on both arches, 2026-10-23.
+       Keep the disk/ESP utilities explicit rather than relying on incidental desktop dependencies. -->
+  <package name="calamares"/>
+  <package name="os-prober"/>
+  <package name="ntfs-3g"/>
+  <package name="ntfsprogs"/>
+  <package name="cryptsetup"/>
+  <package name="parted"/>
+  <package name="dosfstools"/>
+  <package name="efibootmgr"/>
   <package name="basesystem"/>
   <package name="bash"/>
   <package name="coreutils"/>

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=Install ZeeOS
+Comment=Install ZeeOS to a local disk
+Exec=kdesu /usr/bin/calamares
+TryExec=calamares
+Icon=calamares
+Terminal=false
+Categories=System;
