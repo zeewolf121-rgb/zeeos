@@ -25,6 +25,13 @@ ZeeOS is a Fedora 44-based (ADR-0001) Linux distro with an original hybrid deskt
 9. **No self-approval.** Claude and Codex review each other's PRs.
 10. **Disagreements:** five bullets or fewer per model, then the owner decides.
 
+## How to work
+
+- **Read files first.** Read every file a change touches before editing it.
+- **Write the complete solution.** Push one finished fix, not a series of follow-ups.
+- **Test once.** Run the relevant check after the change; rerun only if the code changed.
+- **No over-engineering.** Build what the issue asks for, nothing more.
+
 ## Commands
 
 ```bash
