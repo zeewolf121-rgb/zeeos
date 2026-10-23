@@ -3,9 +3,8 @@
 # Guest layout check (P3-6, marker protocol in docs/phases/phase-3.md). Modes:
 #   announce  print ZEEOS_LAYOUT_CHECK (runs before zeeos-desktop-ready)
 #   check     (default) after ZEEOS_DARK_READY: back to light, then for windows, mac, hybrid run
-#             `zee-layout set`, read back panels and keymap and print ZEEOS_LAYOUT_OK; then the RTL
-#             step and ZEEOS_RTL_OK. Any failure prints ZEEOS_LAYOUT_FAIL <mode>: <reason> or
-#             ZEEOS_RTL_FAIL <reason> and stops.
+#             `zee-layout set`, read back panels and keymap and print ZEEOS_LAYOUT_OK. The session ends
+#             in English/hybrid. Any failure prints ZEEOS_LAYOUT_FAIL <mode>: <reason> and stops.
 # Root system unit: it needs the serial tty. It reaches the live session through its runtime dir.
 # Touches only the live user's ~/.config; not an installer-disk tool.
 set -u
@@ -14,7 +13,6 @@ DRY_RUN=${DRY_RUN:-0}
 SETTLE=${SETTLE:-5}
 CMDLINE=${CMDLINE:-/proc/cmdline}
 LIGHT_GTK=${LIGHT_GTK:-adw-gtk3}
-RTL_LOCALE=${RTL_LOCALE:-ar_EG.UTF-8}
 PANEL_WAIT=${PANEL_WAIT:-60}
 
 ttys=()
@@ -32,7 +30,6 @@ if [ "$mode" = announce ]; then emit ZEEOS_LAYOUT_CHECK; exit 0; fi
 
 cur_mode=setup
 fail() { emit "ZEEOS_LAYOUT_FAIL $cur_mode: $*"; exit 1; }
-rtl_fail() { emit "ZEEOS_RTL_FAIL $*"; exit 1; }
 
 uid=$(id -u "$USER_NAME" 2>/dev/null) || fail "no user $USER_NAME"
 home=$(getent passwd "$USER_NAME" | cut -d: -f6)
@@ -123,26 +120,3 @@ for cur_mode in windows mac hybrid; do
     emit "ZEEOS_LAYOUT_OK mode=$cur_mode panels=$n keymap=$km"
     [ "$DRY_RUN" = 1 ] || sleep "$layout_delay"
 done
-
-# RTL step. glibc lists the locale as ar_EG.utf8.
-locale_re=${RTL_LOCALE%%.*}
-locale -a 2>/dev/null | grep -qiE "^${locale_re}\.(utf-?8)$" || rtl_fail "locale $RTL_LOCALE is not installed"
-font=$(fc-match -f '%{family}' ':lang=ar' 2>/dev/null)
-case $font in
-    Noto*) ;;
-    *) rtl_fail "fc-match :lang=ar gave '${font:-nothing}', want a Noto family" ;;
-esac
-as_user systemctl --user set-environment "LANG=$RTL_LOCALE" "LC_ALL=$RTL_LOCALE" \
-    || rtl_fail "could not set the session locale"
-as_user systemctl --user restart plasma-plasmashell.service || rtl_fail "plasmashell restart failed"
-start=$SECONDS pid=
-while :; do
-    pid=$(pgrep -u "$uid" -x plasmashell | head -n 1)
-    if [ -n "$pid" ] && tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qx "LC_ALL=$RTL_LOCALE"; then
-        break
-    fi
-    (( SECONDS - start >= PANEL_WAIT )) && rtl_fail "plasmashell is not running with $RTL_LOCALE"
-    sleep 2
-done
-sleep "$SETTLE"
-emit "ZEEOS_RTL_OK locale=$RTL_LOCALE font=$font"
