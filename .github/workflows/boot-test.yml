@@ -26,13 +26,15 @@ jobs:
             runner: ubuntu-24.04
             pkgs: qemu-system-x86 ovmf
             timeout: 600
-          # GitHub's arm64 runners have no /dev/kvm, so aarch64 runs under TCG: allow longer.
+          # aarch64 runs on the owner's self-hosted Mac (HVF, #15; two runner instances so both
+          # cells run at once). Fork PRs stay on GitHub's arm64 runner (TCG, slow), so code from a
+          # fork never reaches the Mac. The TCG timeout stays as the upper bound.
           - arch: aarch64
             runner: ubuntu-24.04-arm
             pkgs: qemu-system-arm qemu-efi-aarch64
             timeout: 1800
     name: boot (${{ matrix.arch }}, sb-${{ matrix.sb }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ (matrix.arch == 'aarch64' && github.event.pull_request.head.repo.fork != true) && fromJSON('["self-hosted", "macOS", "ARM64", "zeeos-aarch64"]') || matrix.runner }}
     timeout-minutes: 45
     env:
       ARCH: ${{ matrix.arch }}
@@ -42,11 +44,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install QEMU and UEFI firmware
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
           sudo apt-get install -yq --no-install-recommends ${{ matrix.pkgs }} ipxe-qemu qemu-utils python3
           ls /usr/share/OVMF /usr/share/AAVMF 2>/dev/null || true
       - name: Enable KVM
+        if: runner.os == 'Linux'
         run: |
           if [[ -e /dev/kvm ]]; then
             echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -55,6 +59,26 @@ jobs:
           else
             echo "no /dev/kvm on this runner; QEMU falls back to TCG"
           fi
+      # Homebrew's QEMU has no aarch64 Secure Boot firmware. Take the same AAVMF build the Ubuntu
+      # runners use (qemu-efi-aarch64 2024.02-2ubuntu0.10) and pin it by hash: a changed package
+      # fails here instead of silently testing other firmware.
+      - name: AArch64 UEFI firmware (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo /opt/homebrew/bin >>"$GITHUB_PATH"; export PATH="/opt/homebrew/bin:$PATH"
+          fw="$RUNNER_TEMP/aavmf"; mkdir -p "$fw"
+          podman run --rm -v "$fw:/o" docker.io/library/ubuntu:24.04 sh -c 'apt-get update -qq &&
+            apt-get install -yqq --no-install-recommends qemu-efi-aarch64 >/dev/null &&
+            cp /usr/share/AAVMF/AAVMF_CODE.ms.fd /usr/share/AAVMF/AAVMF_VARS.ms.fd \
+               /usr/share/AAVMF/AAVMF_CODE.no-secboot.fd /usr/share/AAVMF/AAVMF_VARS.fd /o/'
+          (cd "$fw" && shasum -a 256 -c) <<'SUMS' || { echo "::error::AAVMF changed upstream; check it and update the pinned hashes"; exit 1; }
+          d37119b2c1173ecdc88d09c00848842fdf575899403b7549a5b51f06766c20d6  AAVMF_CODE.ms.fd
+          bdd5b6f03eecf9b18e395925012764c9100cdcf164a0e5aa4373017d3d75534b  AAVMF_VARS.ms.fd
+          545e2eda871a00dba51c0df48a34829fe3b0de6ec10ea760c75f1fc1c6a29dc5  AAVMF_CODE.no-secboot.fd
+          b3b855c5a80310168051164986855692d1bdb06e67619856177965cd87c6774f  AAVMF_VARS.fd
+          SUMS
+          if [[ "$SB" == on ]]; then code=AAVMF_CODE.ms.fd vars=AAVMF_VARS.ms.fd; else code=AAVMF_CODE.no-secboot.fd vars=AAVMF_VARS.fd; fi
+          { echo "FW_CODE=$fw/$code"; echo "FW_VARS=$fw/$vars"; } >>"$GITHUB_ENV"
       - name: Download the ISO
         uses: actions/download-artifact@v6
         with:
@@ -90,7 +114,7 @@ jobs:
                   *) r=ok ;;
                 esac
                 f="$OUT/screenshot-$nm.ppm"
-                if [[ -s "$f" ]]; then shot="$(stat -c %s "$f") bytes"; else shot=missing; fi
+                if [[ -s "$f" ]]; then shot="$(wc -c <"$f" | tr -d ' ') bytes"; else shot=missing; fi
                 echo "| $nm | $r | $shot |"
               done <<<"$steps"
             fi
