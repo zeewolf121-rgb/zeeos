@@ -65,7 +65,7 @@ jobs:
           iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
           [[ -n "$iso" ]] || { echo "::error::no ISO in iso-$ARCH artifact"; exit 1; }
           make boot-test ARCH="$ARCH" SECUREBOOT="$SB" ISO="$iso" OUT="$OUT"
-      - name: Summary (boot time, idle RAM, light/dark)
+      - name: Summary (boot time, idle RAM, per-step results)
         if: always()
         run: |
           # P2-5 records these as junit properties; MISSION §6 caps idle RAM at 1.2 GB.
@@ -78,25 +78,38 @@ jobs:
             echo "|---|---|---|---|---|"
             echo "| ${boot:-n/a} s | $(mib "$used") | $(mib "$total") | ${theme:-n/a} | ${diff:-n/a}${diff:+ %} |"
             if [[ -n "$used" ]] && (( used > 1258291 )); then echo; echo "⚠️ idle RAM above the 1.2 GB target (MISSION §6)"; fi
-            for f in screenshot-light.ppm screenshot-dark.ppm; do [[ -s "$OUT/$f" ]] || echo "- missing $f"; done
+            # Per-step results: one boot.step testcase per theme/layout step (vm/boot-test.sh).
+            steps="$(grep -a 'classname="boot.step"' "$OUT/junit.xml" 2>/dev/null || true)"
+            if [[ -n "$steps" ]]; then
+              echo; echo "| step | result | screenshot |"; echo "|---|---|---|"
+              while IFS= read -r l; do
+                nm="$(sed -n 's/.*name="[^"]*\.\([^".]*\)".*/\1/p' <<<"$l")"
+                case $l in
+                  *'<skipped/>'*) r=skipped ;;
+                  *'<failure '*) r="❌ $(sed -n 's/.*<failure message="\([^"]*\)".*/\1/p' <<<"$l")" ;;
+                  *) r=ok ;;
+                esac
+                f="$OUT/screenshot-$nm.ppm"
+                if [[ -s "$f" ]]; then shot="$(stat -c %s "$f") bytes"; else shot=missing; fi
+                echo "| $nm | $r | $shot |"
+              done <<<"$steps"
+            fi
             echo '```'; tail -n 40 "$OUT/serial.log" 2>/dev/null || echo "(no serial log)"; echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
           if [[ -n "$used" ]] && (( used > 1258291 )); then echo "::warning::idle RAM $(mib "$used") is above 1.2 GB"; fi
           # The guest's markers in the job log too: the summary and artifact aren't readable
           # everywhere the log is, and a theme-check failure names its reason only here.
           grep -a -E '^ZEEOS_|secureboot: Secure boot' "$OUT/serial.log" 2>/dev/null || echo "(no guest markers in serial log)"
-          fail="$(grep -a -m1 '^ZEEOS_THEME_FAIL' "$OUT/serial.log" 2>/dev/null || true)"
+          fail="$(grep -a -m1 -E '^ZEEOS_(THEME|LAYOUT|RTL)_FAIL' "$OUT/serial.log" 2>/dev/null || true)"
           if [[ -n "$fail" ]]; then echo "::error::$fail"; fi
-      - name: Upload serial log, light/dark screenshots and JUnit
+      - name: Upload serial log, every step's screenshot and JUnit
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: boot-${{ matrix.arch }}-sb${{ matrix.sb }}
           path: |
             ${{ env.OUT }}/serial.log
-            ${{ env.OUT }}/screenshot.ppm
-            ${{ env.OUT }}/screenshot-light.ppm
-            ${{ env.OUT }}/screenshot-dark.ppm
+            ${{ env.OUT }}/screenshot*.ppm
             ${{ env.OUT }}/junit.xml
             ${{ env.OUT }}/accel
             ${{ env.OUT }}/qemu.stderr
