@@ -27,9 +27,9 @@ baselines dir (`STEP|* X Y W H`, negative X/Y from the right/bottom edge); the t
 (channel tolerance 8). A failure sets the result to `imgdiff-gate`; junit property `imgdiff_gate` is `pass|fail|skip`.
 
 Layout check (phase-3 marker protocol): if the guest prints `ZEEOS_LAYOUT_CHECK`, the harness also requires
-`ZEEOS_LAYOUT_OK mode=windows|mac|hybrid` and `ZEEOS_RTL_OK`, in that order after the theme steps, with the same
-`THEME_TIMEOUT` and settle delay, and screenshots after each (`screenshot-<mode>.ppm`, `screenshot-rtl.ppm`).
-`ZEEOS_LAYOUT_FAIL`/`ZEEOS_RTL_FAIL` fail the cell. junit has one `boot.step` testcase per step (later steps are
+`ZEEOS_LAYOUT_OK mode=windows|mac|hybrid`, in that order after the theme steps, with the same
+`THEME_TIMEOUT` and settle delay, and screenshots after each (`screenshot-<mode>.ppm`).
+`ZEEOS_LAYOUT_FAIL` fails the cell. junit has one `boot.step` testcase per step (later steps are
 `skipped` after a failure) and a `layout_check` property. Without the announce nothing changes.
 `QEMU_BIN`/`FW_CODE`/`FW_VARS` override the emulator and firmware; `tests/selftest.sh` uses them to replay fixture
 serial logs offline.

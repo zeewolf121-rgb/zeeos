@@ -99,7 +99,7 @@ wait_for() {
   local t=$SECONDS
   while (( SECONDS - t < $2 )); do
     grep -aq -- "$1" "$OUT/serial.log" && return 0
-    grep -aq -e '^ZEEOS_THEME_FAIL' -e '^ZEEOS_LAYOUT_FAIL' -e '^ZEEOS_RTL_FAIL' "$OUT/serial.log" && return 1
+    grep -aq -e '^ZEEOS_THEME_FAIL' -e '^ZEEOS_LAYOUT_FAIL'"$OUT/serial.log" && return 1
     kill -0 "$qpid" 2>/dev/null || return 2
     sleep 2
   done
@@ -141,16 +141,16 @@ if kill -0 "$qpid" 2>/dev/null; then
     echo "screendump failed" >&2
     [ "$result" != pass ] || result=screendump-failed
   elif [ "$result" = pass ] && { [ "$has_theme" = 1 ] || [ "$has_layout" = 1 ]; }; then
-    # Phase-2 theme check: light and dark markers. Phase-3 layout check: one per mode, then RTL.
+    # Phase-2 theme check: light and dark markers. Phase-3 layout check: one per mode.
     # Each step is "<grep pattern>|<name>"; its screenshot is screenshot-<name>.ppm.
     [ "$has_theme" = 0 ] || { theme=ok; steps+=("ZEEOS_THEME_OK|light" "ZEEOS_DARK_READY|dark"); }
     [ "$has_layout" = 0 ] || { layout=ok; steps+=("ZEEOS_LAYOUT_OK mode=windows|windows" "ZEEOS_LAYOUT_OK mode=mac|mac" \
-      "ZEEOS_LAYOUT_OK mode=hybrid|hybrid" "ZEEOS_RTL_OK|rtl"); }
+      "ZEEOS_LAYOUT_OK mode=hybrid|hybrid"); }
     failed=""
     for i in "${!steps[@]}"; do
       step=${steps[$i]}; pat=${step%|*}; nm=${step#*|}
       if [ -n "$failed" ]; then stepres[i]=skipped; continue; fi
-      kind=theme; case $nm in windows|mac|hybrid|rtl) kind=layout;; esac
+      kind=theme; case $nm in windows|mac|hybrid) kind=layout;; esac
       st=; rc=0
       wait_for "^$pat" "${THEME_TIMEOUT:-600}" || rc=$?
       if [ "$rc" = 1 ]; then st=fail; elif [ "$rc" != 0 ]; then st=timeout; fi

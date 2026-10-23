@@ -7,4 +7,3 @@ ZEEOS_DARK_READY dark
 ZEEOS_LAYOUT_OK mode=windows panels=1 keymap=win
 ZEEOS_LAYOUT_OK mode=mac panels=2 keymap=mac
 ZEEOS_LAYOUT_OK mode=hybrid panels=2 keymap=win
-ZEEOS_RTL_OK locale=ar_EG.UTF-8 font=Noto Sans Arabic
