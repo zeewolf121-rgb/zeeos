@@ -217,6 +217,13 @@ jobs:
       !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # For a Codex PR, request-review starts this workflow (mode=review) with `gh workflow run`,
+    # which needs actions: write (HTTP 403 "Resource not accessible by integration" otherwise, #194).
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
