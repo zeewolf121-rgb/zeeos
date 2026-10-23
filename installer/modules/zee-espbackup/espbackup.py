@@ -35,7 +35,11 @@ def sha256(path: Path) -> str:
 def esp_files(esp: Path) -> list[Path]:
     """Regular files under the ESP, sorted, as paths relative to it. Symlinks are skipped (FAT has none)."""
     out = []
-    for root, dirs, files in os.walk(esp, followlinks=False):
+
+    def fail(err: OSError) -> None:
+        raise err  # os.walk swallows scan errors by default; an incomplete backup must stop the install
+
+    for root, dirs, files in os.walk(esp, followlinks=False, onerror=fail):
         dirs.sort()
         for name in sorted(files):
             p = Path(root, name)

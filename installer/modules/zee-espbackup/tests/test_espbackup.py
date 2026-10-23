@@ -10,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -45,6 +46,22 @@ def windows_like_esp(esp: Path) -> None:
         p = esp / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
+
+
+class EspScanErrorTest(unittest.TestCase):
+    def test_unreadable_directory_fails_instead_of_empty_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            esp = Path(tmp, "esp")
+            (esp / "EFI/Microsoft").mkdir(parents=True)
+            real = os.scandir
+
+            def boom(path):
+                if str(path).endswith("Microsoft"):
+                    raise PermissionError(13, "injected", str(path))
+                return real(path)
+
+            with mock.patch("os.scandir", boom), self.assertRaises(OSError):
+                espbackup.esp_files(esp)
 
 
 class EspBackupTest(unittest.TestCase):
