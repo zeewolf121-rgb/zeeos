@@ -14,7 +14,7 @@ render_claude() {
   cat "$src"
   printf '\n## Claude specifics\n\n'
   # shellcheck disable=SC2016  # backticks are literal Markdown
-  printf 'Subagents live in `.claude/agents/`. Run them in parallel with one git worktree and branch each, at most 2 Claude agents at once (3 total with Codex), starts staggered 5 minutes apart (MISSION §11).\n'
+  printf 'Subagents live in `.claude/agents/`. Run them in parallel with one git worktree and branch each, at most 3 Claude agents at once (4 total with Codex), starts staggered 5 minutes apart (MISSION §11).\n'
 }
 
 render_agents() {

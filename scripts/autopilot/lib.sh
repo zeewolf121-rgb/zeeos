@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
 OWNER="${REPO%%/*}"
-CAP_CLAUDE="${AUTOPILOT_CAP_CLAUDE:-2}"   # MISSION §11: 2 Claude + 1 Codex
+CAP_CLAUDE="${AUTOPILOT_CAP_CLAUDE:-3}"   # MISSION §11: 3 Claude + 1 Codex
 CAP_CODEX="${AUTOPILOT_CAP_CODEX:-1}"
 CODEX_BOT='chatgpt-codex-connector'      # login prefix (REST adds "[bot]")
 CLAUDE_BOT='claude'
