@@ -110,7 +110,7 @@ Works `model:codex` issues. Owns branding, security, and red-team review (data l
 
 **Output:** diffs and results only. No narration, no restating the task. Reviews list problems only.
 
-**Concurrency:** max 3 agents (2 Claude + 1 Codex), starts staggered 5 minutes apart. Lanes are split across providers to spread quota. Small related issues are batched.
+**Concurrency:** max 4 agents (3 Claude + 1 Codex), starts staggered 5 minutes apart. Lanes are split across providers to spread quota. Small related issues are batched.
 
 **Turn budgets:** small 15 / medium 40 / large 80. When over budget: stop, write a handoff, propose a split.
 

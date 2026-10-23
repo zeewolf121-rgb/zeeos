@@ -32,4 +32,4 @@ When a Claude-authored PR (`agent/<agent>/…` with a Claude agent, or `agent/or
 
 Each run works on `agent/<agent>/<issue>-<slug>` and opens a PR.
 
-Autopilot (`docs/AUTOPILOT.md`) labels issues `ready` and dispatches them within the caps of 2 Claude + 1 Codex. It also runs cross-model reviews, CI retries and merges.
+Autopilot (`docs/AUTOPILOT.md`) labels issues `ready` and dispatches them within the caps of 3 Claude + 1 Codex. It also runs cross-model reviews, CI retries and merges.

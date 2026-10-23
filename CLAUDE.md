@@ -40,4 +40,4 @@ Branch `agent/<agent>/<issue>-<slug>`. Use Conventional Commits with the top-lev
 
 ## Claude specifics
 
-Subagents live in `.claude/agents/`. Run them in parallel with one git worktree and branch each, at most 2 Claude agents at once (3 total with Codex), starts staggered 5 minutes apart (MISSION §11).
+Subagents live in `.claude/agents/`. Run them in parallel with one git worktree and branch each, at most 3 Claude agents at once (4 total with Codex), starts staggered 5 minutes apart (MISSION §11).

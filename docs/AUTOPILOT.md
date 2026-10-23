@@ -27,7 +27,7 @@ The code that decides what happens lives in `scripts/autopilot/` and runs from `
 1. **Deterministic** (`scripts/autopilot/orchestrate.sh`, no LLM tokens):
    - For every open, non-draft PR without `needs-human`, post the gate statuses and merge it if everything passes (§3).
    - In the current phase, label `ready` every open issue that has `model:` + `agent:` labels, isn't started, and whose `blocked-by:#N` issues are closed.
-   - Dispatch `ready` issues (`priority:high` first, then oldest) within the caps: **2 Claude + 1 Codex** in progress (label `in-progress`), Claude starts **5 minutes apart**.
+   - Dispatch `ready` issues (`priority:high` first, then oldest) within the caps: **3 Claude + 1 Codex** in progress (label `in-progress`), Claude starts **5 minutes apart**.
    - When phase 6 is complete, start the release candidate (§8).
    - Write a compact state report (phase, issues, PRs, `.agent/state/` handoffs) for the steps below.
 2. **Sonnet** (`claude-sonnet-5-5`, max **40 turns**) runs **only when needed**:
