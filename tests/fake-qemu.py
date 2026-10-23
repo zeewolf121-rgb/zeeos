@@ -4,12 +4,14 @@
 
 install-test (tests/install-selftest.sh): the boot with the ISO attached uses $FAKE_SERIAL_INSTALL and the
 installed-system boot $FAKE_SERIAL_INSTALLED. During the install boot, $FAKE_FLIP=<offset> flips one byte of
-disk.img and $FAKE_POWEROFF=1 exits right away, as the guest powers off.
+disk.img, $FAKE_GPT=<op> rewrites its partition table (tests/gpt-fixture.py mutate) and $FAKE_POWEROFF=1 exits
+right away, as the guest powers off.
 """
 import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 
 args = sys.argv[1:]
@@ -22,8 +24,11 @@ if installing and os.environ.get("FAKE_SERIAL_INSTALL"):
 elif not installing and os.environ.get("FAKE_SERIAL_INSTALLED"):
     fixture = os.environ["FAKE_SERIAL_INSTALLED"]
 shutil.copy(fixture, serial)
+disk = next((a.split("file=", 1)[1].split(",")[0] for a in args if "disk.img" in a), None)
+if installing and os.environ.get("FAKE_GPT"):
+    fixture_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gpt-fixture.py")
+    subprocess.run([sys.executable, "-I", fixture_py, "mutate", disk, os.environ["FAKE_GPT"]], check=True)
 if installing and os.environ.get("FAKE_FLIP"):
-    disk = next(a.split("file=", 1)[1].split(",")[0] for a in args if "disk.img" in a)
     with open(disk, "r+b") as d:
         d.seek(int(os.environ["FAKE_FLIP"]))
         b = d.read(1)

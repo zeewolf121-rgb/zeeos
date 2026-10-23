@@ -7,6 +7,8 @@
 #      INSTALL_TIMEOUT (s, default 3600)  BOOT_TIMEOUT (s, default 900)
 #      SEED_DIR=<dir with disk.img + seed.json> skips seeding (tests/install-selftest.sh)
 #      QEMU_BIN / FW_CODE / FW_VARS override the emulator and firmware, as in vm/boot-test.sh
+#      DRY_RUN=1 prints the seed plan (install-seed.py --dry-run) and every planned write and QEMU run,
+#      then exits without creating or touching anything (not even OUT)
 # Preset transport (#181): a raw virtio disk with serial ZEEOS-AUTOINSTALL whose first bytes are
 # key=value lines (NUL-padded); the guest reads /dev/disk/by-id/virtio-ZEEOS-AUTOINSTALL.
 # Writes OUT/{serial-install.log,serial-installed.log,checksums-*.json,junit.xml}. Only image files
@@ -52,8 +54,22 @@ if [ -w /dev/kvm ] && [ "$ARCH" = "$(uname -m)" ]; then accel=kvm; cpu=host
 elif [ "$(uname -s)" = Darwin ] && [ "$ARCH" = "$(uname -m | sed s/arm64/aarch64/)" ]; then accel=hvf; cpu=host; fi
 smp=2; if [ "$accel" = tcg ] && [ "$ARCH" = aarch64 ]; then cpu=max,pauth-impdef=on; smp=4; fi
 
-mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
+case $OUT in /*) ;; *) OUT=$PWD/$OUT;; esac
 disk=$OUT/disk.img
+# Before anything is copied or seeded: cp and the seeder must never write through a symlink.
+{ [ ! -L "$disk" ] && { [ ! -e "$disk" ] || [ -f "$disk" ]; }; } || { echo "$disk is not a regular file; refusing" >&2; exit 2; }
+if [ "${DRY_RUN:-0}" = 1 ]; then
+  echo "install-test: dry-run: $CASE on $ARCH (accel=$accel, SECUREBOOT=$SECUREBOOT); nothing will be written"
+  if [ -n "${SEED_DIR:-}" ]; then echo "  would copy $SEED_DIR/{disk.img,seed.json} to $OUT/"
+  else python3 -I "$here/install-seed.py" --dry-run "$CASE" "$OUT"; fi
+  echo "  would remove $OUT/{serial-*.log,checksums-*.json,junit.xml}"
+  echo "  would write $OUT/{preset.conf,preset.img,vars.fd} (vars copied from $vars)"
+  echo "  would hash the pre-existing data of $disk (read only)"
+  echo "  would run $qemu with $code, $disk and $ISO (serial-install.log), then $disk alone (serial-installed.log)"
+  echo "  would write $OUT/{checksums-*.json,junit.xml}"
+  exit 0
+fi
+mkdir -p "$OUT"
 rm -f "$OUT"/serial-*.log "$OUT"/checksums-*.json "$OUT"/junit.xml
 # 1. Seed disk.
 if [ -n "${SEED_DIR:-}" ]; then cp "$SEED_DIR/disk.img" "$SEED_DIR/seed.json" "$OUT/"
@@ -165,13 +181,23 @@ if [[ "$CASE" == refuse-* ]]; then
   cks partitions after
   if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-partitions-before.json" "$OUT/checksums-partitions-after.json"); then
     record checksums ok; else record checksums "pre-existing partitions changed: $(echo "$out" | tr '\n' ' ')"; fi
-elif [ "$has_files" = 1 ] && [ "$installed" = 1 ]; then
-  # The baseline must be what install-seed.py wrote, and readable, or "unchanged" proves nothing.
-  if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-files-seed.json" "$OUT/checksums-files-before.json"); then
-    record seed-files ok; else record seed-files "baseline differs from seed.json: $(echo "$out" | tr '\n' ' ')"; fi
-  cks files after
-  if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-files-before.json" "$OUT/checksums-files-after.json"); then
-    record checksums ok; else record checksums "pre-existing files changed: $(echo "$out" | tr '\n' ' ')"; fi
+elif [ "$CASE" = alongside ]; then
+  # The real post-install GPT first: both copies valid, the disk not truncated, ESP/MSR/Windows
+  # still there with the same type, GUID and start (Windows may only shrink). Bytes at the seed's
+  # offsets prove nothing if the table no longer points at them.
+  layout_ok=0
+  if out=$(python3 -I "$here/install-checksums.py" "$disk" "$OUT/seed.json" layout); then
+    record layout ok; layout_ok=1; else record layout "partition table: $(echo "$out" | tr '\n' ' ')"; fi
+  if [ "$has_files" = 1 ] && [ "$installed" = 1 ] && [ "$layout_ok" = 1 ]; then
+    # The baseline must be what install-seed.py wrote, and readable, or "unchanged" proves nothing.
+    if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-files-seed.json" "$OUT/checksums-files-before.json"); then
+      record seed-files ok; else record seed-files "baseline differs from seed.json: $(echo "$out" | tr '\n' ' ')"; fi
+    cks files after
+    if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-files-before.json" "$OUT/checksums-files-after.json"); then
+      record checksums ok; else record checksums "pre-existing files changed: $(echo "$out" | tr '\n' ' ')"; fi
+  elif [ "$has_files" = 1 ] && [ "$layout_ok" = 0 ]; then
+    record checksums "not checked: the partition table was rejected"
+  fi
 fi
 elapsed=$((SECONDS - start))
 
