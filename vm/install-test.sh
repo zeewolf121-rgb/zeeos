@@ -71,7 +71,10 @@ cp "$OUT/preset.conf" "$OUT/preset.img"; python3 -I -c 'import os,sys; os.trunca
 # 3. Checksums before.
 cks() { python3 -I "$here/install-checksums.py" "$disk" "$OUT/seed.json" "$1" > "$OUT/checksums-$1-$2.json"; }
 [ "$has_parts" = 0 ] || cks partitions before
-[ "$has_files" = 0 ] || cks files before
+if [ "$has_files" = 1 ]; then
+  cks files before
+  python3 -I "$here/install-checksums.py" "$disk" "$OUT/seed.json" manifest > "$OUT/checksums-files-seed.json"
+fi
 
 # 4. Two boots share one NVRAM vars file, so the installer's boot entry survives into the second.
 cp "$vars" "$OUT/vars.fd"
@@ -106,6 +109,12 @@ wait_for() {
 # results[i] for checks[i]: ok | skipped:<why> | <failure>
 checks=(); results=()
 record() { checks+=("$1"); results+=("$2"); }
+# The guest kernel must report the Secure Boot state that was asked for, as in vm/boot-test.sh.
+want_sb=enabled; [ "$SECUREBOOT" = off ] && want_sb=disabled
+check_sb() { # name serial-log
+  local got; got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$2" | awk '{print $NF}' || true)
+  if [ "$got" = "$want_sb" ]; then record "$1" ok; else record "$1" "Secure Boot ${got:-unreported}, want $want_sb"; fi
+}
 
 start=$SECONDS
 launch "$OUT/serial-install.log" -drive "file=$ISO,media=cdrom,readonly=on" \
@@ -125,6 +134,7 @@ case $CASE in
 esac
 # The guest powers off after DONE/FAIL; give it a minute, then stop QEMU ourselves.
 t=$SECONDS; while kill -0 "$qpid" 2>/dev/null && (( SECONDS - t < 60 )); do sleep 2; done; stop
+check_sb secureboot-install "$OUT/serial-install.log"
 
 # 5. Boot the installed system (cases that install). LUKS needs the passphrase typed at the
 # prompt, which isn't implemented yet: reported as skipped, not passed (CLAUDE.md rule 8).
@@ -138,6 +148,7 @@ if [ "${results[0]}" = ok ] && [[ "$CASE" != refuse-* ]]; then
     rc=0; wait_for "$OUT/serial-installed.log" '^ZEEOS_DESKTOP_READY' '^ZEEOS_[A-Z_]*FAIL' "$BOOT_TIMEOUT" || rc=$?
     if [ "$rc" = 0 ]; then record boot ok; else record boot "installed system: no ZEEOS_DESKTOP_READY (rc=$rc)"; fi
     stop
+    check_sb secureboot-installed "$OUT/serial-installed.log"
     bm=$(grep -aom1 '^ZEEOS_BOOTMENU .*' "$OUT/serial-installed.log" || true)
     want_win=0; [ "$CASE" = alongside ] && want_win=1
     if [[ "$bm" == *"zeeos=1"* && "$bm" == *"windows=$want_win"* ]]; then record bootmenu ok
@@ -155,6 +166,9 @@ if [[ "$CASE" == refuse-* ]]; then
   if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-partitions-before.json" "$OUT/checksums-partitions-after.json"); then
     record checksums ok; else record checksums "pre-existing partitions changed: $(echo "$out" | tr '\n' ' ')"; fi
 elif [ "$has_files" = 1 ] && [ "$installed" = 1 ]; then
+  # The baseline must be what install-seed.py wrote, and readable, or "unchanged" proves nothing.
+  if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-files-seed.json" "$OUT/checksums-files-before.json"); then
+    record seed-files ok; else record seed-files "baseline differs from seed.json: $(echo "$out" | tr '\n' ' ')"; fi
   cks files after
   if out=$(python3 -I "$here/install-checksums.py" compare "$OUT/checksums-files-before.json" "$OUT/checksums-files-after.json"); then
     record checksums ok; else record checksums "pre-existing files changed: $(echo "$out" | tr '\n' ' ')"; fi

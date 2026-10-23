@@ -1,3 +1,4 @@
+[    0.000000] secureboot: Secure boot enabled
 ZEEOS_BOOTMENU zeeos=1 windows=1 default=ZeeOS timeout=5
 ZEEOS_ROOTFS fstype=btrfs luks=0
 ZEEOS_DESKTOP_READY

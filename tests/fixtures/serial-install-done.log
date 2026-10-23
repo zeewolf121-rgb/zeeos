@@ -1,2 +1,3 @@
+[    0.000000] secureboot: Secure boot enabled
 ZEEOS_INSTALL_START case=erase
 ZEEOS_INSTALL_DONE case=erase

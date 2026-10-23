@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Checksums of an install-test disk's pre-existing data, taken outside the guest (P4-8).
 
-  install-checksums.py DISK SEED_JSON partitions   -> {"<name>": "<sha256>"} for each seed partition
+  install-checksums.py DISK SEED_JSON partitions   -> {"<name>": "<sha256>"} for each seed partition, plus the
+                                                      primary and backup GPT areas and the disk size
   install-checksums.py DISK SEED_JSON files        -> {"esp:<path>": "<sha256>", "ntfs:<path>": ...}
-  install-checksums.py compare BEFORE AFTER        -> exit 1 and list every key whose hash changed or vanished
+  install-checksums.py DISK SEED_JSON manifest     -> the file hashes seed.json recorded when the disk was built
+  install-checksums.py compare BEFORE AFTER        -> exit 1 and list every key that changed, vanished, or is "missing"
 
 Tier 1 (partitions, stdlib only) hashes whole partition ranges: right for the refuse cases, where
 nothing may change at all. Tier 2 (files) reads individual files out of the image, because an
@@ -37,13 +39,18 @@ def part_sha(disk, offset, size):
 
 
 def partitions(disk, seed):
-    """Partition payloads plus the disk size and both GPT copies (LBA 0-33, last 33 sectors)."""
-    size = os.path.getsize(disk)
     out = {p["name"]: part_sha(disk, p["offset"], p["size"]) for p in seed["partitions"]}
+    # An installer that refuses must not touch the partition tables either (protective MBR + primary
+    # GPT live in the first MiB, the backup GPT in the last MiB; seed partitions start at 1 MiB).
+    size = os.path.getsize(disk)
     out["disk-size"] = str(size)
-    out["gpt-primary"] = part_sha(disk, 0, 34 * 512)
-    out["gpt-backup"] = part_sha(disk, size - 33 * 512, 33 * 512)
+    out["gpt-primary"] = part_sha(disk, 0, min(MiB, size))
+    out["gpt-backup"] = part_sha(disk, max(0, size - MiB), min(MiB, size))
     return out
+
+
+def manifest(seed):
+    return {f"{kind}:{e['path']}": e["sha256"] for kind, entries in seed["files"].items() for e in entries}
 
 
 def extract(disk, offset, size, dest):
@@ -87,7 +94,8 @@ def files(disk, seed):
 
 
 def compare(before, after):
-    bad = [k for k in before if after.get(k) != before[k]]
+    # An unreadable file proves nothing, even if it is unreadable both times.
+    bad = [k for k in before if before[k] == "missing" or after.get(k) != before[k]]
     for k in bad:
         print(f"changed: {k} {before[k][:12]} -> {after.get(k, 'missing')[:12]}")
     return 1 if bad else 0
@@ -97,10 +105,10 @@ def main(argv):
     if len(argv) == 3 and argv[0] == "compare":
         with open(argv[1]) as b, open(argv[2]) as a:
             return compare(json.load(b), json.load(a))
-    if len(argv) != 3 or argv[2] not in ("partitions", "files"):
+    if len(argv) != 3 or argv[2] not in ("partitions", "files", "manifest"):
         sys.exit(__doc__)
     disk, seed = argv[0], json.load(open(argv[1]))
-    result = partitions(disk, seed) if argv[2] == "partitions" else files(disk, seed)
+    result = {"partitions": partitions, "files": files}.get(argv[2], lambda d, s: manifest(s))(disk, seed)
     print(json.dumps(result, indent=1, sort_keys=True))
     return 0
 

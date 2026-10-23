@@ -52,7 +52,19 @@ run refuse-but-installed refuse-hibernated "$tmp/win" serial-install-done.log se
 run alongside-no-windows-entry alongside "$tmp/win" serial-install-done.log serial-installed-ok.log fail \
   'want zeeos=1 windows=1'
 run alongside-ok alongside "$tmp/win" serial-install-done.log serial-installed-windows.log pass 'failures="0"'
+FAKE_FLIP=512 run refuse-gpt-changed refuse-bitlocker "$tmp/win" serial-install-refused.log \
+  serial-installed-ok.log fail 'gpt-primary'
+run installed-without-secureboot erase "$tmp/blank" serial-install-done.log serial-installed-nosb.log fail \
+  'Secure Boot unreported, want enabled'
 [ -s "$tmp/out-refuse-ok/checksums-partitions-before.json" ] || { echo "FAIL: no partition checksums" >&2; exit 1; }
+# A symlinked seed target is refused before anything is written through it.
+mkdir -p "$tmp/sym"; echo precious > "$tmp/victim"; ln -s "$tmp/victim" "$tmp/sym/disk.img"
+if python3 -I vm/install-seed.py erase "$tmp/sym" 2>/dev/null; then echo "FAIL: symlinked disk.img accepted" >&2; exit 1; fi
+[ "$(cat "$tmp/victim")" = precious ] || { echo "FAIL: symlink target was overwritten" >&2; exit 1; }
+# An unreadable baseline file never counts as unchanged.
+echo '{"esp:a": "missing"}' > "$tmp/m.json"
+if python3 -I vm/install-checksums.py compare "$tmp/m.json" "$tmp/m.json" >/dev/null; then
+  echo "FAIL: missing==missing accepted" >&2; exit 1; fi
 grep -q '^luks_passphrase=' "$tmp/out-erase-ok/preset.conf" || { echo "FAIL: preset lacks luks_passphrase" >&2; exit 1; }
 
 echo "install-selftest ok"

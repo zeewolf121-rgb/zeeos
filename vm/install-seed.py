@@ -60,11 +60,11 @@ def sha256_bytes(data):
 
 
 def new_disk(path):
-    if path.is_symlink():
-        die(f"{path} is a symlink; refusing to write")
-    if path.exists() and not stat.S_ISREG(path.lstat().st_mode):
+    """Create the sparse disk. Never follows a symlink: a reused OUT must not redirect the write."""
+    if path.is_symlink() or (path.exists() and not stat.S_ISREG(path.lstat().st_mode)):
         die(f"{path} exists and is not a regular file; refusing to write")
-    with path.open("wb") as f:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "wb") as f:
         f.truncate(DISK)
 
 
