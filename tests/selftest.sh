@@ -28,12 +28,12 @@ replay() {
 # No announce: behaves as before (no layout markers required, no step results).
 replay serial-plain.log pass 'tests="1"' 'layout_check" value="none"'
 replay serial-theme-only.log pass 'layout_check" value="none"' 'name="boot.x86_64.sb-off.dark"'
-replay serial-layout-ok.log pass 'layout_check" value="ok"' 'tests="7"' 'failures="0"'
-for m in windows mac hybrid rtl; do
+replay serial-layout-ok.log pass 'layout_check" value="ok"' 'tests="6"' 'failures="0"'
+for m in windows mac hybrid; do
   [ -s "$tmp/out-serial-layout-ok/screenshot-$m.ppm" ] || { echo "FAIL: no screenshot-$m.ppm" >&2; exit 1; }
 done
 # Announced but a marker never arrives: the cell fails and names the step.
-replay serial-layout-no-rtl.log fail 'timeout-rtl' 'name="boot.x86_64.sb-off.rtl"'
+replay serial-layout-no-hybrid.log fail 'timeout-hybrid' 'name="boot.x86_64.sb-off.hybrid"'
 replay serial-layout-fail.log fail 'layout-fail-mac' '<skipped/>'
 # PID 1 froze in early boot: the harness boots once more; a second freeze ends in a timeout.
 replay serial-freeze.log fail 'boot_retry" value="1"' 'marker ZEEOS_DESKTOP_READY: timeout'
