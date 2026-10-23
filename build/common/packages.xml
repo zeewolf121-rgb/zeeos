@@ -48,6 +48,19 @@
   <package name="glibc-langpack-ar"/>                   <!-- ar_EG.UTF-8 for the RTL step (P3-6) -->
   <package name="google-noto-sans-arabic-vf-fonts"/>    <!-- Arabic UI font (OFL-1.1) -->
   <package name="google-noto-naskh-arabic-vf-fonts"/>   <!-- Arabic text font (OFL-1.1) -->
+  <!-- Phase 4 (P4-1, #175): installer. Checked in Fedora 44 (x86_64 and aarch64) with dnf5 repoquery
+       in a fedora:44 container on 2026-10-23: calamares-3.3.14-5.fc44. cryptsetup, efibootmgr, ntfs-3g,
+       os-prober and parted were already in the closure as dependencies; listed so they stay.
+       calamares hard-requires setxkbmap (an X11 keymap tool), kdesu, grub2 and grub2-efi. setxkbmap is
+       only a forced dependency, like plasma-lookandfeel-fedora below: no X11 session ships (CLAUDE.md #3). -->
+  <package name="calamares"/>
+  <package name="os-prober"/>
+  <package name="ntfs-3g"/>
+  <package name="ntfsprogs"/>
+  <package name="cryptsetup"/>
+  <package name="parted"/>
+  <package name="dosfstools"/>
+  <package name="efibootmgr"/>
   <!-- Exclude Fedora branding at install time (dnf exclude), not <packages type="uninstall">:
        uninstall also removes every package depending on them, which took plasma-workspace and
        the plasma.desktop session with it (#98, run 39057784343). generic-logos provides

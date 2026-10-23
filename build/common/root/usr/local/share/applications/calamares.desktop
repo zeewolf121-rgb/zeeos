@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# P4-1 (#175): the live session's "Install ZeeOS" launcher. Same desktop ID as the calamares RPM's
+# /usr/share/applications/calamares.desktop, so it shadows that entry (/usr/local/share comes first
+# in XDG_DATA_DIRS) without overwriting a packaged file. Exec matches Fedora's: kdesu asks for the
+# live root password, which is empty (build/common/config.sh). Menu entry only, no desktop icon,
+# so the boot-test layout screenshots stay as they are.
+[Desktop Entry]
+Type=Application
+Name=Install ZeeOS
+GenericName=System Installer
+Comment=Install ZeeOS on this computer
+Keywords=install;installer;calamares;system;
+TryExec=calamares
+Exec=kdesu /usr/bin/calamares
+Icon=calamares
+Terminal=false
+StartupNotify=true
+Categories=Qt;System;
+X-AppStream-Ignore=true
