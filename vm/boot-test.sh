@@ -99,7 +99,7 @@ wait_for() {
   local t=$SECONDS
   while (( SECONDS - t < $2 )); do
     grep -aq -- "$1" "$OUT/serial.log" && return 0
-    grep -aq -e '^ZEEOS_THEME_FAIL' -e '^ZEEOS_LAYOUT_FAIL'"$OUT/serial.log" && return 1
+    grep -aq -e '^ZEEOS_THEME_FAIL' -e '^ZEEOS_LAYOUT_FAIL' "$OUT/serial.log" && return 1
     kill -0 "$qpid" 2>/dev/null || return 2
     sleep 2
   done
