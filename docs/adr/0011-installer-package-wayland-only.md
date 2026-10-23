@@ -141,24 +141,18 @@ Installing: 449 packages   adds libX* client libs and xprop; no setxkbmap, no xo
 | Effort | Small. Spec delta is 2 lines, build takes ~2 min per arch, plus the build step and lock wiring | Small + about 1 hour (same pipeline) | Large (days) | Small | Very large |
 | Risk | Low. Sources unchanged, Fedora's own patches kept | Low: a Fedora-supported bcond. One caveat on installed-system updates (Consequences) | High on the deadline | **Not acceptable**: misstates dependencies and breaks if Fedora's setxkbmap is pulled anyway; `--nodeps` leaves a broken rpmdb (E3 shows exclude fails) | Not feasible today |
 
-## Decision (proposed)
+## Decision
 
-**Option 1.** Items 1, 2, 4, 5 and 6 below are the decision. Two questions remain **pending owner input** and are **not** decided by merging this ADR:
-
-- scope question S, in item 3;
-- the installed-system choice in item 6.
-
-Until the owner answers, F3 stays blocked.
+**Option 1.** Items 1 to 6 below are the decision. The two questions that were pending owner input (scope question S in item 3, the installed-system choice in item 6) were decided on 2026-10-24 by a Claude session acting on the owner's instruction to resolve the open issues with the best option (#210).
 
 1. ZeeOS rebuilds Fedora's own `calamares` SRPM, pinned by NEVRA and sha256. The only change is a spec delta: drop `Requires: setxkbmap` and set Release `5.zeeos1`. There are no source patches, and Fedora's `default-settings` and `kdesu` patches stay. This is a rebuild, not a fork, and it keeps phase-4's "no Calamares fork, no compiled modules" rule. **No** C++ patch to `applyXkb()`: E5 shows it's a harmless no-op.
 2. **Keyboard on Wayland (P4-2 config):**
    - `keyboard.conf` sets `useLocale1: true` explicitly and `configure: kwin: false`.
    - The live session ships `kwinrc` with `[Wayland] FollowLocale1=true`, for the live user only (F4a).
    - The test harness checks the live keymap after the keyboard page through KWin, not through `setxkbmap -query`.
-3. **Scope question S (pending owner input).** Does the ruling cover the whole ISO, or only Calamares' Requires? Architect recommendation: **the whole ISO.**
+3. **Scope question S: the whole ISO** (decided 2026-10-24). The owner's ruling on #210 is that setxkbmap is not allowed at all, and the ISO ships it through sddm today, so rebuilding Calamares alone would not meet it.
    - Also rebuild Fedora's `sddm` SRPM `--without x11`, the bcond Fedora itself uses for RHEL 10 (E6). Release becomes `13.zeeos1`.
    - With that, the ISO has neither setxkbmap nor xorg-x11-xinit (E6). It doesn't block the installer chain and can land right after P4-1.
-   - If the owner picks "Calamares only", skip this step. The ISO then keeps setxkbmap through sddm, as main does today.
 4. **Build pipeline (reproducible, rule 5).** image-builder owns this.
    - **Inputs.** `build/rpms/<name>/` holds:
      - `source.lock`: the Fedora SRPM NEVRA and sha256;
@@ -189,8 +183,11 @@ Until the owner answers, F3 stays blocked.
      - (i) accept this and document it;
      - (ii) a ZeeOS update repo, a Phase 5+ question;
      - (iii) a dnf `excludepkgs`, which **is not recommended** because it silently stops sddm security updates.
-     
-     **Pending owner input.** The architect leans towards (i), but the owner should see the cost plainly: under (i), installed systems get setxkbmap and xorg-x11-xinit back as soon as Fedora ships the next sddm update. Only the ISO and a fresh install are setxkbmap-free.
+
+     **Decided 2026-10-24: (ii), gated on F6.** (i) breaks the ruling on the first `dnf update`, and (iii) freezes a security-relevant display manager.
+     - Installed systems get a `zeeos` update repo (in the installed `zeeos-release` config) that carries the rebuilt sddm. The F5 refresh keeps it on Fedora's current sddm NEVRA plus the delta; a dnf repo `priority` above Fedora's is the second guard. F8 must show in a VM that `dnf upgrade` keeps the ZeeOS sddm when Fedora ships a newer build, before the repo is enabled.
+     - **Gate:** the repo ships only with `gpgcheck=1` and the F6 key. The sha256-in-lock interim in item 5 covers ISO builds only; it is not acceptable for packages that installed systems fetch over the network.
+     - **Known gap until F6 and F8 land:** installed systems use stock Fedora repos, so the next Fedora sddm update brings setxkbmap and xorg-x11-xinit back. The ISO and a fresh install are setxkbmap-free. The release notes must say so.
 
 ### Signed boot chain, both arches
 
@@ -218,11 +215,12 @@ No change. The rebuilt packages are userspace only.
 |---|---|---|---|---|---|---|
 | F1 | build: `make rpms`, rebuild Fedora's calamares SRPM without `Requires: setxkbmap` (`build/rpms/calamares/`, SRPM lock, buildroot lock, `zeeos/` dir in the closure, second kiwi repo with sha256 fail-closed check) | image-builder | claude | both | this ADR Accepted | `parallel-safe` |
 | F2 | build: P4-1 uses the F1 calamares; refresh both locks; boot-test SB on, both arches (supersedes the Fedora-calamares part of PR #211 / #216) | image-builder | claude | both | F1 | — |
-| F3 | build: rebuild sddm `--without x11` in the same pipeline; locks without setxkbmap/xorg-x11-xinit; boot-test SB on, both arches | image-builder | claude | both | F1, owner answer on S | `parallel-safe` with F2 after F1 |
+| F3 | build: rebuild sddm `--without x11` in the same pipeline; locks without setxkbmap/xorg-x11-xinit; boot-test SB on, both arches | image-builder | claude | both | F1 | `parallel-safe` with F2 after F1 |
 | F4a | build: write `/home/liveuser/.config/kwinrc` `[Wayland] FollowLocale1=true` in `build/common/config.sh`, live user only (removed with liveuser's home on the target). Not `/etc/xdg/kwinrc`, because that file reaches installed systems | image-builder | claude | both | F2 | `parallel-safe` |
 | F4b | installer: P4-2 keyboard config `useLocale1: true`, `configure.kwin: false`; remove calamares packages from the target; runtime check that the keymap changes in KWin under kdesu | installer-engineer | claude | both | F2, F4a (fold into #176) | `installer-disk` (via #176) |
 | F5 | ci: refresh job watches rebuilt packages' Fedora NEVRAs and rebuilds them in the rolling PR (`needs-human`, workflow edit) | ci-engineer | claude | both | F1 | — |
 | F6 | decision: ZeeOS RPM signing key (GPG; custody, environment, `security/keys/`); then switch the `zeeos/` repo to `package_gpgcheck="true"` | security-hardener | codex | both | owner | `decision`, not on the Phase 4 exit path |
+| F8 | build: `zeeos` update repo for installed systems (rebuilt sddm, `gpgcheck=1`, priority above Fedora); VM test that `dnf upgrade` keeps the ZeeOS sddm over a newer Fedora build | image-builder | claude | both | F3, F5, F6 | not on the Phase 4 exit path |
 | F7 | docs: once this is Accepted, add a "package part superseded by ADR-0011" note to ADR-0003's header and an amendment note to ADR-0008; update README/ARCHITECTURE wording for the rebuilt packages; close PR #214 as superseded | architect | claude | — | this ADR Accepted | `parallel-safe` |
 
 That's at most 2 Claude agents at once, which is enough: F1 → F2 ∥ F3, then F4a → F4b.
