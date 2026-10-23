@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name
 # release=44
 # arch=aarch64
-# resolved=2026-10-23T08:53:03Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:46e5270e5481dd5a88f8390acee45cc05eefb492d315ed81e3e647a27c1d8c7d
+# resolved=2026-10-23T19:51:15Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:1b867dbd9aaf5de5df9901fff6d73fe082a9669929b983696a79c75b653287b6
 LibRaw 0:0.22.2-1.fc44.aarch64 e92b9744b717843d7028ea5e9dfc9fbf1641c7dbf9d43e63345087ad41a08793 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.aarch64 bfac5045a95b38089bf606e56fed9b3f030011eb1837004ec6b5aa83f871d322 ModemManager
 NetworkManager 1:1.56.1-2.fc44.aarch64 2417739e89469a05c597ce6d087090c1960d10c46cfca97f786fc670db4c31df NetworkManager
@@ -37,6 +37,10 @@ avahi-libs 0:0.9~rc2-8.fc44.aarch64 87400b86f07452c69c0dfe4c3a669f23f3f86ad7159e
 bash 0:5.3.9-3.fc44.aarch64 884b530ed43c9b460fae5985009845419d997df1d1ce7b9f473b4c0794ce671c bash
 bc 0:1.08.2-4.fc44.aarch64 47375c407ef7435e4439cd2c0e3de8667a2af1a72fa199a425c8f408573d2f22 bc
 bluez-libs 0:5.87+1.git8750129efca8-1.fc44.aarch64 d08a50fc0bfe42460d0e057847f264fe186273216cd60620b3e903a96ee2be95 bluez
+boost-container 0:1.90.0-7.fc44.aarch64 71700f69370a59b05b94b55457e93b42e9cebc4423756353a7e18bb2043b6712 boost
+boost-graph 0:1.90.0-7.fc44.aarch64 833a3a3adf8e5e7a93cae2e8bdec189a296beb007e8152c92c60ad57a63ce291 boost
+boost-python3 0:1.90.0-7.fc44.aarch64 4594939b1f463b148395558729bc2770fa727caa704018258287376d424332c4 boost
+boost-regex 0:1.90.0-7.fc44.aarch64 042eeaa4b95edb7b5e4f48bdd007144f022f12e52b2b4afa7cd6ff94ad14032a boost
 breeze-cursor-theme 0:6.7.5-1.fc44.noarch 27d8b3647b3d887d0e8f5358d6c3d7b4865baf7be6586241e434800b5b76a8b2 plasma-breeze
 breeze-gtk-common 0:6.7.5-1.fc44.noarch 03a0b47910c822d1f3ac9319d83c3d0df1fca9021998e0a6fb0cb50ec172ce77 breeze-gtk
 breeze-icon-theme 0:6.31.0-1.fc44.noarch 3b81eaa7cecbd4cb9aa711587aaf02ac57d6a77efccabd980f3c740c6720a7d1 kf6-breeze-icons
@@ -46,11 +50,14 @@ bzip2-libs 0:1.0.8-23.fc44.aarch64 6871bba7501f21e96ce6b4baf39ca9eaa457e74336f32
 ca-certificates 0:2026.2.92_v9.0.319-2.fc44.noarch ce1202707eb5df4bb506202c94f4fdc948a51ab044e7f7ead3ddd5e54dd8bde5 ca-certificates
 cairo 0:1.18.6-1.fc44.aarch64 466633fe2f7b75546071380cca5d2f16d10125ef80026621be3ec438ae30e84e cairo
 cairo-gobject 0:1.18.6-1.fc44.aarch64 85800ee3b84520056c789fdae41b6ef0afe30a2bffdbd5430c3a592a738a768b cairo
+calamares 0:3.3.14-5.fc44.aarch64 a534fb88c590974137a31d46d2e7c06e121d08f528a4c7cd8e96c24b4c343b77 calamares
+calamares-libs 0:3.3.14-5.fc44.aarch64 d49ba080a6a7906005b9368b1c56f57f0b426c91a09561970fd3d6585fb73aa0 calamares
 cdparanoia-libs 0:10.2-50.fc44.aarch64 b9438205664c985df6d80f8076dad618666cd5ae051353ccd40d91d1bb720f4a cdparanoia
 cjson 0:1.7.19-1.fc44.aarch64 e2d71f6d3f16881bfe1378ed4143a7e775342c050cf809cf1d2000c19d0d5f21 cjson
 cmake-filesystem 0:4.3.0-1.fc44.aarch64 e301a6f0ccc9c6bfd93223767f4924df5d0bd9073bb4dd312ea194ab9452690d cmake
 codec2 0:1.2.0-9.fc44.aarch64 eca99795e0aaadf16b0d3dee197fa544159bc867a1ea90ced9e051d25da929fb codec2
 colord-libs 0:1.4.8-4.fc44.aarch64 e4ed23fe24a6b753e0deb81086bc8e80f97a83b0710faf73f90b450f9be615b6 colord
+console-setup 0:1.245-3.fc44.noarch 53ecabf4772f2773c802b81a99b234bb5e356fd33b4ec87e56d74b490be019a9 console-setup
 coreutils 0:9.10-5.fc44.aarch64 96fd8d9aa8277bcf13be740e39202d4bb6c9b7201eb50ffe49373417427a420c coreutils
 coreutils-common 0:9.10-5.fc44.aarch64 0c3e1831d42c2170170f707c3b1d1344dfea8b9dc59f2cdc2b1286b6686a18b5 coreutils
 cpio 0:2.15-9.fc44.aarch64 db3d5632cf3be2eb37ba0be51a51893d07029b3ca82fbe6870a515286847296e cpio
@@ -82,6 +89,7 @@ diffutils 0:3.12-5.fc44.aarch64 12df6c24339f01dcb4670d492af2ee46e82ad141bdb316ad
 dnf5 0:5.4.6.0-1.fc44.aarch64 8d53d517cd062e6911b7f55cef01894a98d6ca826d91d06009526893ef7a8a7e dnf5
 docbook-dtds 0:1.0-91.fc44.noarch d1e30aff11533e3043dbc328fedf21703a7795fb489b195af0405be40183bdf1 docbook-dtds
 docbook-style-xsl 0:1.79.2-27.fc44.noarch c75f2b97155fb2c2ef303af546c0e6396597237dc20b98c6425f99647dc17bea docbook-style-xsl
+dosfstools 0:4.2-18.fc44.aarch64 f7e861d16c9aca32d2c0fbb1f49af21d27f169bf1cf0686f02ac651a5260161d dosfstools
 double-conversion 0:3.4.0-3.fc44.aarch64 9f77046c88ae1ecef65e5362097db9eb11e92182d303329bb8afb9dbaac40e99 double-conversion
 dracut 0:108-8.fc44.aarch64 d503e00739a79e6b326804183da66a7e62ae3cd5663b93777e2b75374bd6219b dracut
 dracut-config-generic 0:108-8.fc44.aarch64 ad53dbc9da8961362a73bd7a776d3d3728c2bb9860a895246cd089171a783ef1 dracut
@@ -173,6 +181,7 @@ gpsd-libs 1:3.27.5-5.fc44.aarch64 b5188f80a6ce4baf8036241cfb97316911a193098f9eb4
 graphene 0:1.10.8-4.fc44.aarch64 6a93644a1088f4c2c921680bc5d86a44510c7f43084d3b9418a2e1110a762fa1 graphene
 graphite2 0:1.3.14-20.fc44.aarch64 fe7008c3bd9bef76145be7ccf30db75cf28b5cc16f8da7e7e3a971de5a9f2ee5 graphite2
 grep 0:3.12-3.fc44.aarch64 86c77df52109ccbd34e3d0399b0b0d9baec3f7ef73ec185030a671e543f87cc1 grep
+groff-base 0:1.23.0-12.fc44.aarch64 b1005f37577e24d62e948df20429e881ab94cb49a8ba7b72a5cab20d13b30de6 groff
 grub2-common 1:2.12-66.fc44.noarch 031cb231973ce5509a22937c1c649a4aa1d352f6253c43f23309f10f6e23476b grub2
 grub2-efi-aa64 1:2.12-66.fc44.aarch64 e4bbcad68fc89a8998dd6b4cbffeaf992c3e34c92ed6b7877f4eddad781e9173 grub2
 grub2-efi-aa64-cdboot 1:2.12-66.fc44.aarch64 2ff96808a1d57f112a061155d5c4c269ed0e1fda15c9f35c365d5a88651e0d8f grub2
@@ -314,6 +323,7 @@ kmod-libs 0:34.2-4.fc44.aarch64 6ccc68f4a7ac2a45b9f64fcc8fcda7b92c8e5546265504dd
 knighttime 0:6.7.5-1.fc44.aarch64 063cf72fa2e30b7b62256dbdbb2d00c5974d3c770f15858945ff066a1c15a928 knighttime
 kpartx 0:0.13.1-1.fc44.aarch64 234b9e3a036a72e6e57f2a4629770b62653708a269d7b31c247bd90c50d6c6e9 device-mapper-multipath
 kpipewire 0:6.7.5-1.fc44.aarch64 96472cffd9c5dc853e413d2e0bf3106064c401d4448775aa051e8f803f4fc1f5 kpipewire
+kpmcore 0:26.08.1-1.fc44.aarch64 a28a93aed835bd142409b63507f3505bff1cd8c2fff23ac82ec37b9606abefc1 kpmcore
 krb5-libs 0:1.22.2-4.fc44.aarch64 018bd8b809f746db13c007dc8a9bbdaff41c410f0752c6cae64d5abe1ac74efd krb5
 kscreenlocker 0:6.7.5-1.fc44.aarch64 ecb1de08ae68e251b580cf85ae85d5ea1e64398bdd8942a284361fcd4d56f964 kscreenlocker
 ksystemstats 0:6.7.5-1.fc44.aarch64 81afac3aef58848b0316ffc5e90ad54bd094b16924bd3c50580a253022d45a57 ksystemstats
@@ -568,6 +578,7 @@ mpdecimal 0:4.0.1-3.fc44.aarch64 e4cc577384a475594014335472f3fa60d1c4aba7086c171
 mpfr 0:4.2.2-3.fc44.aarch64 012dae07c3061900dc4b7b77712bc80bf3cb611372b86b16af3efbd2e45998da mpfr
 mpg123-libs 0:1.32.10-3.fc44.aarch64 d36617afee97650421bd5898f81a7844a13069cfbae348ad2ad6e934786fc921 mpg123
 mtdev 0:1.1.6-12.fc44.aarch64 b511e7299e74a4f0e3cee995059c3a1f2f7811d2b02d3e9466ee50831ac345b3 mtdev
+ncurses 0:6.6-1.fc44.aarch64 8e4379a5fef5f03b7ba88c70f0e9fddd81835fd023541ca8df57a589ba68187a ncurses
 ncurses-base 0:6.6-1.fc44.noarch 19c6053ad3e76d47f330da92e5c97e2b9a3617b4ddd8fa2139d9066092cfc181 ncurses
 ncurses-libs 0:6.6-1.fc44.aarch64 5e68aeef90aa603527592466286bc8437df4c575dbc8f4a58f730033a342071b ncurses
 nettle 0:3.10.1-3.fc44.aarch64 3c4b7f6b068de97f3b68d40eef4e3138b7d1a415e76835815f9462385744dc76 nettle
@@ -585,6 +596,7 @@ nss-sysinit 0:3.131.0-1.fc44.aarch64 ac5b61077db9bcddd2791292b0e8acb249817c653cd
 nss-util 0:3.131.0-1.fc44.aarch64 69c0e37cd68bbf68c70e4d521712bdf899ffc7ea512cdefe491ae219e6f62a55 nss
 ntfs-3g 2:2026.2.25-1.fc44.aarch64 1ce7e9d184d8ea66fb19703d0cccda28314ce793019d9032e29cf6ef15dd5b46 ntfs-3g
 ntfs-3g-libs 2:2026.2.25-1.fc44.aarch64 d32ac6797a77775d62ef443e660b70472151de05cf28cdc2fedeeb5c0d8c3b29 ntfs-3g
+ntfsprogs 2:2026.2.25-1.fc44.aarch64 4902f9e12cff607a820b880f8eda2c823f8fb0b0a392a1c6ec6804308c839d1c ntfs-3g
 numactl-libs 0:2.0.19-4.fc44.aarch64 09bf10e5bd44ed65873b8c20e0e9d257772d39453d38ef162422b4e2c1400146 numactl
 ocean-sound-theme 0:6.7.5-1.fc44.noarch 03cc5010cd3c5d8976adf69efc81c1db5d1b13c4c798ae70cb6c842a9acc1c68 ocean-sound-theme
 oniguruma 0:6.9.10-4.fc44.aarch64 62d59ac3ab1180d630b462016184d35494ccb510fc241721e892e43822c2732f oniguruma
@@ -610,6 +622,65 @@ parted 0:3.6-15.fc44.aarch64 36d64d06cdf89bdd4f24cd0f9fc4422e02d5b993b0e6fc4c324
 pcre2 0:10.47-1.fc44.1.aarch64 2ff9f27267103f5369367518898fcfb5460765e7e832db64ecf3e8edb38bc2fb pcre2
 pcre2-syntax 0:10.47-1.fc44.1.noarch f764ad48aff82dc0805ce5db071e91c805dea73dcc9696f8686583b1a2b19c16 pcre2
 pcre2-utf16 0:10.47-1.fc44.1.aarch64 e6f9401f3b09d265b63800a604001326a8885908c5658b7b044ded6a3da86199 pcre2
+perl-AutoLoader 0:5.74-525.fc44.noarch e573e74d5cfe2f4130553fe8a618629fe7690f8ad95882219531c455e7c4bedf perl
+perl-B 0:1.89-525.fc44.aarch64 ab9d3c1d5676fe08f78ac2a277e0c1d9a1359e5278b399d3d37b5759ec95f055 perl
+perl-Carp 0:1.54-521.fc44.noarch e9cf0043e42ebe69eaa72c71ea27eb6bdf471c5de39ebd11b17a11f5a111ae96 perl-Carp
+perl-Class-Struct 0:0.68-525.fc44.noarch d339ef07ac2a6826d0cf6c95edd57c2a349861ff2af75b639def4cbdc59a7dba perl
+perl-Data-Dumper 0:2.192-523.fc44.aarch64 b05f86dc19a7f232580e506f7787f4264dbb704a21011578210f41816ba95df9 perl-Data-Dumper
+perl-Digest 0:1.20-521.fc44.noarch af2c8773549ea5d3314107039d6db2b7671babf88836282cfbad298d1ca6b53e perl-Digest
+perl-Digest-MD5 0:2.59-521.fc44.aarch64 6771b8211d229982677f59ed3b0c314ce7b12c7592214d7ea76583a068591bf3 perl-Digest-MD5
+perl-DynaLoader 0:1.57-525.fc44.aarch64 c4e3aaa390c861e80ed6b7e389ccc2f5f434a5af1f858b1dccfce957f8a8b2c8 perl
+perl-Encode 4:3.21-521.fc44.aarch64 d87eaa2ba93f7145c9a50ebcf6d078611e620979a7d322ad10825aa6c7bc9410 perl-Encode
+perl-Errno 0:1.38-525.fc44.aarch64 d739406f6c48fb74368191edd68c2e347e2dd97940028a5c6f79bd286f1bcd37 perl
+perl-Exporter 0:5.79-521.fc44.noarch 91df6e70667c59ad1dcaae16da543d42eb585137f7daea8c542e44e093795ed9 perl-Exporter
+perl-Fcntl 0:1.20-525.fc44.aarch64 e1adf9b1bb429b3dd631ed7a2d1155c6a1be681871f7e34be5ffb7fe85dd7b21 perl
+perl-File-Basename 0:2.86-525.fc44.noarch 830fd5ee689cb9f617b1168e498857b61cb96f9a0fe4b15a98753f648143175c perl
+perl-File-Path 0:2.18-522.fc44.noarch d4055404e4bad92adad5541529f7ea112df609c870adc52e18a4fe81cea72157 perl-File-Path
+perl-File-Temp 1:0.231.200-2.fc44.noarch e804c108d3bb4de20837ddad280ba43b079b3da790054bce17fca5b12049024b perl-File-Temp
+perl-File-stat 0:1.14-525.fc44.noarch f541d01ff262f1d74550d9f3d7c6458f70ff3827fb2f8ac96f4ad876a5be3de3 perl
+perl-FileHandle 0:2.05-525.fc44.noarch 8d8c746126747b4be6ff543dbc18fbc7ce3d61a7df6840b8b7bdaf544e93773e perl
+perl-Getopt-Long 1:2.58-521.fc44.noarch e5669af3a35df5c9f22d1a573e78a4e34ae12f7d92876da306fa49358491bf13 perl-Getopt-Long
+perl-Getopt-Std 0:1.14-525.fc44.noarch 84a59f1e97d6f4a6a2ca21a3e1df8e40e604be613b5c9528f6584bb6aa3cae3c perl
+perl-HTTP-Tiny 0:0.096-1.fc44.noarch f9e5920753c503be84d223bb1ac728cb3981485efb37018b14f14b53821daccd perl-HTTP-Tiny
+perl-IO 0:1.55-525.fc44.aarch64 5ad78a9f6c9402b16f7d758fc1c5ac3f13201bd170856d79d2c2b26c9a170110 perl
+perl-IO-Socket-IP 0:0.43-522.fc44.noarch 9e02014db5da0a8d493d226287f2736b13fe890a8d7fb4723bd38b78bc096a4e perl-IO-Socket-IP
+perl-IO-Socket-SSL 0:2.098-2.fc44.noarch c611b0adbabd7df6828a8fbdb573435f034ac2242407024e8987a54aa4959399 perl-IO-Socket-SSL
+perl-IPC-Open3 0:1.24-525.fc44.noarch c0e9f1ab82f74b55a763e9b3c79475889b4060ed0368f243e780cdc7d2cb0672 perl
+perl-MIME-Base32 0:1.303-25.fc44.noarch c5c8a4253b0a9a4138f75767f0a7d9e135f1cedcfddf736e60fc049be8fef591 perl-MIME-Base32
+perl-MIME-Base64 0:3.16-521.fc44.aarch64 3d562a465189a11262843545b5801c5d858fcb91d6600996c0230c79326146ee perl-MIME-Base64
+perl-Net-SSLeay 0:1.94-12.fc44.aarch64 fe71be39235843407cd4231f57f8dba39aa148a44fd3b005a57699f1f4f53c78 perl-Net-SSLeay
+perl-POSIX 0:2.23-525.fc44.aarch64 073c7b1bfa8500336dd5492c7a500787381f9810b7f76366991b24c1a5d8cef7 perl
+perl-PathTools 0:3.94-521.fc44.aarch64 fafa085698ac4157b9e3a448a4376a54585cdc7407e11743507f5ce49f09186e perl-PathTools
+perl-Pod-Escapes 1:1.07-521.fc44.noarch b7ae89fb11761199357b2ac7f3b3be61fb8128275e7f6e88f5d8398411a5c306 perl-Pod-Escapes
+perl-Pod-Perldoc 0:3.28.01-522.fc44.noarch d02cb8537ec5f3eed4aaafcf6b1b422a60d9bcb6c72af6b39a286724a4b7e3ed perl-Pod-Perldoc
+perl-Pod-Simple 1:3.47-4.fc44.noarch f00d9ebb9cef0d0fcadb174bd1a5ad7766504fb42c6aae45dcfa9414a419c959 perl-Pod-Simple
+perl-Pod-Usage 4:2.05-521.fc44.noarch c561c517f42f77bf81b342248d7cb043fa58a1915536baa624dbb041590ff04b perl-Pod-Usage
+perl-Scalar-List-Utils 5:1.70-2.fc44.aarch64 6333155fef1e007f73a4098438d298885116156f94c9aa7da0edeef846788c00 perl-Scalar-List-Utils
+perl-SelectSaver 0:1.02-525.fc44.noarch 7620920eda0cb190e477aeb77974c02ce9c20644646f18d75d8a6cf200a1c367 perl
+perl-Socket 4:2.043-1.fc44.aarch64 b5f44b17a68f8372d8e0871b6fb68bb6bf74d0c1e50390ab8b314a295543bc0e perl-Socket
+perl-Storable 1:3.37-522.fc44.aarch64 15243f076ecaa3945f99bcedf0cd565d47662da1f7abfa3ea1e06a8df303f7a4 perl-Storable
+perl-Symbol 0:1.09-525.fc44.noarch e5a76800f2bcb03e061458e9a12170ca5057a8c141e49fcbc355394d991f9eff perl
+perl-Term-ANSIColor 0:5.01-522.fc44.noarch 09a2f964f650f3723e73dc03dcaa85e372232f8ebb4b38ac7d3bf337545fa9dd perl-Term-ANSIColor
+perl-Term-Cap 0:1.18-521.fc44.noarch ae9f5f35a19822b3e9f36990e4a2885a40c8aebe5e23dfaebdd2cc6a6db3a67f perl-Term-Cap
+perl-Text-ParseWords 0:3.31-521.fc44.noarch ca97e6d30af840fff4de4d59470aa721ffecbda6229b46c9565656dc6b2aa6b7 perl-Text-ParseWords
+perl-Text-Tabs+Wrap 0:2024.001-521.fc44.noarch 26c2082150a8ffc95ce2d3936048a693ca3e7456f1b4ab531dfa5bfc2025a414 perl-Text-Tabs+Wrap
+perl-Time-HiRes 4:1.9778-521.fc44.aarch64 1e99844763ff0dd7217efad5943de45585dd9edb8d822e7c8947a09890869de5 perl-Time-HiRes
+perl-Time-Local 2:1.350-521.fc44.noarch b8964a6c838bdc05384878c54f852844b36488ef693246eb6f31d69c3e187558 perl-Time-Local
+perl-URI 0:5.36-1.fc44.noarch 6a1c96ddc0e77ec6b26a7bca3497246097698376df85fd5ac7b3e59f4ebf2be1 perl-URI
+perl-Unicode-Normalize 0:1.32-521.fc44.aarch64 230ccb3d5ea72ae462661c728ef42816f96dd9d5ad7045193d8fbd4fc45a3ce0 perl-Unicode-Normalize
+perl-base 0:2.27-525.fc44.noarch 2d8dde378a93668b893c74209b799e86c19cd0f94cc10872081b4021fb5dce2d perl
+perl-constant 0:1.33-522.fc44.noarch 75be8875a0b824f80f467d08216beaf22d7d38848db72307d67e9e7684147a48 perl-constant
+perl-if 0:0.61.000-525.fc44.noarch c30eefad789d77b21ee232abd97145b7fa5010bc19d747ec01d07b8cbab2da56 perl
+perl-interpreter 4:5.42.3-525.fc44.aarch64 af4d4e0d65c5637f94a1a48f66dd68f1e3c02e986d4d5fe5a9ba32d6387da579 perl
+perl-libnet 0:3.15-522.fc44.noarch 185258d366a688434d08bfb1fc61f17615147e26d964ef1d88a834c7905b4fbc perl-libnet
+perl-libs 4:5.42.3-525.fc44.aarch64 08923a80008e207f61d012f2a7974ad5f4c4430e79b545ffb578216b4c05e802 perl
+perl-locale 0:1.13-525.fc44.noarch e53450b8a1c2bd7ec5e9ca455a6b0a9abf53fbe4415bbf53f17570038b28309b perl
+perl-mro 0:1.29-525.fc44.aarch64 5c450d6cfe94bf83c689a3e5be569668f4737302dc36a48d6dd9f201079edefb perl
+perl-overload 0:1.40-525.fc44.noarch f95f0df8c7aa4fed58d156b021d3e16fa0b665120fe15796da031d9cb2cfa02c perl
+perl-overloading 0:0.02-525.fc44.noarch b259a748bf7604057e3afef0401d2881d7d33826f6ca0944a65aef024abb53bc perl
+perl-parent 1:0.244-521.fc44.noarch a8a05fad32039b86b093119d10c8d2e644948f2ab4b259bd8adfca835a154252 perl-parent
+perl-podlators 1:6.0.2-522.fc44.noarch 7a39e84ec4086da1b274a1e22736285f1c0ee962c15c75706124c5ac5ec94ec6 perl-podlators
+perl-vars 0:1.05-525.fc44.noarch 00b9cdf3896a00caaacfe4d1c65875affb62bd9f3f60b0adaf4c8ec0e1bcf8a2 perl
 pinentry 0:1.3.2-3.fc44.aarch64 9ad310e1748202029de1bf0203e44a85872c3dc16a679e544cb6b8c8cb596a87 pinentry
 pinentry-gnome3 0:1.3.2-3.fc44.aarch64 d95c2c3daff0c711904ecd58fd68b7ac75c8f1a2d40b9c1dfd6dc3c2f7d1749a pinentry
 pipewire-libs 0:1.6.9-1.fc44.aarch64 c62c7e2174eb6dfd0a4a326cf2e1425c1b546e04d3eba8f840fe4c257f353e7c pipewire
@@ -689,6 +760,7 @@ rpm 0:6.0.2-1.fc44.aarch64 61a92686f0e1f9a89a56e987d83bba1e4b0ad234ff3fc19ec2db6
 rpm-libs 0:6.0.2-1.fc44.aarch64 07dfa140659952ea773541acd57306b741a347abc5e818221deb4447091dc402 rpm
 rpm-plugin-selinux 0:6.0.2-1.fc44.aarch64 205cec8e75ad170bc5ba5f22bf84f8f5ef6caf2c46faa7ee17466eb38b390ff1 rpm
 rpm-sequoia 0:1.10.3-1.fc44.aarch64 0028974adc377d2e731f927740119187547b95ce3985d2f91a3c17a8526966e6 rust-rpm-sequoia
+rsync 0:3.5.1-1.fc44.aarch64 9df3229acf5db10e0111474acc23b1c2a444e6587e6db921f4a87980331e8dee rsync
 rubberband-libs 0:4.0.0-5.fc44.aarch64 e4f9a9c5ae0c38cfb0371202362ab6d75acd90bce04a1fde677ce0a8fd77a6c2 rubberband
 samba-client-libs 2:4.24.7-1.fc44.aarch64 9d351a6b468b610ea4adf5da0e9557fd72bd1f25fbc3de694741dd89c32a08ac samba
 samba-common 2:4.24.7-1.fc44.noarch 4aa912394bd2f185648aa9f3e452abf9656b5960895bbfe582280300624c6dd7 samba
@@ -746,6 +818,8 @@ twolame-libs 0:0.4.0-9.fc44.aarch64 78a0b4d1114bdea0f93139effd3ef302468178d66471
 tzdata 0:2026e-1.fc44.noarch c834a815040bdc1419764dcf81ca2d6ed5818c5625e07476b7923cf0e1b8f45c tzdata
 unity-gtk-module-common 0:0.0.0+17.04.20170403-24.fc44.noarch f88748f58dcf1311a2ccaed37fb52c2034735c25594bfd59c1007889227d3777 unity-gtk-module
 unity-gtk3-module 0:0.0.0+17.04.20170403-24.fc44.aarch64 3c9bc4acdf5fa4952a238d1d14c41a00ab2ec24893ec32c33155f3f05458884e unity-gtk-module
+upower 0:1.91.5-1.fc44.aarch64 acf870e0a7b3bc9caeb45ab823b504f73473aff5ae9ac53210b5372774f2911d upower
+upower-libs 0:1.91.5-1.fc44.aarch64 c8add48a56580448e69d12b169e4f0ec900933dd00564f60f9c85e9660311fa7 upower
 userspace-rcu 0:0.15.6-1.fc44.aarch64 beab142209f298fa23a68a3817272a9a8b99be3c771dfb704fde41cd3cbabbe8 userspace-rcu
 util-linux 0:2.41.5-1.fc44.aarch64 3143fc9cc51988af60c506ea352d8944afe1eee67d1c6902d7c22332d0f2795d util-linux
 util-linux-core 0:2.41.5-1.fc44.aarch64 fe72652bf773da6d3a65df8fb0f22716ea49313a7634267f0e601b1b9efc68c2 util-linux
@@ -782,8 +856,10 @@ xorg-x11-xinit 0:1.4.3-4.fc44.aarch64 6c0d43c911b56c828316da065741ccbeff4e2a7a83
 xprop 0:1.2.8-5.fc44.aarch64 f3aa4fcb950f824309dc2485540d2b6cb116b3c5df8048c50c6c3cc581963ab8 xprop
 xrdb 0:1.2.2-7.fc44.aarch64 4ab03bc46db6495890c4092d509b1bd630a59614ef34fa7229ceb601a3d61380 xrdb
 xvidcore 0:1.3.7-19.fc44.aarch64 97b183f812e6a7bad147d113bc86027f0a20a95eceaa0f57240326e620d2707c xvidcore
+xxhash-libs 0:0.8.4-1.fc44.aarch64 4dba0ea9d193c05a53818d15952b7a961b5376a12378bbc967276dbfa07aec14 xxhash
 xz 1:5.8.2-2.fc44.aarch64 0be29420cb9b468bb7ccc2fd31ef6275c9e4e92bc49ec607124ea73fc635df99 xz
 xz-libs 1:5.8.2-2.fc44.aarch64 8710ede1d6ac25e721d7fc6eb6758727f32710fb2ad059384c47b17876762939 xz
+yaml-cpp 0:0.8.0-5.fc44.aarch64 b3e24349d4e0e011790da537abb8f3a02cd6e463112e59fc6a6979ed4666eb94 yaml-cpp
 zchunk-libs 0:1.5.4-1.fc44.aarch64 e1dc7024458e70e6e3ef8a5b61477e0c3f3dce8450e5aa59278d55c4ed0ba86d zchunk
 zeromq 0:4.3.5-22.fc43.aarch64 2fcc1a278f217897f69f5527694e91a86cbfddc73159db928963ed0aa7608811 zeromq
 zimg 0:3.0.6-3.fc44.aarch64 ae0fec6e1a5a6228d89f6da30b06b428a182ac3894247914c874665c11efd0fd zimg
