@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 ZeeOS contributors
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# Original artwork. Menu entries come from grub.cfg, never from this theme.
+title-text: ""
+desktop-image: "background.png"
+desktop-image-scale-method: "stretch"
+desktop-color: "#101a30"
+terminal-font: "Noto Sans Regular 20"
+message-font: "Noto Sans Regular 20"
+message-color: "#f2f5fc"
+message-bg-color: "#101a30"
+
++ label {
+  left = 8%
+  top = 12%
+  width = 84%
+  height = 48
+  text = "Choose your system"
+  font = "Noto Sans Regular 32"
+  color = "#f2f5fc"
+}
++ label {
+  left = 8%
+  top = 23%
+  width = 84%
+  height = 30
+  text = "A clear start. Your choice."
+  font = "Noto Sans Regular 20"
+  color = "#bdcce7"
+}
++ boot_menu {
+  left = 8%
+  top = 36%
+  width = 84%
+  height = 40%
+  item_font = "Noto Sans Regular 20"
+  item_color = "#d8e1f2"
+  selected_item_color = "#ffffff"
+  selected_item_pixmap_style = "selection_*.png"
+  item_height = 46
+  item_padding = 10
+  item_spacing = 8
+  item_icon_space = 0
+  icon_width = 0
+  icon_height = 0
+  scrollbar = true
+  scrollbar_width = 12
+}
++ label {
+  id = "__timeout__"
+  left = 8%
+  top = 80%
+  width = 84%
+  height = 30
+  text = "Starting the selected system in %d seconds"
+  font = "Noto Sans Regular 16"
+  color = "#bdcce7"
+}
++ label {
+  left = 8%
+  top = 90%
+  width = 84%
+  height = 28
+  text = "Up / Down: select    Enter: start    Esc: back"
+  font = "Noto Sans Regular 16"
+  color = "#bdcce7"
+}
