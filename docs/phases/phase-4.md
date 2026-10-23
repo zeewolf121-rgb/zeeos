@@ -15,7 +15,7 @@ Secure Boot on for every case. Case (b) is x86_64 only: Windows-on-ARM dual boot
 
 ## Scope rules for this phase
 
-- **Calamares 3.3 from Fedora** with our modules in `/installer/modules/` (ADR-0003). No Calamares fork, no compiled modules: Python `job` modules and QML `view` modules only. If a goal needs C++, stop and open a `decision` issue.
+- **Calamares 3.3 from Fedora** with our modules in `/installer/modules/` (ADR-0003). Package source under review: proposed [ADR-0011](../adr/0011-installer-package-wayland-only.md) rebuilds Fedora's Calamares without `setxkbmap` (#210). No Calamares fork, no compiled modules: Python `job` modules and QML `view` modules only. If a goal needs C++, stop and open a `decision` issue.
 - **Disk safety** (CONVENTIONS): every module that can write to a disk, partition table, ESP or NVRAM is `installer-disk`, has a dry-run mode the tests use, logs every planned operation first, never formats an existing ESP and never removes or overwrites Windows Boot Manager. `installer-disk` PRs need Opus authoring + cross-review, not owner approval.
 - **Tests first for detection code.** `zee-preflight` and `zee-espbackup` get pytest suites on small fixture images built by scripts in `tests/fixtures/` (never committed binaries over 1 MB).
 - **The live session isn't the installed system.** Calamares removes the live-only parts on the target: `liveuser` and its home, `etc/sddm.conf.d/10-zeeos-live-autologin.conf`, the guest test units (`zeeos-*-check`, `zeeos-desktop-ready`) and passwordless root. Auto-login is off on installed systems (MISSION §4).
