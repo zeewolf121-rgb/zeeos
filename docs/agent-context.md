@@ -28,7 +28,11 @@ ZeeOS is a Fedora 44-based (ADR-0001) Linux distro with an original hybrid deskt
 - **Read files first.** Read every file a change touches before editing it.
 - **Write the complete solution.** Push one finished fix, not a series of follow-ups.
 - **Test once.** Run the relevant check after the change; rerun only if the code changed.
-- **No over-engineering.** Build what the issue asks for, nothing more.
+- **No over-engineering.** Build what the issue asks for, nothing more. No abstractions for a single use, no speculative features, no error handling for cases that cannot happen.
+- **Don't guess.** Verify APIs, versions, flags, package names and commit SHAs in code, docs or CI logs before relying on them.
+- **Debugging:** read the relevant code and logs before naming a cause. State what you found, where, and the fix. If the cause is unclear, say so.
+- **Reviews:** state the bug and the fix, then stop. Nothing outside the PR's scope.
+- **Output:** concise. Plain hyphens and straight quotes in code, commits and PR text.
 
 ## Commands
 
