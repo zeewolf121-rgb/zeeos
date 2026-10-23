@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 jobs:
+  selftest:
+    name: Boot harness fixture self-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Replay boot marker fixtures
+        run: bash tests/selftest.sh
   boot:
     strategy:
       fail-fast: false
