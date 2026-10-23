@@ -59,7 +59,9 @@ $ rpm -qpR calamares-3.3.14-5.zeeos1.fc44.aarch64.rpm calamares-libs-...rpm | gr
 0
 ```
 
-**Evidence scope:** the Calamares rebuild, the sddm rebuild (E6) and the full-set resolution (E6) ran natively on aarch64. The x86_64 run is reported in the PR, with the result it actually got. The argument carries across arches because `Requires: setxkbmap` sits outside `%ifarch` and the sddm `x11` bcond isn't arch-conditional, but x86_64 remains unverified until F2 and F3 build it.
+**x86_64** (emulated `--platform linux/amd64` container, same spec delta): `builddep rc=0`, `build rc=0` in 22m14s. `rpm -qpR calamares-3.3.14-5.zeeos1.fc44.x86_64.rpm | grep -c -i -E 'setxkbmap|xorg|xinit'` returns `0`, and the RPM still requires `grub2`, `grub2-efi-x64` and `efibootmgr`.
+
+**Evidence scope:** the Calamares rebuild ran on both arches. The sddm rebuild (E6) and the full-set resolution (E6) ran on aarch64 only. The argument carries across arches because `Requires: setxkbmap` sits outside `%ifarch` and the sddm `x11` bcond isn't arch-conditional, but x86_64 remains unverified until F2 and F3 build it.
 
 **E5. Without setxkbmap, the keyboard module still sets the live keymap on Wayland/KWin.** Source: `calamares-3.3.14/src/modules/keyboard/Config.cpp`.
 
