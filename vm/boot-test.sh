@@ -65,7 +65,6 @@ if [ "$accel" = tcg ] && [ "$ARCH" = aarch64 ]; then cpu=max,pauth-impdef=on; sm
 
 mkdir -p "$OUT"
 echo "$accel" > "$OUT/accel"
-[ -n "${vars:-}" ] && cp "$vars" "$OUT/vars.fd"
 sock=$OUT/qmp.sock
 args=(-accel "$accel" -cpu "$cpu" -m 4096 -smp "$smp" "${machine[@]}"
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=${code:-/nonexistent}"
@@ -80,10 +79,15 @@ fi
 if [ "$DRY_RUN" = 1 ]; then echo "$qemu ${args[*]}"; exit 0; fi
 
 # Per-run artifacts: a reused OUT must not leak an earlier run's screenshots into this diff/report.
-rm -f "$OUT"/screenshot*.ppm
-: > "$OUT/serial.log"
-"$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
-qpid=$!
+rm -f "$OUT"/screenshot*.ppm "$OUT/serial-attempt1.log"
+# launch: fresh NVRAM vars, serial log and QMP socket for each attempt.
+launch() {
+  [ -n "${vars:-}" ] && cp "$vars" "$OUT/vars.fd"
+  rm -f "$sock"; : > "$OUT/serial.log"
+  "$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
+  qpid=$!
+}
+launch
 trap 'kill "$qpid" 2>/dev/null || true' EXIT
 # QEMU resolves the screendump path in its own cwd: always pass it an absolute one (OUT may be either).
 shot() {
@@ -104,9 +108,18 @@ wait_for() {
 # stepres[i] is the result of steps[i]. Indexed arrays only, and every expansion of a maybe-empty array is
 # guarded: the macOS runner's bash is 3.2 (no declare -A, and "${a[@]}" of an empty array trips set -u).
 theme=none; layout=none; steps=(); stepres=()
-start=$SECONDS; result=timeout
+start=$SECONDS; result=timeout; retried=0
 while (( SECONDS - start < TIMEOUT )); do
   if grep -aq -- "$MARKER" "$OUT/serial.log"; then result=pass; break; fi
+  # Under aarch64 TCG, systemd's generators sometimes time out and PID 1 freezes before any guest
+  # output (run 39960462599). That says nothing about the image: boot once more from scratch.
+  if [ "$retried" = 0 ] && grep -aq 'Freezing execution' "$OUT/serial.log"; then
+    echo "systemd froze during early boot; retrying once (first attempt: $OUT/serial-attempt1.log)" >&2
+    grep -a -m3 -e 'Failed to fork off' -e 'Failed to start up manager' "$OUT/serial.log" >&2 || true
+    cp "$OUT/serial.log" "$OUT/serial-attempt1.log"
+    kill "$qpid" 2>/dev/null || true; wait "$qpid" 2>/dev/null || true
+    retried=1; launch; start=$SECONDS; continue
+  fi
   kill -0 "$qpid" 2>/dev/null || { result=qemu-exited; break; }
   sleep 2
 done
@@ -193,7 +206,7 @@ fail=1; [ "$result" = pass ] && fail=0
   nfail=$fail; for r in ${stepres[@]+"${stepres[@]}"}; do [ "$r" = ok ] || [ "$r" = skipped ] || nfail=$((nfail + 1)); done
   printf '<testsuite name="zeeos-boot" tests="%d" failures="%d" time="%d">\n' "$((1 + ${#steps[@]}))" "$nfail" "$elapsed"
   printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$SECUREBOOT"
-  printf '<property name="imgdiff_gate" value="%s"/>' "$gate"
+  printf '<property name="imgdiff_gate" value="%s"/><property name="boot_retry" value="%d"/>' "$gate" "$retried"
   printf '<property name="theme_check" value="%s"/><property name="boot_seconds" value="%d"/>' "$theme" "$elapsed"
   printf '<property name="layout_check" value="%s"/>' "$layout"
   for k in total_kb available_kb used_kb; do

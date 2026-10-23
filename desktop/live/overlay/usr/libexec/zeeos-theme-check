@@ -101,16 +101,23 @@ emit "ZEEOS_THEME_OK scheme=$scheme gtk=$gtk portal=$portal"
 # The harness has no channel to the guest: wait out its light-screenshot delay.
 [ "$DRY_RUN" = 1 ] || sleep "$dark_delay"
 
-# Switch to dark. kde-gtk-config would sync GTK from Plasma (#118); until then set it here.
-as_user plasma-apply-colorscheme ZeeOSDark >/dev/null 2>&1 || fail "dark: plasma-apply-colorscheme failed"
-as_user mkdir -p "$home/.config/gtk-3.0" "$home/.config/gtk-4.0"
-for v in 3 4; do
-    printf '[Settings]\ngtk-theme-name=%s\ngtk-application-prefer-dark-theme=1\n' "$DARK_GTK" \
-        | as_user tee "$home/.config/gtk-$v.0/settings.ini" >/dev/null
-done
-as_user gsettings set org.gnome.desktop.interface gtk-theme "$DARK_GTK" >/dev/null 2>&1 || true
-sleep "$SETTLE"   # let a live repaint start
+# gtk_prefer_dark: gtk-application-prefer-dark-theme from the user's GTK3 settings.ini (0 if unset).
+gtk_prefer_dark() {
+    local v
+    v=$(sed -n 's/^gtk-application-prefer-dark-theme *= *//p' "$home/.config/gtk-3.0/settings.ini" 2>/dev/null | tail -n 1)
+    case $v in 1 | true) echo 1 ;; *) echo 0 ;; esac
+}
 
+# Switch Plasma only: kde-gtk-config's gtkconfig kded module must carry GTK3 along (#118).
+# adw-gtk3 is dark with either its -dark variant or prefer-dark-theme=1.
+as_user plasma-apply-colorscheme ZeeOSDark >/dev/null 2>&1 || fail "dark: plasma-apply-colorscheme failed"
+start=$SECONDS
+while :; do
+    gtk=$(gtk_theme) dark=$(gtk_prefer_dark)
+    [ "$gtk" = "$DARK_GTK" ] || [ "$dark" = 1 ] && break
+    (( SECONDS - start >= PORTAL_WAIT )) && break
+    sleep 2
+done
 # plasmashell did not repaint from the change notification in the live session (#170: light panels and
 # light wallpaper after the switch). Restart it so it reads the new scheme from kdeglobals, then wait until
 # the new process answers on D-Bus; evaluateScript replying is what plasmashell itself reports.
@@ -129,8 +136,9 @@ done
 [ "$shell" = up ] || fail "dark: plasmashell did not come back after restart within ${SHELL_WAIT}s"
 sleep "$SETTLE"   # let the panels and wallpaper paint before the harness screenshots
 
-scheme=$(plasma_scheme) gtk=$(gtk_theme) portal=$(wait_portal prefer-dark)
+scheme=$(plasma_scheme) portal=$(wait_portal prefer-dark)
 [ "$scheme" = ZeeOSDark ] || fail "dark: plasma scheme is '$scheme', want ZeeOSDark"
-[ "$gtk" = "$DARK_GTK" ] || fail "dark: gtk theme is '$gtk', want $DARK_GTK"
+[ "$gtk" = "$DARK_GTK" ] || [ "$dark" = 1 ] \
+    || fail "dark: GTK3 did not follow Plasma (theme '$gtk', prefer-dark $dark); is kde-gtk-config's gtkconfig running?"
 [ "$portal" = prefer-dark ] || fail "dark: portal color-scheme is '$portal', want prefer-dark"
-emit "ZEEOS_DARK_READY scheme=$scheme gtk=$gtk portal=$portal"
+emit "ZEEOS_DARK_READY scheme=$scheme gtk=$gtk portal=$portal gtk_prefer_dark=$dark"
