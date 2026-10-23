@@ -26,3 +26,4 @@ lint:
 	reuse lint
 	scripts/sync-agent-docs.sh --check
 	scripts/autopilot/selftest.sh
+	for t in installer/modules/*/tests; do [ -d "$$t" ] || continue; python3 -m unittest discover -s "$$t" || exit 1; done
