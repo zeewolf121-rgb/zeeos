@@ -197,7 +197,7 @@ jobs:
             `verdict: fail` (fail if anything is blocking), then a summary of at most 5 lines.
           claude_args: >-
             --model ${{ steps.pr.outputs.llm }} --max-turns 20
-            --allowedTools "Read,Glob,Grep,Write(claude-review.md),Bash(gh pr view ${{ inputs.pr }}:*),Bash(gh pr diff ${{ inputs.pr }}:*),mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "Read,Glob,Grep,Edit(/claude-review.md),Bash(gh pr view ${{ inputs.pr }}:*),Bash(gh pr diff ${{ inputs.pr }}:*),mcp__github_inline_comment__create_inline_comment"
       - name: Post the verdict marker (cross-review reads it)
         if: always()
         env:
