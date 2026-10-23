@@ -51,8 +51,9 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
   it only runs once `ZEEOS_DARK_READY` was printed). It switches back to light, then per mode runs `zee-layout set`,
   reads back the panels (edge and applets, via `org.kde.PlasmaShell` `evaluateScript`) and the keymap, and prints
   `ZEEOS_LAYOUT_OK mode=<m> panels=<n> keymap=<k>`, then waits `zeeos.layout_delay` s (default 150). The RTL step
-  sets `ar_EG.UTF-8`, restarts `plasmashell`, checks the locale, `fc-match :lang=ar` (Noto) and the shell's
-  environment, then prints `ZEEOS_RTL_OK`. Failures print `ZEEOS_LAYOUT_FAIL <mode>: <reason>` or `ZEEOS_RTL_FAIL`.
+  sets `ar_EG.UTF-8` and `LANGUAGE=ar` (Qt mirrors only with a loaded `qtbase_ar.qm`), restarts `plasmashell`, checks
+  the locale, `fc-match :lang=ar` (Noto), the Qt translation file, the shell's environment and the layout direction
+  plasmashell reports (must be RightToLeft), then prints `ZEEOS_RTL_OK`. Failures print `ZEEOS_LAYOUT_FAIL <mode>: <reason>` or `ZEEOS_RTL_FAIL`.
 - The expected panel strings in the script mirror the three `org.kde.plasma.desktop-layout.js` files: change both together.
 - `DRY_RUN=1` prints without touching the serial tty. Not run in a guest yet; the boot-test CI run is the evidence.
 

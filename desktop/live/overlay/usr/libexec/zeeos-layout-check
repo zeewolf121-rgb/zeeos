@@ -132,7 +132,13 @@ case $font in
     Noto*) ;;
     *) rtl_fail "fc-match :lang=ar gave '${font:-nothing}', want a Noto family" ;;
 esac
-as_user systemctl --user set-environment "LANG=$RTL_LOCALE" "LC_ALL=$RTL_LOCALE" \
+# Qt mirrors the UI only when it loads a translation for an RTL language (qtbase_ar.qm sets
+# QT_LAYOUT_DIRECTION), and the Plasma catalogs follow LANGUAGE, so LC_ALL alone is not enough.
+RTL_LANGUAGE=${RTL_LANGUAGE:-${RTL_LOCALE%%_*}}
+QT_TRANSLATIONS=${QT_TRANSLATIONS:-/usr/share/qt6/translations}
+[ -e "$QT_TRANSLATIONS/qtbase_$RTL_LANGUAGE.qm" ] \
+    || rtl_fail "$QT_TRANSLATIONS/qtbase_$RTL_LANGUAGE.qm is missing (qt6-qttranslations not in the image), Qt cannot mirror"
+as_user systemctl --user set-environment "LANG=$RTL_LOCALE" "LC_ALL=$RTL_LOCALE" "LANGUAGE=$RTL_LANGUAGE" \
     || rtl_fail "could not set the session locale"
 as_user systemctl --user restart plasma-plasmashell.service || rtl_fail "plasmashell restart failed"
 start=$SECONDS pid=
@@ -144,5 +150,22 @@ while :; do
     (( SECONDS - start >= PANEL_WAIT )) && rtl_fail "plasmashell is not running with $RTL_LOCALE"
     sleep 2
 done
+
+# Ask plasmashell for its layout direction (Qt::RightToLeft is 1), polling while it settles.
+DIR_JS='print(typeof Qt === "undefined" ? "noqt" : Qt.application.layoutDirection);'
+read_direction() {
+    local out
+    out=$(as_user gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+        --method org.kde.PlasmaShell.evaluateScript "$DIR_JS" 2>"$DBUS_ERR") || return 0
+    out=${out#\(\'}
+    echo "${out%\',\)}"
+}
+start=$SECONDS dir=
+while :; do
+    dir=$(read_direction)
+    [ "$dir" = 1 ] && break
+    (( SECONDS - start >= PANEL_WAIT )) && rtl_fail "plasmashell layout direction is '${dir:-unknown}', want 1 (RightToLeft) (gdbus stderr: $(tr '\n' ' ' <"$DBUS_ERR" | cut -c1-300))"
+    sleep 2
+done
 sleep "$SETTLE"
-emit "ZEEOS_RTL_OK locale=$RTL_LOCALE font=$font"
+emit "ZEEOS_RTL_OK locale=$RTL_LOCALE font=$font direction=rtl"
