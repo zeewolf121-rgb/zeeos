@@ -1,0 +1,22 @@
+# Checks the self-hosted macOS ARM64 runner (docs/ci/macos-arm64-runner.md, #15): podman machine,
+# aarch64 container, loop devices, QEMU with HVF, aarch64 Secure Boot firmware. Manual only, so
+# nothing from a fork PR ever reaches this runner through it.
+name: runner-check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: [self-hosted, macOS, ARM64, zeeos-aarch64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Runner check
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          scripts/runner-check.sh | tee runner-check.txt
+      - name: Summary
+        if: always()
+        run: |
+          { echo '### runner-check'; echo '```'; cat runner-check.txt 2>/dev/null || echo '(no output)'; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
