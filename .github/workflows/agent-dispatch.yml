@@ -197,7 +197,7 @@ jobs:
             `verdict: fail` (fail if anything is blocking), then a summary of at most 5 lines.
           claude_args: >-
             --model ${{ steps.pr.outputs.llm }} --max-turns 20
-            --allowedTools "Read,Glob,Grep,Write(claude-review.md),Bash(gh pr view ${{ inputs.pr }}:*),Bash(gh pr diff ${{ inputs.pr }}:*),mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "Read,Glob,Grep,Edit(/claude-review.md),Bash(gh pr view ${{ inputs.pr }}:*),Bash(gh pr diff ${{ inputs.pr }}:*),mcp__github_inline_comment__create_inline_comment"
       - name: Post the verdict marker (cross-review reads it)
         if: always()
         env:
@@ -217,6 +217,13 @@ jobs:
       !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # For a Codex PR, request-review starts this workflow (mode=review) with `gh workflow run`,
+    # which needs actions: write (HTTP 403 "Resource not accessible by integration" otherwise, #194).
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
