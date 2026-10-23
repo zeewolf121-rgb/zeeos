@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 ZeeOS contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Custom label of the self-hosted macOS ARM64 runner (docs/ci/macos-arm64-runner.md).
+self-hosted-runner:
+  labels:
+    - zeeos-aarch64
