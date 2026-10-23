@@ -19,3 +19,11 @@ bottom.addWidget("org.kde.plasma.kickoff");
 bottom.addWidget("org.kde.plasma.panelspacer");
 bottom.addWidget("org.kde.plasma.icontasks");
 bottom.addWidget("org.kde.plasma.panelspacer");
+
+// --resetLayout rebuilds the desktops with Plasma's stock wallpaper, and the once-per-user
+// zeeos-wallpaper.js update doesn't run again: set the ZeeOS package here too (light/dark aware).
+desktops().forEach(function (d) {
+    d.wallpaperPlugin = "org.kde.image";
+    d.currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
+    d.writeConfig("Image", "/usr/share/wallpapers/ZeeOS/");
+});
