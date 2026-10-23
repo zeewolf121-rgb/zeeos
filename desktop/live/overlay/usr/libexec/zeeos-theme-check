@@ -14,6 +14,7 @@ DARK_GTK=${DARK_GTK:-adw-gtk3-dark}
 MEMINFO=${MEMINFO:-/proc/meminfo}
 CMDLINE=${CMDLINE:-/proc/cmdline}
 PORTAL_WAIT=${PORTAL_WAIT:-60}
+SHELL_WAIT=${SHELL_WAIT:-60}
 
 # Serial ttys with a real UART behind them (see zeeos-desktop-ready).
 ttys=()
@@ -117,7 +118,23 @@ while :; do
     (( SECONDS - start >= PORTAL_WAIT )) && break
     sleep 2
 done
-sleep "$SETTLE"   # let the repaint finish before the harness screenshots
+# plasmashell did not repaint from the change notification in the live session (#170: light panels and
+# light wallpaper after the switch). Restart it so it reads the new scheme from kdeglobals, then wait until
+# the new process answers on D-Bus; evaluateScript replying is what plasmashell itself reports.
+old_pid=$(pgrep -u "$uid" -x plasmashell | head -n 1)
+as_user systemctl --user restart plasma-plasmashell.service || fail "dark: plasmashell restart failed"
+start=$SECONDS shell=down
+while (( SECONDS - start < SHELL_WAIT )); do
+    pid=$(pgrep -u "$uid" -x plasmashell | head -n 1)
+    if [ -n "$pid" ] && [ "$pid" != "$old_pid" ] \
+        && as_user gdbus call --session --dest org.kde.plasmashell --object-path /PlasmaShell \
+            --method org.kde.PlasmaShell.evaluateScript 'print(panels().length)' >/dev/null 2>&1; then
+        shell=up; break
+    fi
+    sleep 2
+done
+[ "$shell" = up ] || fail "dark: plasmashell did not come back after restart within ${SHELL_WAIT}s"
+sleep "$SETTLE"   # let the panels and wallpaper paint before the harness screenshots
 
 scheme=$(plasma_scheme) portal=$(wait_portal prefer-dark)
 [ "$scheme" = ZeeOSDark ] || fail "dark: plasma scheme is '$scheme', want ZeeOSDark"
