@@ -217,7 +217,7 @@ ok "error verdict twice: needs-human + owner ping" 'grep -q "issue edit 5 --repo
 # Dispatch: caps, priority, labels.
 reset
 echo '[{"number":1,"createdAt":"2026-01-01","labels":[{"name":"ready"}]},{"number":2,"createdAt":"2026-02-01","labels":[{"name":"ready"},{"name":"priority:high"}]},{"number":3,"createdAt":"2026-03-01","labels":[{"name":"ready"}]}]' | fx issue_list_ready
-echo '[{"labels":[{"name":"model:claude"}]}]' | fx issue_list_in-progress
+echo '[{"labels":[{"name":"model:claude"}]},{"labels":[{"name":"model:claude"}]}]' | fx issue_list_in-progress
 for n in 1 2 3; do echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"ready"}]}' | fx "issue_view_$n"; done
 "$here/dispatch.sh" 2>/dev/null
 ok "only one Claude slot left: priority:high #2 goes first" 'grep -q "workflow run agent-dispatch.yml --repo o/r -f issue=2" "$CALLS" && [[ $(grep -c "workflow run" "$CALLS") == 1 ]]'
@@ -254,7 +254,7 @@ ok "route works for a Codex agent without a .claude/agents file" '[[ "$out" == *
 reset
 echo '[{"number":7,"createdAt":"2026-01-05","labels":[{"name":"paused"},{"name":"in-progress"}]}]' | fx issue_list_paused
 echo '[{"number":14,"createdAt":"2026-01-01","labels":[{"name":"ready"}]}]' | fx issue_list_ready
-echo '[{"labels":[{"name":"model:claude"}]}]' | fx issue_list_in-progress
+echo '[{"labels":[{"name":"model:claude"}]},{"labels":[{"name":"model:claude"}]}]' | fx issue_list_in-progress
 echo '{"labels":[{"name":"model:claude"},{"name":"agent:image-builder"},{"name":"paused"},{"name":"in-progress"}]}' | fx issue_view_7
 echo '{"labels":[{"name":"model:claude"},{"name":"agent:desktop-shell"},{"name":"ready"}]}' | fx issue_view_14
 "$here/dispatch.sh" 2>/dev/null
