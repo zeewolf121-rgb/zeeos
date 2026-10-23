@@ -37,7 +37,13 @@ def part_sha(disk, offset, size):
 
 
 def partitions(disk, seed):
-    return {p["name"]: part_sha(disk, p["offset"], p["size"]) for p in seed["partitions"]}
+    """Partition payloads plus the disk size and both GPT copies (LBA 0-33, last 33 sectors)."""
+    size = os.path.getsize(disk)
+    out = {p["name"]: part_sha(disk, p["offset"], p["size"]) for p in seed["partitions"]}
+    out["disk-size"] = str(size)
+    out["gpt-primary"] = part_sha(disk, 0, 34 * 512)
+    out["gpt-backup"] = part_sha(disk, size - 33 * 512, 33 * 512)
+    return out
 
 
 def extract(disk, offset, size, dest):

@@ -46,6 +46,9 @@ Install test (P4-8, docs/phases/phase-4.md): `vm/install-test.sh` with `CASE=era
 seeds `OUT/disk.img` (`vm/install-seed.py`; the partitioned cases need gdisk, dosfstools, mtools, ntfs-3g), attaches the
 ISO and the `ZEEOS-AUTOINSTALL` preset disk, waits for `ZEEOS_INSTALL_DONE`/`_FAIL`, boots the installed disk with the
 same NVRAM vars, and checks `ZEEOS_BOOTMENU`, `ZEEOS_ROOTFS`, `ZEEOS_DESKTOP_READY`. `vm/install-checksums.py` hashes the
-pre-existing data outside the guest: whole partitions for the refuse cases, individual ESP/NTFS files for alongside.
+pre-existing data outside the guest: whole partitions plus the disk size and both GPT copies for the refuse cases,
+individual ESP/NTFS files for alongside. Preset transport (for #181, until the architect adds it to the plan): a raw virtio
+disk with serial `ZEEOS-AUTOINSTALL`, `key=value` lines from byte 0, NUL-padded to 1 MiB; keys `case`, `user`, `password`,
+`luks_passphrase`.
 Not yet implemented and reported as skipped in junit: typing the LUKS passphrase at boot, and the Windows Boot Manager
 NVRAM entry check. Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).

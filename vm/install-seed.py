@@ -60,7 +60,9 @@ def sha256_bytes(data):
 
 
 def new_disk(path):
-    if path.exists() and not stat.S_ISREG(path.stat().st_mode):
+    if path.is_symlink():
+        die(f"{path} is a symlink; refusing to write")
+    if path.exists() and not stat.S_ISREG(path.lstat().st_mode):
         die(f"{path} exists and is not a regular file; refusing to write")
     with path.open("wb") as f:
         f.truncate(DISK)
