@@ -1,0 +1,2 @@
+ZEEOS_INSTALL_START case=erase
+ZEEOS_INSTALL_FAIL partition: no space

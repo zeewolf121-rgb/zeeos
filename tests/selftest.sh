@@ -41,4 +41,5 @@ replay serial-freeze.log fail 'boot_retry" value="1"' 'marker ZEEOS_DESKTOP_READ
 
 rm -rf "$tmp"
 bash tests/imgdiff_gate_test.sh
+bash tests/install-selftest.sh
 echo "selftest ok"
