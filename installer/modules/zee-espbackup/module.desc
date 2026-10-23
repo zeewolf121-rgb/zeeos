@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares job module (ADR-0003): back up the existing ESP before any bootloader write.
+---
+type: "job"
+name: "zee-espbackup"
+interface: "python"
+script: "main.py"
