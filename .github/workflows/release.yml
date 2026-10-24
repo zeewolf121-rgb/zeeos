@@ -39,6 +39,9 @@ jobs:
           printf 'tag=%s\nprerelease=%s\n' "$TAG" "$pre" >>"$GITHUB_OUTPUT"
   build:
     needs: guard
+    permissions:
+      contents: read
+      actions: read   # build-iso/boot-test fetch the ISO artifact through the REST API
     uses: ./.github/workflows/build-iso.yml
   publish:
     needs: [guard, build]
