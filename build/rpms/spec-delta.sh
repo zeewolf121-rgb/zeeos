@@ -27,5 +27,9 @@ case "$name" in
     sed -i -E '/^Requires:[[:space:]]+setxkbmap[[:space:]]*$/d' "$spec"
     add_release_marker
     ;;
+  sddm)
+    # Only the release marker: the X11 removal is the `--without x11` bcond in source.lock's RPMBUILD_OPTS.
+    add_release_marker
+    ;;
   *) echo "no spec delta defined for $name" >&2; exit 2 ;;
 esac

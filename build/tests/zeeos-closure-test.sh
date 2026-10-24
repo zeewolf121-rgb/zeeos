@@ -147,5 +147,19 @@ printf 'Release: 5%%{?dist}\nRequires: setxkbmap\nRequires: setxkbmap\n' >"$tmp/
 expect fail "spec delta fails on an ambiguous spec" bash "$root/build/rpms/spec-delta.sh" calamares "$tmp/dup.spec"
 expect fail "spec delta rejects an unknown package" bash "$root/build/rpms/spec-delta.sh" nosuch "$tmp/calamares.spec"
 
+# --- sddm (F3): built --without x11, and only the release marker changes ---------------------------
+expect pass "sddm source.lock names the Fedora NEVRA and builds --without x11" bash -c "
+  grep -q '^SRPM=sddm-0.21.0-13.fc44.src.rpm\$' '$root/build/rpms/sddm/source.lock' &&
+  grep -q '^RPMBUILD_OPTS=--without x11\$' '$root/build/rpms/sddm/source.lock'"
+printf 'Name: sddm\nRelease: 13%%{?dist}\n' >"$tmp/sddm.spec"
+expect pass "spec delta applies to an sddm-shaped spec" bash "$root/build/rpms/spec-delta.sh" sddm "$tmp/sddm.spec"
+expect pass "  ... release is 13.zeeos1" grep -q '^Release: 13.zeeos1%{?dist}$' "$tmp/sddm.spec"
+expect fail "sddm spec delta fails when the Release line no longer has the stock shape" bash "$root/build/rpms/spec-delta.sh" sddm "$tmp/sddm.spec"
+printf 'sddm 0:0.21.0-13.fc44.x86_64\n' >"$tmp/with-sddm.ids"
+mkdir -p "$tmp/tree2/build"; cp -R "$root/build/rpms" "$tmp/tree2/build/"
+sed -i "s/^SRPM_SHA256=.*/SRPM_SHA256=$(printf 'a%.0s' {1..64})/" "$tmp/tree2/build/rpms/sddm/source.lock"
+expect fail "stock sddm resolved without zeeos.lock fails once sddm is locked" pin_check_no_stock_rebuilds "$tmp/with-sddm.ids" "$tmp/tree2/build/rpms"
+has_msg "sddm is a ZeeOS rebuild" && ok "  ... names the package" || bad "  ... message"
+
 echo "$pass passed, $fail failed"
 [[ "$fail" == 0 ]]
