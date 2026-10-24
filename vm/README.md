@@ -27,9 +27,9 @@ baselines dir (`STEP|* X Y W H`, negative X/Y from the right/bottom edge); the t
 (channel tolerance 8). A failure sets the result to `imgdiff-gate`; junit property `imgdiff_gate` is `pass|fail|skip`.
 
 Layout check (phase-3 marker protocol): if the guest prints `ZEEOS_LAYOUT_CHECK`, the harness also requires
-`ZEEOS_LAYOUT_OK mode=windows|mac|hybrid` and `ZEEOS_RTL_OK`, in that order after the theme steps, with the same
-`THEME_TIMEOUT` and settle delay, and screenshots after each (`screenshot-<mode>.ppm`, `screenshot-rtl.ppm`).
-`ZEEOS_LAYOUT_FAIL`/`ZEEOS_RTL_FAIL` fail the cell. junit has one `boot.step` testcase per step (later steps are
+`ZEEOS_LAYOUT_OK mode=windows|mac|hybrid`, in that order after the theme steps, with the same
+`THEME_TIMEOUT` and settle delay, and screenshots after each (`screenshot-<mode>.ppm`).
+`ZEEOS_LAYOUT_FAIL` fails the cell. junit has one `boot.step` testcase per step (later steps are
 `skipped` after a failure) and a `layout_check` property. Without the announce nothing changes.
 `QEMU_BIN`/`FW_CODE`/`FW_VARS` override the emulator and firmware; `tests/selftest.sh` uses them to replay fixture
 serial logs offline.
@@ -41,3 +41,18 @@ firmware paths are probed. aarch64 SB-on needs an AAVMF vars file with keys enro
 falls back to the stock vars and is not a true Secure Boot test.
 
 `make boot-test` still needs wiring to this script (the Makefile is outside this agent's scope).
+
+Install test (P4-8, docs/phases/phase-4.md): `vm/install-test.sh` with `CASE=erase|luks|alongside|refuse-bitlocker|refuse-hibernated`
+seeds `OUT/disk.img` (`vm/install-seed.py`; the partitioned cases need gdisk, dosfstools, mtools, ntfs-3g), attaches the
+ISO and the `ZEEOS-AUTOINSTALL` preset disk, waits for `ZEEOS_INSTALL_DONE`/`_FAIL`, boots the installed disk with the
+same NVRAM vars, and checks `ZEEOS_BOOTMENU`, `ZEEOS_ROOTFS`, `ZEEOS_DESKTOP_READY`. `vm/install-checksums.py` hashes the
+pre-existing data outside the guest: whole partitions plus the disk size and both GPT copies for the refuse cases.
+For alongside it first validates the real post-install GPT (`layout`: both copies valid and identical, disk not
+truncated, ESP/MSR/Windows kept with the same type, unique GUID and start; only Windows may end earlier), then hashes
+individual ESP/NTFS files read from the partitions' current ranges. `DRY_RUN=1 vm/install-test.sh` (and
+`install-seed.py --dry-run`) prints every planned write and writes nothing; a normal run prints the same seed plan
+first. Preset transport (for #181, until the architect adds it to the plan): a raw virtio
+disk with serial `ZEEOS-AUTOINSTALL`, `key=value` lines from byte 0, NUL-padded to 1 MiB; keys `case`, `user`, `password`,
+`luks_passphrase`.
+Not yet implemented and reported as skipped in junit: typing the LUKS passphrase at boot, and the Windows Boot Manager
+NVRAM entry check. Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).

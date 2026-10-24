@@ -34,7 +34,7 @@ Out of scope for v1: bare-metal Apple Silicon (Phase 7 is a feasibility report o
   - Reuse the ESP; never format it; back it up first. Never touch Windows Boot Manager.
   - Themed GRUB/systemd-boot menu listing ZeeOS + Windows, with a default and timeout.
   - Final confirmation screen listing every disk change, plus a backup warning.
-- LUKS2 option, Arabic + English locales (RTL tested), auto-login off.
+- LUKS2 option, English locale (`en_US.UTF-8`; ZeeOS promises and tests no other language, owner decision, ADR-0009), auto-login off.
 - Intel Macs: Option-key boot; T2 Macs best effort (document requirements).
 - First-run wizard: layout mode, theme, accent, privacy.
 
@@ -134,7 +134,7 @@ Each phase closes with an integration checkpoint: merge, full suite, phase repor
 0. Architecture: base distro (Fedora vs Debian; signed shim/kernel for both archs), build tool (mkosi preferred), installer, desktop route (customized KDE Plasma 6 for v1, custom shell for v2). Create the board, labels, agents, CLAUDE.md/AGENTS.md, CI skeleton, ci-summary.sh, and the handoff template. **STOP for my approval.**
 1. Live ISO boots in QEMU for both archs; boot-test green.
 2. Wayland desktop + base theme in the live session.
-3. Full design language, layout switcher, keymaps, Arabic/RTL.
+3. Full design language, layout switcher, keymaps. (Arabic/RTL dropped by owner decision, ADR-0009.)
 4. Installer (erase / alongside / manual, LUKS2, boot menu); install-test green.
 5. Hardening, Secure Boot verified, updates, signing, UTM bundle.
 6. Polish: Plymouth, login, first-run wizard, branding, install guides. Pass the manual gate, then ship v1.0.
