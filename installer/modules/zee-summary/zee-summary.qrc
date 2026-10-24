@@ -1,0 +1,7 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file>zee-summary.qml</file>
+    </qresource>
+</RCC>
