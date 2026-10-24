@@ -4,6 +4,6 @@
 # download. It is deliberately empty until that has run: build.sh refuses to build with an empty hash.
 NAME=calamares
 SRPM=calamares-3.3.14-5.fc44.src.rpm
-SRPM_SHA256=
+SRPM_SHA256=6462fd77081b11ab2fe5d6a2b16262f54b87977a29d17bb7c1ded3cea67264c6
 # Passed to rpmbuild; none for calamares.
 RPMBUILD_OPTS=

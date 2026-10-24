@@ -99,9 +99,10 @@ if [[ "${ZEEOS_UNPINNED:-0}" != 1 && "${DRY_RUN:-0}" != 1 && "$entry" == build/b
 fi
 # ZEEOS_ENTRY lets `make pin-packages` run build/pin/resolve.sh in the same container.
 # Inside the container we are root, so build-iso.sh skips sudo (ZEEOS_IN_CONTAINER).
+# ${a[@]+"${a[@]}"}: an empty array is "unbound" under set -u in macOS's Bash 3.2.
 "${engine[@]}" run --rm --privileged \
-  "${mounts[@]}" -w /work "${envs[@]}" \
+  "${mounts[@]}" -w /work ${envs[@]+"${envs[@]}"} \
   -e SOURCE_DATE_EPOCH="$epoch" -e DRY_RUN="${DRY_RUN:-0}" -e ZEEOS_IN_CONTAINER=1 \
   -e ZEEOS_UNPINNED="${ZEEOS_UNPINNED:-0}" -e ZEEOS_CLOSURE_REBUILD="${ZEEOS_CLOSURE_REBUILD:-0}" \
   -e ZEEOS_TOOLS_PINNED="$tools_pinned" -e ZEEOS_RPMS_ONLY="${ZEEOS_RPMS_ONLY:-}" \
-  "$tag" bash -c 'git config --global --add safe.directory /work && exec bash "$@"' _ "$entry" "${args[@]}"
+  "$tag" bash -c 'git config --global --add safe.directory /work && exec bash "$@"' _ "$entry" ${args[@]+"${args[@]}"}

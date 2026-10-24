@@ -111,10 +111,22 @@ expect pass "installed-system rule: no repo shipped in overlays uses package_gpg
 
 # --- source.lock gate: never builds on a guessed or missing hash ---------------------------------
 arch="$(uname -m)"
-expect fail "build.sh refuses an empty SRPM_SHA256" bash "$root/build/rpms/build.sh" "$arch" "$tmp/o"
+# A copy of build/rpms and build/pin with the hash blanked: build.sh resolves paths from its own location.
+mkdir -p "$tmp/tree/build"; cp -R "$root/build/rpms" "$root/build/pin" "$tmp/tree/build/"
+sed -i.bak 's/^SRPM_SHA256=.*/SRPM_SHA256=/' "$tmp/tree/build/rpms/calamares/source.lock"
+expect fail "build.sh refuses an empty SRPM_SHA256" bash "$tmp/tree/build/rpms/build.sh" "$arch" "$tmp/o"
 has_msg "BLOCKED" && ok "  ... reports it as blocked" || bad "  ... message"
-expect pass "calamares source.lock names a real NEVRA, shared by both arches" bash -c "
-  grep -q '^SRPM=calamares-3.3.14-5.fc44.src.rpm\$' '$root/build/rpms/calamares/source.lock' && [[ ! -e '$root/build/arch/x86_64/rpms' ]]"
+expect pass "calamares source.lock names a real NEVRA and a sha256, shared by both arches" bash -c "
+  grep -q '^SRPM=calamares-3.3.14-5.fc44.src.rpm\$' '$root/build/rpms/calamares/source.lock' &&
+  grep -qE '^SRPM_SHA256=[0-9a-f]{64}\$' '$root/build/rpms/calamares/source.lock' && [[ ! -e '$root/build/arch/x86_64/rpms' ]]"
+
+# --- resolve guard: a ZeeOS rebuild is never pinned as Fedora's stock build -----------------------
+printf 'bash 0:5.3-1.fc44.x86_64\ncalamares 0:3.3.14-5.fc44.x86_64\n' >"$tmp/with-calamares.ids"
+printf 'bash 0:5.3-1.fc44.x86_64\ncalamares-libs-extra 0:1-1.fc44.x86_64\n' >"$tmp/without-calamares.ids"
+expect fail "stock calamares resolved without zeeos.lock fails" pin_check_no_stock_rebuilds "$tmp/with-calamares.ids" "$root/build/rpms"
+has_msg "calamares is a ZeeOS rebuild" && ok "  ... names the package" || bad "  ... message"
+expect pass "a closure without calamares passes (prefix names don't match)" pin_check_no_stock_rebuilds "$tmp/without-calamares.ids" "$root/build/rpms"
+expect pass "an unlocked source.lock (empty hash) doesn't trigger the guard" pin_check_no_stock_rebuilds "$tmp/with-calamares.ids" "$tmp/tree/build/rpms"
 
 # --- spec delta ---------------------------------------------------------------------------------
 cat >"$tmp/calamares.spec" <<'EOF'

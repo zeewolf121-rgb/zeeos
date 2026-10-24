@@ -1,4 +1,3 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Digest-pinned build container for x86_64 (ADR-0008). Written by build/container/publish.sh.
-# Empty until first published: run.sh then builds the Containerfile locally and warns.
-TOOLS_IMAGE=
+TOOLS_IMAGE=ghcr.io/zeewolf121-rgb/zeeos-build@sha256:a17d4f10290a94192bd2240657a7e78b9034337a806b88f7d9700a78a15e527e
