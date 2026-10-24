@@ -37,3 +37,7 @@ lint:
 	scripts/sync-agent-docs.sh --check
 	scripts/autopilot/selftest.sh
 	bash build/tests/zeeos-closure-test.sh
+	@for d in installer/modules/*/tests installer/tools/tests; do \
+	  if [ -d "$$d" ]; then python3 -m unittest discover -s "$$d" || exit 1; fi; \
+	done
+	@if [ -f installer/tools/zee-plan.py ]; then python3 installer/tools/zee-plan.py --mode alongside --luks >/dev/null || exit 1; fi
