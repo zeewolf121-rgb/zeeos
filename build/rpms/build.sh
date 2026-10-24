@@ -81,7 +81,9 @@ for n in "${names[@]}"; do
   while IFS= read -r f; do
     case "$(basename "$f")" in *-debuginfo-*|*-debugsource-*) continue ;; esac
     cp "$f" "$out/zeeos/"
-    evra="$(rpm -qp --qf '%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}' "$f")"
+    # %{ARCH} of an SRPM is the build arch, not "src": name source RPMs by their file suffix.
+    sfx="$(rpm -qp --qf '%{ARCH}' "$f")"; [[ "$f" == *.src.rpm ]] && sfx=src
+    evra="$(rpm -qp --qf '%{EPOCHNUM}:%{VERSION}-%{RELEASE}' "$f").$sfx"
     [[ "$evra" == *.zeeos* ]] || { echo "built $f has no .zeeos release marker" >&2; exit 1; }
     pn="$(rpm -qp --qf '%{NAME}' "$f")"
     origin=zeeos-rebuild; [[ "$f" == *.src.rpm ]] && origin=zeeos-rebuild-src
