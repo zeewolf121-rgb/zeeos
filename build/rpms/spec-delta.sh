@@ -27,5 +27,15 @@ case "$name" in
     sed -i -E '/^Requires:[[:space:]]+setxkbmap[[:space:]]*$/d' "$spec"
     add_release_marker
     ;;
+  sddm)
+    # The X11 parts go through rpmbuild --without x11 (source.lock). The spec must still gate
+    # xorg-x11-xinit on that bcond, or the option would silently stop removing it.
+    expect_one "%bcond x11" '^%bcond[[:space:]]+x11[[:space:]]'
+    expect_one "Requires: xorg-x11-xinit" '^Requires:[[:space:]]*xorg-x11-xinit[[:space:]]*$'
+    awk '/^%if %\{with x11\}/ { gated = 1; next } gated && /^Requires:[[:space:]]*xorg-x11-xinit/ { ok = 1 } { gated = 0 }
+         END { exit !ok }' "$spec" \
+      || { echo "spec delta for sddm no longer applies: Requires: xorg-x11-xinit is not under %if %{with x11}" >&2; exit 1; }
+    add_release_marker
+    ;;
   *) echo "no spec delta defined for $name" >&2; exit 2 ;;
 esac
