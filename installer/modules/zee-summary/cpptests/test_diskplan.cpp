@@ -2,7 +2,7 @@
  *
  * Unit tests for DiskPlan (no Qt, no Calamares). Run:
  *   g++ -std=c++17 -Wall -Wextra -Werror -I installer/modules/zee-summary \
- *       installer/modules/zee-summary/DiskPlan.cpp installer/modules/zee-summary/tests/test_diskplan.cpp \
+ *       installer/modules/zee-summary/DiskPlan.cpp installer/modules/zee-summary/cpptests/test_diskplan.cpp \
  *       -o /tmp/test_diskplan && /tmp/test_diskplan
  */
 #include "DiskPlan.h"

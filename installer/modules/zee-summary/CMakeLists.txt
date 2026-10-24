@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 enable_testing()
-add_executable(test_diskplan DiskPlan.cpp tests/test_diskplan.cpp)
+add_executable(test_diskplan DiskPlan.cpp cpptests/test_diskplan.cpp)
 target_include_directories(test_diskplan PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME diskplan COMMAND test_diskplan)
 

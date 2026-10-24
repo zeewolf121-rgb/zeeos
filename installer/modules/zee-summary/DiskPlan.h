@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  *
  * zee-summary (P4-6, #178, ADR-0003): groups Calamares' planned partition jobs by disk.
- * Plain C++17, no Qt and no Calamares, so it is unit-tested on its own (tests/test_diskplan.cpp).
+ * Plain C++17, no Qt and no Calamares, so it is unit-tested on its own (cpptests/test_diskplan.cpp).
  */
 #ifndef ZEE_SUMMARY_DISKPLAN_H
 #define ZEE_SUMMARY_DISKPLAN_H
