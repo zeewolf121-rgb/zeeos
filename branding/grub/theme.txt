@@ -3,7 +3,9 @@
 # Original artwork. Menu entries come from grub.cfg, never from this theme.
 title-text: ""
 desktop-image: "background.png"
-desktop-image-scale-method: "stretch"
+desktop-image-scale-method: "crop"
+desktop-image-h-align: "center"
+desktop-image-v-align: "center"
 desktop-color: "#101a30"
 terminal-font: "Noto Sans Regular 20"
 message-font: "Noto Sans Regular 20"
