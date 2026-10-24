@@ -1,0 +1,3 @@
+[    0.000000] secureboot: Secure boot enabled
+ZEEOS_INSTALL_START case=refuse-bitlocker
+ZEEOS_INSTALL_FAIL preflight: /dev/vda3 is encrypted with BitLocker
