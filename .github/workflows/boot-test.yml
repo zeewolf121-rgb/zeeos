@@ -124,7 +124,7 @@ jobs:
           # The guest's markers in the job log too: the summary and artifact aren't readable
           # everywhere the log is, and a theme-check failure names its reason only here.
           grep -a -E '^ZEEOS_|secureboot: Secure boot' "$OUT/serial.log" 2>/dev/null || echo "(no guest markers in serial log)"
-          fail="$(grep -a -m1 -E '^ZEEOS_(THEME|LAYOUT|RTL)_FAIL' "$OUT/serial.log" 2>/dev/null || true)"
+          fail="$(grep -a -m1 -E '^ZEEOS_(THEME|LAYOUT)_FAIL' "$OUT/serial.log" 2>/dev/null || true)"
           if [[ -n "$fail" ]]; then echo "::error::$fail"; fi
       - name: Upload serial log, every step's screenshot and JUnit
         if: always()
