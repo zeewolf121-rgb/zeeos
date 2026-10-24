@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name
 # release=44
 # arch=x86_64
-# resolved=2026-10-23T08:53:12Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-x86_64@sha256:8298486c0bf9dd512a9d0d3b4a71977ce9505bae963b6b6ee0fe66a0de702afa
+# resolved=2026-10-24T10:29:33Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-x86_64@sha256:6e219d310a80539323a462b323701b460d7033f3872deb39be74e4943c688361
 LibRaw 0:0.22.2-1.fc44.x86_64 a067b7e73bf950679dff4ead6b7fc8a8c1d7ca36a7d6480fc0e3d258b4bbe7a8 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.x86_64 7b0dbb4b78031a2434480c1b391711e578579b616c184095e2dc2d032f22261b ModemManager
 NetworkManager 1:1.56.1-2.fc44.x86_64 8ccdaa8da6ab019fe629bd492ad12c88bb0157608908c3e98f1008f2186a5b62 NetworkManager
@@ -144,7 +144,6 @@ glib2 0:2.88.4-1.fc44.x86_64 52d8b35294ca2bf4f19e18735645c760d7335122673e1cac007
 glibc 0:2.43-9.fc44.x86_64 594ef5114f0713bdba2a819b70e662e67321755889247ffec2bed31ad6ca4d9f glibc
 glibc-common 0:2.43-9.fc44.x86_64 3568d7e83e59a6ee97a08c8a5ecee8e435afaa74a9273042945a148845c3c733 glibc
 glibc-gconv-extra 0:2.43-9.fc44.x86_64 351d975f677d41f8e237a4fdd3f6d3ff1b4f43b0314ecb693a050724f7d72975 glibc
-glibc-langpack-ar 0:2.43-9.fc44.x86_64 1d24dec6d8fa465809e443f1121cecdb855e3e928c1cf727d52a074300b2d5db glibc
 glibc-langpack-en 0:2.43-9.fc44.x86_64 a16d442791e434e8803e27741616a302b63e670bbb6ee89de3acb305b3f08fe9 glibc
 glibc-minimal-langpack 0:2.43-9.fc44.x86_64 b9da9b984d902a5bd983c5ad700be1e8adaf36224a3713955228a1128e5c4631 glibc
 glx-utils 0:9.0.0-11.fc44.x86_64 b30fc5b7f799f14b42d01ae8b20efba1e7351a4f8aa0eb7a93e966c5ef266e5b mesa-demos
@@ -162,8 +161,6 @@ gnutls 0:3.8.13-1.fc44.x86_64 3cd4e8a10a6ff6a9e3d2bac05f4cdc7573e7d94737f7070e5b
 gobject-introspection 0:1.86.0-3.fc44.x86_64 f3cdc954f82e83c4c6af310c9b6c702ff71910a4e590a6d2d82c56dd56f036d0 gobject-introspection
 google-noto-color-emoji-fonts 0:20260921-1.fc44.noarch aa360c7ba84bd1f6c822058fe807dab2e67c7a28c5d1f8b4c1acfb8bd80360b0 google-noto-emoji-fonts
 google-noto-fonts-common 0:20251201-2.fc44.noarch 1da1dedae72ffbab654de2f5fa465d07f334e3e1929bf5967e32c53ec4d96f66 google-noto-fonts
-google-noto-naskh-arabic-vf-fonts 0:20251201-2.fc44.noarch ddeaace945c72ad55bef9dde7c28ac713f6d90f4e8b15e9710dd7e8ec8ca4df2 google-noto-fonts
-google-noto-sans-arabic-vf-fonts 0:20251201-2.fc44.noarch 38ceb33f82e020cfe487940592538fefdb32cde770e7150eb5544409ad2cf016 google-noto-fonts
 google-noto-sans-fonts 0:20251201-2.fc44.noarch d1806cb29ab8f30a91ed34dbfd84ac0e886c9962cce2815855b70132678152c1 google-noto-fonts
 google-noto-sans-mono-fonts 0:20251201-2.fc44.noarch 4abb9e17f27acc7efcc8798fd3c4a96779aea140bbd98a87a5e64835b8448b2f google-noto-fonts
 google-noto-sans-vf-fonts 0:20251201-2.fc44.noarch f1d4ddf1e251649ab1f2b8772222999b0cdc3f4ccd40aa6ad999a5f41b9e5762 google-noto-fonts
