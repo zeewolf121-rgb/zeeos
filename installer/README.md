@@ -6,6 +6,20 @@ Owner: `installer-engineer` (see docs/agents.md). Other agents: open an issue in
 
 English only. The Calamares `locale` module defaults to `en_US.UTF-8`, and the installer's own strings and branding are English. ZeeOS doesn't provision any Arabic locale or font in the installer, and no view needs an Arabic/RTL acceptance check (P4-2, P4-6 `zee-summary`, P4-9 unattended preset). Upstream Calamares translations and the language list stay as shipped; we just don't promise or test them. This scope doesn't relax anything else: the mandatory backup confirmation, the disk safeguards, LUKS2, Windows Boot Manager safety, `installer-disk` and dry-run coverage all stay.
 
+## Calamares configuration (P4-2, #176, `installer-disk`)
+
+`calamares/` is what the image installs: `settings.conf` → `/etc/calamares/settings.conf`, `calamares/modules/*.conf` → `/etc/calamares/modules/`, `calamares/branding/zeeos/` → `/etc/calamares/branding/zeeos/`, and each `modules/zee-*/` → `/usr/lib/calamares/modules/zee-*/`. Copying them into the image is image-builder's job (`build/build-iso.sh`), tracked in a follow-up issue.
+
+- Sequence: welcome, locale, keyboard, partition, users, summary; then partition, mount, unpackfs, …, live cleanup, removeuser, remove calamares, dracut, `zee-espbackup`, `zee-bootloader`, umount. Slots for `zee-preflight` (after partition), `zee-summary` (in place of summary) and `zee-bootmenu` (after `zee-bootloader`) are marked in `settings.conf`.
+- `partition`: erase / alongside / manual, LUKS2 option for the btrfs root, Fedora's layout (ESP, ext4 `/boot`, btrfs `/` with `root`/`home` subvolumes). An existing ESP is reused, never formatted.
+- `unpackfs` rsyncs the running live root (`/boot/efi/*` excluded). The live-only parts are removed on the target: SDDM and serial auto-login, the guest test units and scripts, `liveuser` and its home (removeuser), passwordless root (locked), and the `calamares` packages (ADR-0011).
+- `zee-bootloader` replaces the stock `bootloader` module, whose `grub` mode runs `grub2-install` and builds an unsigned image (ADR-0004). It copies Fedora's signed shim + GRUB into `\EFI\fedora\` only (refusing a non-empty one) and writes the GRUB stub, then runs `grub2-mkconfig`. It never writes `\EFI\Microsoft\` or `\EFI\BOOT\`. The NVRAM entry is `zee-bootmenu` (P4-7).
+- `keyboard`: `useLocale1: true`, `configure.kwin: false`, no setxkbmap (ADR-0011).
+- **Dry run:** `python3 installer/tools/zee-plan.py [--mode erase|alongside|manual] [--luks]` checks the disk-safety rules on the shipped config and prints every planned disk operation. It opens no disk. Each `zee-*` job also honours `zeeDryRun` / `ZEE_DRY_RUN=1`.
+- Tests: `python3 -m unittest discover -s installer/tools/tests` (needs PyYAML) and `python3 -m unittest discover -s installer/modules/zee-bootloader/tests`.
+
 ## Modules
+
+- `modules/zee-bootloader/` (#176, `installer-disk`): Fedora's signed shim + GRUB into `\EFI\fedora\`, GRUB stub, `grub2-mkconfig`. Dry run via `zeeDryRun` or `ZEE_DRY_RUN=1`.
 
 - `modules/zee-espbackup/` (#177, `installer-disk`): Calamares job that tars the existing ESP to `/var/lib/zeeos/esp-backup-<UTC>.tar` on the target, with a SHA-256 manifest, before any bootloader write. Reads the ESP only; dry run via globalstorage `zeeDryRun` or `ZEE_DRY_RUN=1`. Tests: `python3 -m unittest discover -s installer/modules/zee-espbackup/tests`.

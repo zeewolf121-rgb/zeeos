@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ZeeOS branding for Calamares (P4-2). Original assets only (rule 2); English strings (ADR-0009).
+---
+componentName: zeeos
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 900px,620px
+windowPlacement: center
+sidebar: widget
+navigation: widget
+
+strings:
+  productName: "ZeeOS"
+  shortProductName: "ZeeOS"
+  version: "1"
+  shortVersion: "1"
+  versionedName: "ZeeOS 1"
+  shortVersionedName: "ZeeOS 1"
+  bootloaderEntryName: "ZeeOS"
+  productUrl: ""
+  supportUrl: ""
+  knownIssuesUrl: ""
+  releaseNotesUrl: ""
+  donateUrl: ""
+
+images:
+  productLogo: "zeeos-logo.svg"
+  productIcon: "zeeos-logo.svg"
+  productWelcome: "zeeos-logo.svg"
+
+slideshow: "show.qml"
+slideshowAPI: 2
+
+style:
+  SidebarBackground: "#1b1e2b"
+  SidebarText: "#ffffff"
+  SidebarTextCurrent: "#ffffff"
+  SidebarBackgroundCurrent: "#3d6df2"
+
+uploadServer:
+  type: "none"
