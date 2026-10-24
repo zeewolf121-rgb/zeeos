@@ -12,4 +12,5 @@
       <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
     </source>
   </repository>
+  <!-- @ZEEOS_REPO@: build-iso.sh adds the zeeos-rebuild repo here when out/zeeos holds a ZeeOS rebuild (ADR-0011) -->
 </image>

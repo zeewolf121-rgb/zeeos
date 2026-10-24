@@ -42,7 +42,17 @@ fi
 # Tools (ADR-0008): use the digest-pinned per-arch image once published; else build locally, unpinned.
 # shellcheck source=build/arch/x86_64/tools-image.lock
 source "$root/build/arch/$arch/tools-image.lock"
-if [[ -n "${TOOLS_IMAGE:-}" && "${ZEEOS_LOCAL_TOOLS:-0}" != 1 ]]; then
+# ZeeOS RPM rebuilds (ADR-0011) end up in a lock, so the pin is a prerequisite, not a warning:
+# without TOOLS_IMAGE they run only when the developer opts in, and the result is marked unpinned.
+tools_pinned=0
+if [[ -n "${TOOLS_IMAGE:-}" && "${ZEEOS_LOCAL_TOOLS:-0}" != 1 ]]; then tools_pinned=1; fi
+if [[ "${ZEEOS_ENTRY:-}" == build/rpms/* && "$tools_pinned" != 1 && "${ZEEOS_ALLOW_UNPINNED_TOOLS:-0}" != 1 ]]; then
+  echo "BLOCKED: build/arch/$arch/tools-image.lock has no TOOLS_IMAGE (or ZEEOS_LOCAL_TOOLS=1). Publish the tools image natively" >&2
+  echo "  on $arch ('build/container/publish.sh $arch'), or set ZEEOS_ALLOW_UNPINNED_TOOLS=1 for a development-only build" >&2
+  echo "  whose RPMs cannot be locked." >&2
+  exit 1
+fi
+if (( tools_pinned )); then
   "${engine[@]}" pull -q "$TOOLS_IMAGE" >/dev/null
   tag="$TOOLS_IMAGE"
 # Opt-in cache hooks for the local build (the tag pins only the base image, not the
@@ -77,7 +87,8 @@ fi
 # Package closure (ADR-0008): pulled on the host (podman login lives there) and mounted read-only.
 # ZEEOS_CLOSURE_REBUILD=1 instead lets the container rebuild it from the lock (writable mount).
 envs=()
-if [[ "${ZEEOS_UNPINNED:-0}" != 1 && "${DRY_RUN:-0}" != 1 ]]; then
+entry="${ZEEOS_ENTRY:-build/build-iso.sh}"
+if [[ "${ZEEOS_UNPINNED:-0}" != 1 && "${DRY_RUN:-0}" != 1 && "$entry" == build/build-iso.sh ]]; then
   closure="$root/out/closure-$arch"
   if [[ "${ZEEOS_CLOSURE_REBUILD:-0}" == 1 ]]; then
     rm -rf "$closure"; mkdir -p "$closure"; mounts+=(-v "$closure:/closure")
@@ -87,10 +98,10 @@ if [[ "${ZEEOS_UNPINNED:-0}" != 1 && "${DRY_RUN:-0}" != 1 ]]; then
   envs+=(-e ZEEOS_CLOSURE_DIR=/closure)
 fi
 # ZEEOS_ENTRY lets `make pin-packages` run build/pin/resolve.sh in the same container.
-entry="${ZEEOS_ENTRY:-build/build-iso.sh}"
 # Inside the container we are root, so build-iso.sh skips sudo (ZEEOS_IN_CONTAINER).
 "${engine[@]}" run --rm --privileged \
   "${mounts[@]}" -w /work "${envs[@]}" \
   -e SOURCE_DATE_EPOCH="$epoch" -e DRY_RUN="${DRY_RUN:-0}" -e ZEEOS_IN_CONTAINER=1 \
   -e ZEEOS_UNPINNED="${ZEEOS_UNPINNED:-0}" -e ZEEOS_CLOSURE_REBUILD="${ZEEOS_CLOSURE_REBUILD:-0}" \
-  "$tag" bash -c 'git config --global --add safe.directory /work && exec "$@"' _ "$entry" "${args[@]}"
+  -e ZEEOS_TOOLS_PINNED="$tools_pinned" -e ZEEOS_RPMS_ONLY="${ZEEOS_RPMS_ONLY:-}" \
+  "$tag" bash -c 'git config --global --add safe.directory /work && exec bash "$@"' _ "$entry" "${args[@]}"

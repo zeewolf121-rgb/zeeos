@@ -27,7 +27,8 @@ for pkg in "$root"/branding/wallpapers/*/metadata.json; do
   cp -a "$(dirname "$pkg")" "$desc/root/usr/share/wallpapers/"
 done
 # Escape a value for use inside an XML attribute and as a sed replacement (| delimiter).
-xml_sed() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; v="${v//</&lt;}"; printf '%s' "$v" | sed 's/[\\&|]/\\&/g'; }
+xml_esc() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; printf '%s' "${v//</&lt;}"; }
+xml_sed() { xml_esc "$1" | sed 's/[\\&|]/\\&/g'; }
 # kiwi resolves file:// includes against its cwd, not the description dir: make the path absolute.
 sed -i "s|<include from=\"file://|<include from=\"file://$(xml_sed "$desc")/|" "$desc/config.xml"
 # Package source (ADR-0008). Default: the closure repo built from packages.lock is the ONLY repo.
@@ -36,7 +37,12 @@ lock="$src/packages.lock"
 unpinned=0
 if [[ "${ZEEOS_UNPINNED:-0}" == 1 ]]; then
   unpinned=1
+  # shellcheck source=build/pin/lib.sh
+  source "$root/build/pin/lib.sh"
   cp "$src/repos-unpinned.xml" "$desc/repos.xml"
+  # A local `make rpms` result (unsigned, development only) joins the live mirrors.
+  zdir=""; [[ ! -f "$out/zeeos/repodata/repomd.xml" ]] || zdir="$(xml_esc "$out/zeeos")"
+  pin_inject_zeeos_repo "$desc/repos.xml" "$zdir"
   echo "WARNING: ZEEOS_UNPINNED=1: building from live Fedora mirrors; the output is NOT reproducible" >&2
 else
   closure="${ZEEOS_CLOSURE_DIR:-$out/closure}"
@@ -46,7 +52,31 @@ else
     fi
     [[ -f "$closure/repodata/repomd.xml" ]] || { echo "no closure repo in $closure" >&2; exit 1; }
   fi
+  # shellcheck source=build/pin/lib.sh
+  source "$root/build/pin/lib.sh"
+  zdir=""
+  if pin_lock_has_zeeos "$lock"; then
+    zdir="$closure/zeeos"
+    if [[ "${DRY_RUN:-0}" != 1 ]]; then
+      if [[ "${ZEEOS_CLOSURE_REBUILD:-0}" == 1 ]]; then
+        # Explicit rebuild (ADR-0011): identities must match the lock; bytes may differ. Only the
+        # locked files are staged into the closure.
+        rm -rf "$out/rpms-rebuild" "$zdir"; mkdir -p "$zdir"
+        ZEEOS_RPMS_CHECK=1 bash "$root/build/rpms/build.sh" "$arch" "$out/rpms-rebuild"
+        while read -r n evra _; do cp "$out/rpms-rebuild/zeeos/$(pin_rpm_file "$n" "$evra")" "$zdir/"
+        done < <(pin_lock_lines "$lock" zeeos-rebuild; pin_lock_lines "$lock" zeeos-rebuild-src)
+        createrepo_c --quiet "$zdir"
+        pin_verify_zeeos "$lock" "$zdir" identity-only || { echo "ZeeOS rebuild does not match $lock" >&2; exit 1; }
+      else
+        # Fail closed BEFORE kiwi: the zeeos-rebuild repo has no RPM signature check (ADR-0011 interim).
+        pin_verify_zeeos "$lock" "$zdir" || { echo "ZeeOS RPMs in $zdir do not match $lock; refusing to build" >&2; exit 1; }
+        [[ -f "$zdir/repodata/repomd.xml" ]] || { echo "no zeeos repo metadata in $zdir" >&2; exit 1; }
+      fi
+    fi
+  fi
   sed "s|@CLOSURE_DIR@|$(xml_sed "$closure")|" "$src/repos-pinned.xml" >"$desc/repos.xml"
+  [[ -z "$zdir" ]] || zdir="$(xml_esc "$zdir")"
+  pin_inject_zeeos_repo "$desc/repos.xml" "$zdir"
 fi
 rm -f "$desc/repos-pinned.xml" "$desc/repos-unpinned.xml"
 echo "staged description in $desc (SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH, unpinned=$unpinned)"

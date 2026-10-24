@@ -26,8 +26,9 @@ try() {   # try <url> <dest> <sha256>: download, keep only if the hash matches
 }
 
 declare -A want=()
-while read -r n evra sha src; do
+while read -r n evra sha src origin; do
   [[ -n "$n" && "$n" != '#'* ]] || continue
+  [[ -z "$origin" ]] || continue   # zeeos-rebuild lines come from build/rpms/build.sh, never from Fedora
   f="$(pin_rpm_file "$n" "$evra")"; want[$f]=1; dest="$dir/$f"
   if [[ -f "$dest" && "$(sha256sum "$dest" | cut -d' ' -f1)" == "$sha" ]]; then continue; fi
   rm -f "$dest"
