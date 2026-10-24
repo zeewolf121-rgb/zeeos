@@ -16,4 +16,7 @@ Theme=breeze
 # Animation speed (P3-5): factor on durations, below 1 is faster.
 AnimationDurationFactor=0.75
 LookAndFeelPackage=org.zeeos.hybrid
+# Quick Settings Theme (Light/Dark/Automatic) offers these instead of stock Breeze (#188).
+DefaultLightLookAndFeel=org.zeeos.light
+DefaultDarkLookAndFeel=org.zeeos.dark
 widgetStyle=Breeze

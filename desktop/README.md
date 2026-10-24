@@ -66,6 +66,9 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
   magnification yet); buttons left (close, min, max).
 - hybrid (default): top panel (Global Menu, tray, clock) plus a floating bottom panel (Kickoff, centered Icons-only
   Task Manager); buttons left. `etc/xdg/kdeglobals` sets `LookAndFeelPackage=org.zeeos.hybrid`.
+- `org.zeeos.light` and `org.zeeos.dark`: colour-scheme-only global themes (no layout or wallpaper).
+  `etc/xdg/kdeglobals` sets `DefaultLightLookAndFeel` and `DefaultDarkLookAndFeel` to them so Quick Settings Theme
+  offers ZeeOSLight and ZeeOSDark (#188). Not yet verified on a booted guest.
 - `org.zeeos.base` stays as the defaults reference. Keymaps and switching belong to `zee-layout` (P3-3).
 - Not verified in a guest yet: the layout scripts are untested until the boot-test CI run shows the hybrid panels.
 

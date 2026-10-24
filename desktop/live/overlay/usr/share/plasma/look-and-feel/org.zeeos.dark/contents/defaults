@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Colour-scheme-only global theme for Quick Settings Theme. No layout, wallpaper or button order,
+# so picking it keeps the current org.zeeos.<mode> layout.
+[kdeglobals][General]
+ColorScheme=ZeeOSDark
+
+[kdeglobals][KDE]
+widgetStyle=Breeze
