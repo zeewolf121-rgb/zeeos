@@ -39,10 +39,17 @@ def run():
         return ("UEFI required", "zee-bootloader: ZeeOS installs on UEFI systems only.")
     esp_mount = gs.value("efiSystemPartition") or "/boot/efi"
     partitions = gs.value("partitions")
-    # Fedora's stub points at /boot; without a separate /boot (manual layouts) it points at /.
-    boot_uuid = mounted_uuid(partitions, "/boot") or mounted_uuid(partitions, "/")
-    if mounted_uuid(partitions, esp_mount) is None or not boot_uuid:
-        return ("Missing partitions", "zee-bootloader: no ESP or no /boot / root partition.")
+    # Fedora's stub loads ($dev)/grub2/grub.cfg, which is only right for a separate /boot. ZeeOS
+    # always uses one (guided layouts create it; with LUKS2 root it must exist, GRUB can't read
+    # argon2), so a manual layout without /boot is refused here instead of installing an unbootable
+    # system (a root-relative prefix would also need the Btrfs subvolume path).
+    boot_uuid = mounted_uuid(partitions, "/boot")
+    if mounted_uuid(partitions, esp_mount) is None:
+        return ("Missing partitions", "zee-bootloader: no EFI system partition is mounted.")
+    if not boot_uuid:
+        return ("Separate /boot required",
+                "zee-bootloader: ZeeOS needs a separate, unencrypted /boot partition. "
+                "Add one in manual partitioning.")
     dry = bool(gs.value("zeeDryRun")) or os.environ.get("ZEE_DRY_RUN") == "1"
     try:
         shimgrub.install(
