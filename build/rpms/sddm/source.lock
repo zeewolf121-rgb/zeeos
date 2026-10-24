@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Fedora SRPM that ZeeOS rebuilds for sddm (ADR-0011 F3). Shared by both arches.
+# SRPM_SHA256 is written by 'make rpms-source-lock RPM=sddm ARCH=<arch>' from the real, Fedora-signed
+# download. It is deliberately empty until that has run: build.sh refuses to build with an empty hash.
+NAME=sddm
+SRPM=sddm-0.21.0-13.fc44.src.rpm
+SRPM_SHA256=644dd505e52e94547b52715ef4257f178ff5c12e408db7870cb41557e28c61cb
+# Fedora's own bcond for RHEL 10: drops the xorg-x11-xinit (setxkbmap) dependency.
+RPMBUILD_OPTS=--without x11

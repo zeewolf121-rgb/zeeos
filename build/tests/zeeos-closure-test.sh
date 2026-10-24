@@ -146,6 +146,24 @@ expect fail "spec delta fails when Fedora already dropped the Requires (delta no
 printf 'Release: 5%%{?dist}\nRequires: setxkbmap\nRequires: setxkbmap\n' >"$tmp/dup.spec"
 expect fail "spec delta fails on an ambiguous spec" bash "$root/build/rpms/spec-delta.sh" calamares "$tmp/dup.spec"
 expect fail "spec delta rejects an unknown package" bash "$root/build/rpms/spec-delta.sh" nosuch "$tmp/calamares.spec"
+# sddm (F3): X11 goes via rpmbuild --without x11, so the spec must keep xinit behind that bcond.
+cat >"$tmp/sddm.spec" <<'EOF'
+%bcond x11 %[%{undefined rhel} || 0%{?rhel} < 10]
+Name:           sddm
+Release:        13%{?dist}
+%if %{with x11}
+Requires: xorg-x11-xinit
+%endif
+EOF
+cp "$tmp/sddm.spec" "$tmp/sddm-orig.spec"
+expect pass "sddm spec delta applies to an sddm-shaped spec" bash "$root/build/rpms/spec-delta.sh" sddm "$tmp/sddm.spec"
+expect pass "  ... release marked, xinit still gated on the x11 bcond" bash -c "
+  grep -q '^Release:        13.zeeos1%{?dist}\$' '$tmp/sddm.spec' && grep -q '^%if %{with x11}\$' '$tmp/sddm.spec'"
+sed '/^%if %{with x11}$/d; /^%endif$/d' "$tmp/sddm-orig.spec" >"$tmp/sddm-ungated.spec"
+expect fail "sddm spec delta fails when xinit is no longer behind the x11 bcond" bash "$root/build/rpms/spec-delta.sh" sddm "$tmp/sddm-ungated.spec"
+expect pass "sddm source.lock builds --without x11 and names a real NEVRA" bash -c "
+  grep -q '^SRPM=sddm-0.21.0-13.fc44.src.rpm\$' '$root/build/rpms/sddm/source.lock' &&
+  grep -q '^RPMBUILD_OPTS=--without x11\$' '$root/build/rpms/sddm/source.lock'"
 
 echo "$pass passed, $fail failed"
 [[ "$fail" == 0 ]]
