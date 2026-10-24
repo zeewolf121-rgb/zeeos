@@ -3,6 +3,17 @@
 <!-- Shared package set: minimal base plus the live Plasma desktop (Wayland only). Arch packages live in build/arch/<arch>/. -->
 <image>
 <packages type="image">
+  <!-- Phase 4 installer (P4-1, #175). calamares is the ZeeOS rebuild without setxkbmap (ADR-0011):
+       lock it with `pin-packages -f build_rpms=true`; a plain refresh fails closed. Names checked
+       with Fedora 44 dnf5 repoquery. Disk/ESP tools stay explicit, not desktop side effects. -->
+  <package name="calamares"/>
+  <package name="os-prober"/>
+  <package name="ntfs-3g"/>
+  <package name="ntfsprogs"/>
+  <package name="cryptsetup"/>
+  <package name="parted"/>
+  <package name="dosfstools"/>
+  <package name="efibootmgr"/>
   <package name="basesystem"/>
   <package name="bash"/>
   <package name="coreutils"/>
