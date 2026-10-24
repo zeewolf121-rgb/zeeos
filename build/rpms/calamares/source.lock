@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Fedora SRPM that ZeeOS rebuilds for calamares (ADR-0011). Shared by both arches.
+# SRPM_SHA256 is written by 'make rpms-source-lock RPM=calamares ARCH=<arch>' from the real, Fedora-signed
+# download. It is deliberately empty until that has run: build.sh refuses to build with an empty hash.
+NAME=calamares
+SRPM=calamares-3.3.14-5.fc44.src.rpm
+SRPM_SHA256=
+# Passed to rpmbuild; none for calamares.
+RPMBUILD_OPTS=

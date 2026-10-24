@@ -19,8 +19,62 @@ pin_identities() {
     print $1, e ":" $3 "-" $4 "." $5 }' | LC_ALL=C sort -u
 }
 
-# Identities of a lock file (sha256 and source columns dropped).
-pin_lock_identities() { grep -v '^#' "$1" | awk 'NF >= 3 { print $1, $2 }' | LC_ALL=C sort -u; }
+# Lock columns: name evra sha256 source-rpm-name [origin]. A missing origin means Fedora's own RPM.
+# ZeeOS rebuilds (ADR-0011) carry origin "zeeos-rebuild" (binary) or "zeeos-rebuild-src" (their SRPM).
+# Identities of a lock file (sha256, source and origin columns dropped). SRPMs are not installable
+# packages, so they never count as an identity.
+pin_lock_identities() { grep -v '^#' "$1" | awk 'NF >= 3 && $5 != "zeeos-rebuild-src" { print $1, $2 }' | LC_ALL=C sort -u; }
+
+# Lock lines with origin $2 ("fedora" matches lines without an origin column).
+pin_lock_lines() {
+  grep -v '^#' "$1" | awk -v o="$2" 'NF >= 3 { x = ($5 == "" ? "fedora" : $5); if (x == o) print }'
+}
+
+# True when the lock has at least one ZeeOS-rebuilt line (binary or source).
+pin_lock_has_zeeos() { [[ -n "$(pin_lock_lines "$1" zeeos-rebuild)$(pin_lock_lines "$1" zeeos-rebuild-src)" ]]; }
+
+# Repository block for the ZeeOS rebuilds in <dir> (ADR-0011 interim trust model): no RPM signature
+# check here. pin_verify_zeeos must have passed first. Fedora's repo keeps package_gpgcheck="true".
+pin_zeeos_repo_xml() {
+  printf '  <repository type="rpm-md" alias="zeeos-rebuild" priority="1" package_gpgcheck="false" repository_gpgcheck="false">\n'
+  printf '    <source path="dir://%s"/>\n  </repository>\n' "$1"
+}
+
+# Replace the @ZEEOS_REPO@ placeholder line in <repos.xml> with the zeeos-rebuild repo for <dir>,
+# or remove it when <dir> is empty (nothing ZeeOS-built in the closure).
+pin_inject_zeeos_repo() {
+  local xml="$1" dir="${2:-}" block=""
+  [[ -z "$dir" ]] || block="$(pin_zeeos_repo_xml "$dir")"
+  ZB="$block" awk '/@ZEEOS_REPO@/ { if (ENVIRON["ZB"] != "") print ENVIRON["ZB"]; next } { print }' "$xml" >"$xml.new" && mv "$xml.new" "$xml"
+}
+
+# Fail closed unless <dir> holds exactly the ZeeOS-rebuilt RPMs the lock names, byte for byte.
+# Checks: every locked file exists and matches its sha256; nothing unlocked sits in <dir>; a rebuilt
+# package carries the ".zeeos" release marker and shares no name with a Fedora line (no mixed NEVRA).
+# Usage: pin_verify_zeeos <lock> <dir> [identity-only]   (identity-only skips sha256, for ZEEOS_CLOSURE_REBUILD)
+pin_verify_zeeos() {
+  local lock="$1" dir="$2" idonly="${3:-}" bad=0 n evra sha origin f got
+  local -A want=() fed=()
+  while read -r n _; do fed[$n]=1; done < <(pin_lock_lines "$lock" fedora)
+  while read -r n evra sha _ origin; do
+    f="$(pin_rpm_file "$n" "$evra")"; want[$f]=1
+    if [[ "$evra" != *.zeeos* ]]; then
+      echo "zeeos: $n $evra has no .zeeos release marker" >&2; bad=1
+    fi
+    if [[ "$origin" == zeeos-rebuild && -n "${fed[$n]:-}" ]]; then
+      echo "zeeos: $n is locked both as a Fedora and as a zeeos-rebuild package" >&2; bad=1
+    fi
+    if [[ ! -f "$dir/$f" ]]; then echo "zeeos: missing $f" >&2; bad=1; continue; fi
+    [[ -n "$idonly" ]] && continue
+    got="$(sha256sum "$dir/$f" | cut -d' ' -f1)"
+    [[ "$got" == "$sha" ]] || { echo "zeeos: $f sha256 $got does not match the lock ($sha)" >&2; bad=1; }
+  done < <(pin_lock_lines "$lock" zeeos-rebuild; pin_lock_lines "$lock" zeeos-rebuild-src)
+  for f in "$dir"/*.rpm; do
+    [[ -e "$f" ]] || continue
+    [[ -n "${want[$(basename "$f")]:-}" ]] || { echo "zeeos: $(basename "$f") is not in the lock" >&2; bad=1; }
+  done
+  return "$bad"
+}
 
 # Lock body without the header, for semantic comparison (the timestamp must not count).
 pin_lock_body() { grep -v '^#' "$1" | LC_ALL=C sort; }
