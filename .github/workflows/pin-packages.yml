@@ -4,6 +4,7 @@
 # (e.g. #80's); the daily run refreshes main through a rolling PR. The publish step's
 # anonymous-pull check fails until the owner makes the ghcr.io/<owner>/zeeos-closure-* packages
 # public once. GITHUB_TOKEN pushes trigger no CI, so the commit job dispatches lint and build-iso.
+# Dispatch with publish_tools=true to also publish and pin the build/tools image (#221).
 name: pin-packages
 on:
   workflow_dispatch:
@@ -12,6 +13,11 @@ on:
         description: branch to commit the locks to (default main → rolling PR)
         required: false
         default: main
+      publish_tools:
+        description: also build, push and pin the build/tools image natively per arch (build/container/publish.sh)
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: '41 3 * * *'
 permissions:
@@ -63,6 +69,15 @@ jobs:
         env:
           TOKEN: ${{ github.token }}
         run: echo "$TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+      # Opt-in only (never on the daily schedule): the tools image is the pinned build container
+      # that `make rpms` (ADR-0011) refuses to run without. Built natively on this runner's arch;
+      # writes tools-image.lock and tools.lock, which the commit job picks up from the artifact.
+      # Its anonymous-pull check fails until the owner makes ghcr.io/<owner>/zeeos-build public once.
+      - name: Publish the tools image
+        if: inputs.publish_tools == true
+        env:
+          ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
+        run: build/container/publish.sh ${{ matrix.arch }}
       - name: Resolve, fetch and publish
         env:
           ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
