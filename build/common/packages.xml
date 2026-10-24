@@ -56,9 +56,6 @@
   <!-- Phase 3 (P3-1, #127): checked in Fedora 44 via mdapi.fedoraproject.org on 2026-10-20. -->
   <package name="kde-gtk-config"/>                      <!-- GTK3 dark-mode sync with Plasma (#118) -->
   <package name="unity-gtk3-module"/>                   <!-- GTK3 menus over DBusMenu for the Global Menu -->
-  <package name="glibc-langpack-ar"/>                   <!-- ar_EG.UTF-8 for the RTL step (P3-6) -->
-  <package name="google-noto-sans-arabic-vf-fonts"/>    <!-- Arabic UI font (OFL-1.1) -->
-  <package name="google-noto-naskh-arabic-vf-fonts"/>   <!-- Arabic text font (OFL-1.1) -->
   <!-- Exclude Fedora branding at install time (dnf exclude), not <packages type="uninstall">:
        uninstall also removes every package depending on them, which took plasma-workspace and
        the plasma.desktop session with it (#98, run 39057784343). generic-logos provides
