@@ -4,7 +4,8 @@
 # (e.g. #80's); the daily run refreshes main through a rolling PR. The publish step's
 # anonymous-pull check fails until the owner makes the ghcr.io/<owner>/zeeos-closure-* packages
 # public once. GITHUB_TOKEN pushes trigger no CI, so the commit job dispatches lint and build-iso.
-# Dispatch with publish_tools=true to also publish and pin the build/tools image (#221).
+# Dispatch with publish_tools=true to also publish and pin the build/tools image (#221), and with
+# build_rpms=true to rebuild the ADR-0011 RPMs natively first so the closure carries them.
 name: pin-packages
 on:
   workflow_dispatch:
@@ -15,6 +16,11 @@ on:
         default: main
       publish_tools:
         description: also build, push and pin the build/tools image natively per arch (build/container/publish.sh)
+        type: boolean
+        required: false
+        default: false
+      build_rpms:
+        description: rebuild the ZeeOS RPMs (make rpms, ADR-0011) natively per arch before resolving
         type: boolean
         required: false
         default: false
@@ -78,6 +84,12 @@ jobs:
         env:
           ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
         run: build/container/publish.sh ${{ matrix.arch }}
+      # Opt-in only: rebuilds every build/rpms/<name> natively (needs the pinned tools image) and
+      # leaves out/<arch>/zeeos + zeeos.lock, which resolve.sh stages as the closure's zeeos/ repo.
+      # Without it, resolve.sh fails closed if a rebuilt package would resolve as Fedora's stock RPM.
+      - name: Rebuild the ZeeOS RPMs
+        if: inputs.build_rpms == true
+        run: make rpms ARCH=${{ matrix.arch }}
       - name: Resolve, fetch and publish
         env:
           ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
@@ -89,8 +101,19 @@ jobs:
             build/arch/${{ matrix.arch }}/packages.lock
             build/arch/${{ matrix.arch }}/tools-image.lock
             build/arch/${{ matrix.arch }}/tools.lock
+            build/arch/${{ matrix.arch }}/rpms-buildroot/
           if-no-files-found: error
           retention-days: 7
+      # The rebuilt RPMs as build evidence, also when no package in packages.xml uses them yet.
+      - uses: actions/upload-artifact@v6
+        if: inputs.build_rpms == true
+        with:
+          name: zeeos-rpms-${{ matrix.arch }}
+          path: |
+            out/${{ matrix.arch }}/zeeos/
+            out/${{ matrix.arch }}/zeeos.lock
+          if-no-files-found: error
+          retention-days: 30
   commit:
     needs: resolve
     runs-on: ubuntu-24.04
@@ -117,6 +140,9 @@ jobs:
             for f in packages.lock tools-image.lock tools.lock; do
               [[ -f "locks/lock-$a/$f" ]] && cp "locks/lock-$a/$f" "build/arch/$a/$f"
             done
+            if [[ -d "locks/lock-$a/rpms-buildroot" ]]; then
+              mkdir -p "build/arch/$a/rpms-buildroot"; cp locks/lock-"$a"/rpms-buildroot/*.lock "build/arch/$a/rpms-buildroot/"
+            fi
           done
           # Stage first: on the first run the locks are untracked, and plain `git diff` ignores those.
           git add -A -- build/arch
