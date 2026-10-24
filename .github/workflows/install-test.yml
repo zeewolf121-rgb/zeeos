@@ -1,0 +1,146 @@
+# Install tests (P4-W, docs/phases/phase-4.md): the Phase 4 exit criterion. For every case the
+# installer runs unattended from the ISO onto a seeded disk (vm/install-test.sh, P4-8), the installed
+# system boots from that disk, and the pre-existing data is checked from outside the guest.
+# Runs after every successful build-iso on main (the ISO comes from that run), or by hand against a
+# given build-iso run. Secure Boot is on for every case. Case (b) and the refuse cases are x86_64 only.
+name: install-test
+on:
+  workflow_run:
+    workflows: [build-iso]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: build-iso run whose iso-<arch> artifacts to install (default the latest green one on main)
+        required: false
+permissions:
+  contents: read
+  actions: read   # read the build-iso run's ISO artifacts
+concurrency:
+  group: install-test-${{ github.event.workflow_run.id || inputs.run_id || 'latest' }}
+  cancel-in-progress: false
+jobs:
+  source:
+    if: >-
+      vars.AUTOPILOT == 'on' && (github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    outputs:
+      run_id: ${{ steps.r.outputs.run_id }}
+    steps:
+      - id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_RUN: ${{ github.event.workflow_run.id }}
+          INPUT_RUN: ${{ inputs.run_id }}
+        run: |
+          id="${EVENT_RUN:-$INPUT_RUN}"
+          if [[ -z "$id" ]]; then
+            id="$(gh run list -R "$GITHUB_REPOSITORY" --workflow build-iso.yml --branch main --status success \
+              --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::no build-iso run to install from"; exit 1; }
+          echo "run_id=$id" >>"$GITHUB_OUTPUT"
+          echo "Installing the ISOs from build-iso run $id" >>"$GITHUB_STEP_SUMMARY"
+  install:
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, case: erase }
+          - { arch: x86_64, case: alongside }
+          - { arch: x86_64, case: luks }
+          - { arch: x86_64, case: refuse-bitlocker }
+          - { arch: x86_64, case: refuse-hibernated }
+          - { arch: aarch64, case: erase }
+          - { arch: aarch64, case: luks }
+    name: install (${{ matrix.arch }}, ${{ matrix.case }})
+    # aarch64 runs on the owner's self-hosted Mac (HVF), as boot-test does; x86_64 on GitHub's KVM runner.
+    runs-on: ${{ matrix.arch == 'aarch64' && fromJSON('["self-hosted", "macOS", "ARM64", "zeeos-aarch64"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    env:
+      ARCH: ${{ matrix.arch }}
+      CASE: ${{ matrix.case }}
+      SECUREBOOT: 'on'
+      OUT: out/install-test/${{ matrix.arch }}-${{ matrix.case }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install QEMU, UEFI firmware and disk tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends qemu-system-x86 ovmf ipxe-qemu qemu-utils python3 \
+            gdisk dosfstools mtools ntfs-3g
+      - name: Enable KVM
+        if: runner.os == 'Linux'
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm.rules >/dev/null
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          else
+            echo "no /dev/kvm on this runner; QEMU falls back to TCG"
+          fi
+      # Same pinned AAVMF build as boot-test.yml (Homebrew's QEMU has no aarch64 Secure Boot firmware).
+      - name: AArch64 UEFI firmware (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo /opt/homebrew/bin >>"$GITHUB_PATH"; export PATH="/opt/homebrew/bin:$PATH"
+          fw="$RUNNER_TEMP/aavmf"; mkdir -p "$fw"
+          podman run --rm -v "$fw:/o" docker.io/library/ubuntu:24.04 sh -c 'apt-get update -qq &&
+            apt-get install -yqq --no-install-recommends qemu-efi-aarch64 >/dev/null &&
+            cp /usr/share/AAVMF/AAVMF_CODE.ms.fd /usr/share/AAVMF/AAVMF_VARS.ms.fd /o/'
+          (cd "$fw" && shasum -a 256 -c) <<'SUMS' || { echo "::error::AAVMF changed upstream; check it and update the pinned hashes"; exit 1; }
+          d37119b2c1173ecdc88d09c00848842fdf575899403b7549a5b51f06766c20d6  AAVMF_CODE.ms.fd
+          bdd5b6f03eecf9b18e395925012764c9100cdcf164a0e5aa4373017d3d75534b  AAVMF_VARS.ms.fd
+          SUMS
+          { echo "FW_CODE=$fw/AAVMF_CODE.ms.fd"; echo "FW_VARS=$fw/AAVMF_VARS.ms.fd"; } >>"$GITHUB_ENV"
+      - name: Download the ISO (parallel)
+        id: fetch
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/fetch-artifact.sh "${{ needs.source.outputs.run_id }}" "iso-${{ matrix.arch }}" "out/${{ matrix.arch }}/image"
+      - name: Download the ISO
+        if: steps.fetch.outcome != 'success'
+        uses: actions/download-artifact@v6
+        with:
+          name: iso-${{ matrix.arch }}
+          path: out/${{ matrix.arch }}/image
+          run-id: ${{ needs.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Install, reboot from disk, check
+        run: |
+          iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
+          [[ -n "$iso" ]] || { echo "::error::no ISO in iso-$ARCH artifact"; exit 1; }
+          ISO="$iso" vm/install-test.sh
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### install $ARCH $CASE (Secure Boot on)"
+            echo '```'; grep -a -h -E '^ZEEOS_' "$OUT"/serial-*.log 2>/dev/null | head -n 40 || echo "(no guest markers)"; echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          fail="$(grep -a -h -m1 -E '^ZEEOS_INSTALL_FAIL' "$OUT"/serial-*.log 2>/dev/null || true)"
+          if [[ -n "$fail" ]]; then echo "::error::$fail"; fi
+      - name: Upload serial logs, checksums and JUnit
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: install-${{ matrix.arch }}-${{ matrix.case }}
+          path: |
+            ${{ env.OUT }}/serial-*.log
+            ${{ env.OUT }}/checksums-*.json
+            ${{ env.OUT }}/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+  # One status for the whole matrix (the Phase 4 exit check).
+  install-test:
+    needs: install
+    if: always() && needs.install.result != 'skipped'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          [[ "${{ needs.install.result }}" == success ]] || { echo "::error::install matrix: ${{ needs.install.result }}"; exit 1; }
+          echo "all install cases passed"
