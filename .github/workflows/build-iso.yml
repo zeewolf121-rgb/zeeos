@@ -10,6 +10,7 @@ on:
   workflow_call:
 permissions:
   contents: read
+  actions: read   # boot-test.yml downloads the ISO artifact through the REST API
 jobs:
   changes:
     runs-on: ubuntu-24.04

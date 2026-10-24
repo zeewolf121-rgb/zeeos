@@ -7,6 +7,7 @@ on:
   workflow_call:
 permissions:
   contents: read
+  actions: read   # scripts/fetch-artifact.sh reads this run's artifact through the REST API
 jobs:
   selftest:
     name: Boot harness fixture self-tests
@@ -79,7 +80,16 @@ jobs:
           SUMS
           if [[ "$SB" == on ]]; then code=AAVMF_CODE.ms.fd vars=AAVMF_VARS.ms.fd; else code=AAVMF_CODE.no-secboot.fd vars=AAVMF_VARS.fd; fi
           { echo "FW_CODE=$fw/$code"; echo "FW_VARS=$fw/$vars"; } >>"$GITHUB_ENV"
+      # Parallel range download: the artifact blob throttles each connection (the self-hosted Mac
+      # got ~0.1 MB/s per stream, hours for one ISO). Falls back to download-artifact on any failure.
+      - name: Download the ISO (parallel)
+        id: fetch
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/fetch-artifact.sh "${{ github.run_id }}" "iso-${{ matrix.arch }}" "out/${{ matrix.arch }}/image"
       - name: Download the ISO
+        if: steps.fetch.outcome != 'success'
         uses: actions/download-artifact@v6
         with:
           name: iso-${{ matrix.arch }}
