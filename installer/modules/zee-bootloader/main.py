@@ -8,7 +8,6 @@ in shimgrub.py. Dry run: globalstorage key `zeeDryRun` true, or ZEE_DRY_RUN=1.
 from __future__ import annotations
 
 import os
-import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -51,7 +50,6 @@ def run():
             Path(root + esp_mount),
             Path(root),
             boot_uuid=boot_uuid,
-            arch=platform.machine(),
             dry_run=dry,
             log=libcalamares.utils.debug,
             run=target_run,

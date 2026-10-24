@@ -56,7 +56,6 @@ class ShimGrubTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def install(self, **kw):
-        kw.setdefault("arch", "x86_64")
         kw.setdefault("log", lambda m: None)
         kw.setdefault("run", lambda cmd, root: self.calls.append((cmd, root)))
         return shimgrub.install(self.source, self.esp, self.root, boot_uuid=UUID, **kw)
@@ -102,17 +101,17 @@ class ShimGrubTest(unittest.TestCase):
             self.install()
         self.assertEqual(tree_digest(self.esp), before)
 
-    def test_aarch64_needs_aa64_names(self):
+    def test_aarch64_names_need_no_arch_setting(self):
+        for f in self.source.iterdir():
+            f.unlink()
         with self.assertRaises(FileNotFoundError):
-            self.install(arch="aarch64")
+            shimgrub.plan_files(self.source)
         write(self.source, {"shimaa64.efi": b"MZ", "grubaa64.efi": b"MZ"})
-        names = shimgrub.plan_files(self.source, "aarch64")
-        self.assertIn("shimaa64.efi", names)
-        self.assertIn("grubaa64.efi", names)
+        self.assertEqual(shimgrub.plan_files(self.source), ["grubaa64.efi", "shimaa64.efi"])
 
     def test_bad_uuid_rejected(self):
         with self.assertRaises(ValueError):
-            shimgrub.install(self.source, self.esp, self.root, boot_uuid="a b", arch="x86_64",
+            shimgrub.install(self.source, self.esp, self.root, boot_uuid="a b",
                              log=lambda m: None, run=lambda c, r: None)
 
     def test_cli_dry_run(self):

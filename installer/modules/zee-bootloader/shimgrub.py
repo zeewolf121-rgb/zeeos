@@ -29,10 +29,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 VENDOR_DIR = "EFI/fedora"  # relative to the ESP; the only directory this job writes
-SIGNED = {
-    "x86_64": ("shimx64.efi", "grubx64.efi"),
-    "aarch64": ("shimaa64.efi", "grubaa64.efi"),
-}
+# Architecture-neutral: the live system's RPMs only ship the running architecture's binaries.
+REQUIRED_PREFIXES = ("shim", "grub")  # at least one <prefix>*.efi each
 # Also copied when present: MokManager / fallback and the shim CSV (all from the same RPMs).
 OPTIONAL_PREFIXES = ("mm", "BOOT", "shim")
 STUB = (
@@ -43,18 +41,19 @@ STUB = (
 )
 
 
-def plan_files(source: Path, arch: str) -> list[str]:
-    """Names to copy from source: the arch's shim + grub (required) and the optional extras."""
-    if arch not in SIGNED:
-        raise ValueError(f"unsupported architecture {arch!r}")
+def plan_files(source: Path) -> list[str]:
+    """Names to copy from source: the shim + grub binaries (required) and the optional extras."""
     if not source.is_dir():
         raise FileNotFoundError(f"no signed boot files at {source}")
     names = sorted(p.name for p in source.iterdir() if p.is_file() and not p.is_symlink())
-    missing = [n for n in SIGNED[arch] if n not in names]
+    efi = [n for n in names if n.lower().endswith(".efi")]
+    missing = [f"{x}*.efi" for x in REQUIRED_PREFIXES if not any(n.startswith(x) for n in efi)]
     if missing:
         raise FileNotFoundError(f"{source} lacks {', '.join(missing)} (Fedora shim/grub2-efi RPMs)")
-    keep = set(SIGNED[arch])
-    keep |= {n for n in names if n.startswith(OPTIONAL_PREFIXES) and n.lower().endswith((".efi", ".csv"))}
+    keep = {
+        n for n in names
+        if n.startswith(REQUIRED_PREFIXES + OPTIONAL_PREFIXES) and n.lower().endswith((".efi", ".csv"))
+    }
     return sorted(keep)
 
 
@@ -64,7 +63,6 @@ def install(
     target_root: Path,
     *,
     boot_uuid: str,
-    arch: str,
     dry_run: bool = False,
     log: Callable[[str], None] = print,
     run: Callable[[list[str], Path], None] | None = None,
@@ -81,7 +79,7 @@ def install(
             f"{dest} already exists and is not empty (another Fedora-based install?); "
             "refusing to overwrite its boot files"
         )
-    names = plan_files(source, arch)
+    names = plan_files(source)
     ops = [f"mkdir {dest}"]
     ops += [f"copy {source / n} -> {dest / n}" for n in names]
     ops.append(f"write {dest / 'grub.cfg'} (stub: /boot UUID {boot_uuid})")
@@ -109,13 +107,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--boot-uuid", required=True)
-    ap.add_argument("--arch", default="x86_64", choices=sorted(SIGNED))
     ap.add_argument("source", type=Path)
     ap.add_argument("esp", type=Path)
     ap.add_argument("target_root", type=Path)
     a = ap.parse_args(argv)
     try:
-        install(a.source, a.esp, a.target_root, boot_uuid=a.boot_uuid, arch=a.arch, dry_run=a.dry_run)
+        install(a.source, a.esp, a.target_root, boot_uuid=a.boot_uuid,dry_run=a.dry_run)
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         print(f"zee-bootloader: {e}", file=sys.stderr)
         return 1
