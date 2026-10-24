@@ -102,3 +102,17 @@ pin_check_signatures() {
   if grep -qv 'signatures OK' <<<"$out"; then echo "$out" | grep -v 'signatures OK' >&2; rm -rf "$db"; return 1; fi
   rm -rf "$db"
 }
+
+# pin_check_no_stock_rebuilds <resolved.ids> <rpms-dir>: fails if a package with a locked
+# <rpms-dir>/<name>/source.lock (a ZeeOS rebuild, ADR-0011) was resolved without its rebuild.
+pin_check_no_stock_rebuilds() {
+  local ids="$1" sl name rc=0
+  for sl in "$2"/*/source.lock; do
+    if [[ ! -f "$sl" ]] || ! grep -qE '^SRPM_SHA256=[0-9a-f]{64}$' "$sl"; then continue; fi
+    name="$(basename "$(dirname "$sl")")"
+    if grep -q "^$name " "$ids"; then
+      echo "$name is a ZeeOS rebuild but only Fedora's build was resolved (no zeeos.lock)" >&2; rc=1
+    fi
+  done
+  return "$rc"
+}

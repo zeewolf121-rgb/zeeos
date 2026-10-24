@@ -24,6 +24,13 @@ fi
 ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
 pin_identities <"$out/resolved.list" >"$out/resolved.ids"
 [[ -s "$out/resolved.ids" ]] || { echo "kiwi resolved no packages" >&2; exit 1; }
+# Fail closed: a package ZeeOS rebuilds (a locked build/rpms/<name>/source.lock) must never be
+# pinned as Fedora's stock build, e.g. calamares with setxkbmap (ADR-0011). Without zeeos.lock
+# kiwi only saw Fedora, so stop instead of silently locking the stock RPM.
+if [[ ! -f "$zl" ]]; then
+  pin_check_no_stock_rebuilds "$out/resolved.ids" "$PIN_ROOT/build/rpms" \
+    || { echo "  run 'make rpms ARCH=$arch' before 'make pin-packages'" >&2; exit 1; }
+fi
 # Split: identities that are ZeeOS rebuilds come from $out/zeeos, everything else from Fedora.
 : >"$out/zeeos.ids"
 if [[ -f "$zl" ]]; then
