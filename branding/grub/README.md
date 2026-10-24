@@ -3,10 +3,18 @@
 Original dark background and selection tiles, with high-contrast text and a layout designed for 800×600
 and larger displays. No third-party icons or logo artwork. Noto Sans is redistributed under OFL-1.1;
 its upstream copyright and license are in `LICENSES/OFL-1.1.txt`. All text is ASCII so the generated
-font subset covers every theme label. Arabic boot labels need a wider font subset and separate RTL
-validation; this theme does not claim Arabic shaping support.
+font subset covers every theme label. Per the owner's #200 decision and ADR-0009, keep the ASCII
+PF2 subset. The installer-owned boot-menu work (#179) must keep generated entry titles and messages
+ASCII too; user-supplied non-ASCII labels are not covered by these fonts. No Arabic/RTL support is claimed.
 
 ![800×600 design mockup, illustrative entries](preview-800x600.png)
+
+![1600×900 design mockup, illustrative entries](preview-1600x900.png)
+
+The 1600×1200 background is center-cropped to the display's aspect ratio before proportional scaling.
+At 1600×900 this removes 150 pixels from each of the top and bottom edges; at 800×600 the entire source
+is scaled by one half. Text and menu layout stay anchored to screen percentages. Both previews use
+the actual `background.png` with the same crop geometry, rather than regenerating artwork at each size.
 
 The previews are **design mockups**, not screenshots from GRUB. Entries are illustrative: the theme
 only displays entries already supplied by `grub.cfg`. It never adds a Windows entry or changes the

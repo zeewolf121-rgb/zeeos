@@ -26,9 +26,25 @@ def background(width: int, height: int) -> Image.Image:
     return image
 
 
+def crop_background(source: Image.Image, width: int, height: int) -> Image.Image:
+    # Match GRUB's centered crop: trim the source to the destination aspect ratio,
+    # then scale proportionally. Integer divisions match bitmap_scale.c.
+    sw, sh = source.size
+    if sw * height < width * sh:
+        cropped_height = sw * height // width
+        top = (sh - cropped_height) // 2
+        source = source.crop((0, top, sw, top + cropped_height))
+    else:
+        cropped_width = sh * width // height
+        left = (sw - cropped_width) // 2
+        source = source.crop((left, 0, left + cropped_width, sh))
+    return source.resize((width, height), Image.Resampling.BILINEAR)
+
+
 def preview(width: int, height: int) -> None:
     # A design mockup, not a GRUB screenshot. Keep positions aligned with theme.txt.
-    image = background(width, height)
+    with Image.open(ROOT / "background.png") as source:
+        image = crop_background(source, width, height)
     draw = ImageDraw.Draw(image)
     def label(x: int, y: int, text: str, size: int, color: str) -> None:
         draw.text((x, y), text, font=ImageFont.truetype(str(FONT), size), fill=color)
