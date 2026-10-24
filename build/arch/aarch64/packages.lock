@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name [origin: zeeos-rebuild | zeeos-rebuild-src]
 # release=44
 # arch=aarch64
-# resolved=2026-10-24T17:48:40Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:a683c4903c862eb77120bc4ed65f742ed00a715b88ac0cea7d2c0c8e5f1d9785
+# resolved=2026-10-24T18:23:47Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:2d3dae00e936564a2757540ae11369ce76eeb0891e03748834922c08f7e0aefb
 LibRaw 0:0.22.2-1.fc44.aarch64 e92b9744b717843d7028ea5e9dfc9fbf1641c7dbf9d43e63345087ad41a08793 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.aarch64 bfac5045a95b38089bf606e56fed9b3f030011eb1837004ec6b5aa83f871d322 ModemManager
 NetworkManager 1:1.56.1-2.fc44.aarch64 2417739e89469a05c597ce6d087090c1960d10c46cfca97f786fc670db4c31df NetworkManager
@@ -50,9 +50,9 @@ bzip2-libs 0:1.0.8-23.fc44.aarch64 6871bba7501f21e96ce6b4baf39ca9eaa457e74336f32
 ca-certificates 0:2026.2.92_v9.0.319-2.fc44.noarch ce1202707eb5df4bb506202c94f4fdc948a51ab044e7f7ead3ddd5e54dd8bde5 ca-certificates
 cairo 0:1.18.6-1.fc44.aarch64 466633fe2f7b75546071380cca5d2f16d10125ef80026621be3ec438ae30e84e cairo
 cairo-gobject 0:1.18.6-1.fc44.aarch64 85800ee3b84520056c789fdae41b6ef0afe30a2bffdbd5430c3a592a738a768b cairo
-calamares 0:3.3.14-5.zeeos1.fc44.aarch64 f2b5271c1b3d4df6bf64a240f6b5787da1bd631b38d5e36c26ac9d6dc54e5460 calamares zeeos-rebuild
-calamares 0:3.3.14-5.zeeos1.fc44.src b1c828436040c86923483b51dce83c2954e0e2ffd5afc19d14915b1fbf217fbf calamares zeeos-rebuild-src
-calamares-libs 0:3.3.14-5.zeeos1.fc44.aarch64 e3274c67f97e0bbf5671478e78e6fa52acc686422213e243fbb749cadf7ea25f calamares zeeos-rebuild
+calamares 0:3.3.14-5.zeeos1.fc44.aarch64 11157a7f496fc83e570755058b6fca4b534a5c17a387305332eeb6123a720b9f calamares zeeos-rebuild
+calamares 0:3.3.14-5.zeeos1.fc44.src 942db4f7d38e6ecf2c45c8d0d7acf73cd01e750927ee251c48eacc22a2d03363 calamares zeeos-rebuild-src
+calamares-libs 0:3.3.14-5.zeeos1.fc44.aarch64 53d494bbb22ec32d918d6227f98de86b915f7816ecc153097a45340cde2f2a48 calamares zeeos-rebuild
 cdparanoia-libs 0:10.2-50.fc44.aarch64 b9438205664c985df6d80f8076dad618666cd5ae051353ccd40d91d1bb720f4a cdparanoia
 cjson 0:1.7.19-1.fc44.aarch64 e2d71f6d3f16881bfe1378ed4143a7e775342c050cf809cf1d2000c19d0d5f21 cjson
 cmake-filesystem 0:4.3.0-1.fc44.aarch64 e301a6f0ccc9c6bfd93223767f4924df5d0bd9073bb4dd312ea194ab9452690d cmake
@@ -153,7 +153,6 @@ glib2 0:2.88.4-1.fc44.aarch64 d0071970d49f7a5851f4e4b828c316cd14f5ee9e3d0aa9de5e
 glibc 0:2.43-9.fc44.aarch64 e650d99736f270179024cbf73bb603613a5e79f44e1c57779cb098c9dc3fb343 glibc
 glibc-common 0:2.43-9.fc44.aarch64 0db971a6145b9fa8a6ddc3809df08fed872aeaf7303a0b838f0a5039268e4892 glibc
 glibc-gconv-extra 0:2.43-9.fc44.aarch64 6e79333db969927384e52a8e9f6c2082f761d3b4c9a5e7b1e7031dbd47bb2f1e glibc
-glibc-langpack-ar 0:2.43-9.fc44.aarch64 78594186dd1b1bc02bd1b7c604877dfb5990144cb221388d5a77478253042c20 glibc
 glibc-langpack-en 0:2.43-9.fc44.aarch64 4b2940b118fa1d711e1bc5e17722d45070ff5f8bf039da453ec090b4601f0289 glibc
 glibc-minimal-langpack 0:2.43-9.fc44.aarch64 4bb4f0df14eb7150b53bde7045b062fc8944af576e0de00b34024c1d84fece0a glibc
 glx-utils 0:9.0.0-11.fc44.aarch64 11e85732e87c1ea98175a98b309a24388e420163be502b469fe156c5e3fb563b mesa-demos
@@ -171,8 +170,6 @@ gnutls 0:3.8.13-1.fc44.aarch64 45ba27b248c7901dcab3a6b56bd3b11bd71fd48f83de4f148
 gobject-introspection 0:1.86.0-3.fc44.aarch64 a5db16f0cd858b656c5b18ce11b2251b3f4791a945b635426a3bec825d4e74b9 gobject-introspection
 google-noto-color-emoji-fonts 0:20260921-1.fc44.noarch aa360c7ba84bd1f6c822058fe807dab2e67c7a28c5d1f8b4c1acfb8bd80360b0 google-noto-emoji-fonts
 google-noto-fonts-common 0:20251201-2.fc44.noarch 1da1dedae72ffbab654de2f5fa465d07f334e3e1929bf5967e32c53ec4d96f66 google-noto-fonts
-google-noto-naskh-arabic-vf-fonts 0:20251201-2.fc44.noarch ddeaace945c72ad55bef9dde7c28ac713f6d90f4e8b15e9710dd7e8ec8ca4df2 google-noto-fonts
-google-noto-sans-arabic-vf-fonts 0:20251201-2.fc44.noarch 38ceb33f82e020cfe487940592538fefdb32cde770e7150eb5544409ad2cf016 google-noto-fonts
 google-noto-sans-fonts 0:20251201-2.fc44.noarch d1806cb29ab8f30a91ed34dbfd84ac0e886c9962cce2815855b70132678152c1 google-noto-fonts
 google-noto-sans-mono-fonts 0:20251201-2.fc44.noarch 4abb9e17f27acc7efcc8798fd3c4a96779aea140bbd98a87a5e64835b8448b2f google-noto-fonts
 google-noto-sans-vf-fonts 0:20251201-2.fc44.noarch f1d4ddf1e251649ab1f2b8772222999b0cdc3f4ccd40aa6ad999a5f41b9e5762 google-noto-fonts
@@ -607,8 +604,8 @@ openexr-libs 0:3.2.4-7.fc44.aarch64 c2d5926085dbdcba1677b7d939e57996e081805688e2
 openjpeg 0:2.5.4-3.fc44.aarch64 13e3899697b2b266944910652d5bc36a7756d3249107026512d80fd3996f8227 openjpeg
 openldap 0:2.6.15-1.fc44.aarch64 901dd880e79fc967d05b7d64ea455a9431c4ac14d001f9a99a139e3c57056cba openldap
 openpgm 0:5.3.128-6.fc44.aarch64 83dde52603a53222d87b0bf8f1235731c346d05e29772a96af7073207762f8dc openpgm
-openssh 0:10.2p1-14.fc44.aarch64 bed53ec13ffe30eb579b4afb58538d3e00c2ed3d384fa0ca6e07fb5e0f050f8b openssh
-openssh-clients 0:10.2p1-14.fc44.aarch64 900b2188a90153fe6bd5b389fdfcd2f7452bc446a31cd36f150cbfa0da6569ba openssh
+openssh 0:10.2p1-16.fc44.aarch64 a1adb7e89893f6a746b427bd4a97e64545e35f91ddefd6e3fd30e3b33a236590 openssh
+openssh-clients 0:10.2p1-16.fc44.aarch64 6fd4631bdbf8cfc6ef901b9a8c8a7af967e7a315f8ce43af1ea8f918a8e69434 openssh
 openssl-libs 1:3.5.9-1.fc44.aarch64 d3c8baef97c15128677618ba2b805b21605c866fc70979a8f0d4e9a33674db00 openssl
 openxr-libs 0:1.1.65-1.fc44.aarch64 2bc71461e58a3a6018a2d3b2bac3d092bafa029311acf85097c9cbb264713a43 openxr
 opus 0:1.6-2.fc44.aarch64 9c47674868ef3d3cc2c98d28046f9e35d50e8efc0f24f75b451a6b60b4286d8b opus
@@ -684,7 +681,7 @@ perl-podlators 1:6.0.2-522.fc44.noarch 7a39e84ec4086da1b274a1e22736285f1c0ee962c
 perl-vars 0:1.05-525.fc44.noarch 00b9cdf3896a00caaacfe4d1c65875affb62bd9f3f60b0adaf4c8ec0e1bcf8a2 perl
 pinentry 0:1.3.2-3.fc44.aarch64 9ad310e1748202029de1bf0203e44a85872c3dc16a679e544cb6b8c8cb596a87 pinentry
 pinentry-gnome3 0:1.3.2-3.fc44.aarch64 d95c2c3daff0c711904ecd58fd68b7ac75c8f1a2d40b9c1dfd6dc3c2f7d1749a pinentry
-pipewire-libs 0:1.6.9-1.fc44.aarch64 c62c7e2174eb6dfd0a4a326cf2e1425c1b546e04d3eba8f840fe4c257f353e7c pipewire
+pipewire-libs 0:1.6.10-1.fc44.aarch64 9a86979fbd1a5165b802cf6bcef49314ea2efc957702a9271f5607cc6cac9670 pipewire
 pixman 0:0.46.2-3.fc44.aarch64 00996153606c697cabff8c869ec2765589d7e1c65322a7f39aa9de4d4f0d32c9 pixman
 pkgconf 0:2.5.1-1.fc44.aarch64 41a7aefd39b8471e8011fdd53378ecf5b0b7f5a30a9110aebad5c0b68341096e pkgconf
 pkgconf-m4 0:2.5.1-1.fc44.noarch 5b45fb58dec26385b34f937b2917608abd66d531eb7d78a878e8ed426c65eff5 pkgconf
@@ -768,7 +765,8 @@ samba-common 2:4.24.7-1.fc44.noarch 4aa912394bd2f185648aa9f3e452abf9656b5960895b
 samba-core-libs 2:4.24.7-1.fc44.aarch64 10fe88735694064f0ce39e7a477108f1c967a9ca09f8b325acc8f4dd03d07329 samba
 samba-ndr-libs 2:4.24.7-1.fc44.aarch64 96df33d440e0ff957a5ad19fa6a4a93d3e9875a4aa18599e3ef135697e6d2704 samba
 sdbus-cpp 0:2.2.1-2.fc44.aarch64 d2cf0958195f61cd9a75c4aefbe6f667d4bd9e45da5ef2bf8d7c6c2da6c1c1ee sdbus-cpp
-sddm 0:0.21.0-13.fc44.aarch64 af11e6912b61ef63b6a5b8fdedb195150c1c5844f5c9f25f201166b96c0f81cd sddm
+sddm 0:0.21.0-13.zeeos1.fc44.aarch64 f84da5a2187e416840b2945e70c2b4bd23d00e7f30ffd116804596caa3f3987b sddm zeeos-rebuild
+sddm 0:0.21.0-13.zeeos1.fc44.src 3e3633ac00d8c61e4f79e6faac516cfef24de476a4d09a7768e14cf76ab9cc70 sddm zeeos-rebuild-src
 sddm-breeze 0:6.7.5-1.fc44.noarch 8ef337e50adf9d58acb59a25970ac30183535379b743af52ed4e463ffd6d70a0 plasma-desktop
 sddm-wayland-plasma 0:6.7.5-1.fc44.noarch 39af43b7857fddc9661f3a04f9167cae7233aba2aea29ea1a7bc7449dddae65e plasma-workspace
 sdl2-compat 0:2.32.74-1.fc44.aarch64 108880687764492ec4d4276d42e1359113d13e4d70051df510d96cf88f4c2244 sdl2-compat
@@ -777,7 +775,6 @@ selinux-policy 0:44.11-1.fc44.noarch a7bafbe77f1c4991d164827074456e25cb8b75987de
 selinux-policy-targeted 0:44.11-1.fc44.noarch b6f9af608cb52f46602095278b91b051a93c4e1a08ee46b226815ca4e976f7aa selinux-policy
 serd 0:0.32.8-1.fc44.aarch64 aa52d8034192c77f56821bb9afc2fa86ccc2968cdf82eefd5c7bde1d35c76bb4 serd
 setup 0:2.15.0-28.fc44.noarch 55d58325996df10b4be2f1a9b963dbec3cea3099e43f9f4295eea6e8adfaf7b8 setup
-setxkbmap 0:1.3.4-7.fc44.aarch64 cecb1573e0fa224195df49c1c38462eae8f973d44c2f4bfdc9888d469a338b90 setxkbmap
 sgml-common 0:0.6.3-68.fc44.noarch 3693bf4245754c217488ab5f4ef0d1d321c8f61c9c9fd91402e51fcbbb4d3188 sgml-common
 shadow-utils 2:4.19.0-7.fc44.aarch64 e2499ad798f4eb76d97725b5da82609dfe5d5ce4142d2716534d67b88282f40e shadow-utils
 shared-mime-info 0:2.4-3.fc44.aarch64 ead849bb45fdfe349e19e6f044b49e3a51056f80a83ecf9143b3657c4d86bafa shared-mime-info
@@ -845,15 +842,11 @@ xdg-utils 0:1.2.1-5.fc44.noarch ba9fbbadf1eb8026cdab12b9545e4f4ddb13b652365703b3
 xevd-libs 0:0.5.0-6.fc44.aarch64 d18ebca7f4d706f10eaab8402b4bfd26ad1cd3d87a82e99265c6b8143622ffc3 xevd
 xeve-libs 0:0.5.1-6.fc44.aarch64 cbd42587ddaea7a20db78e4a9bfce97d67c7b31594203c3f6187ad3326162858 xeve
 xfsprogs 0:7.1.1-1.fc44.aarch64 366e2a9ed06bc1c2d7da6549a4d636aa50dbb7bd3911bf89e52a13b8d077fb42 xfsprogs
-xhost 0:1.0.9-11.fc44.aarch64 8a4f8c9780b4d523b388d6164a1adac92956efda5e6609125ee07e30fcf79b08 xhost
 xkbcomp 0:1.5.0-2.fc44.aarch64 b7856e86e4bde32eea6274d80f85d02cde39a7bd7464613a98299ab69db53356 xkbcomp
 xkeyboard-config 0:2.47-1.fc44.noarch 9f8656378173b895203e8ea66227b23087dd494b031b274ef88090812c257a54 xkeyboard-config
 xmessage 0:1.0.7-8.fc44.aarch64 c5ce03e99ae1d8064b77ee4e5a3be72abfe0454495e56e88cfdad46b8238bbb4 xmessage
 xml-common 0:0.6.3-68.fc44.noarch a5ac9f1028fca4218e90d23f379567a8e62a35be668f4cc4760f0189f7fe59fd sgml-common
-xmodmap 0:1.0.11-10.fc44.aarch64 8adda3140d31d9141457bda10329b9fdd0906b820589cb1922310a215beab0fa xmodmap
 xorg-x11-server-Xwayland 0:24.1.14-1.fc44.aarch64 64055ed45cca1c82be11361117ebc246ee206922ab6b647fbd2f7a9e1c076225 xorg-x11-server-Xwayland
-xorg-x11-xauth 1:1.1.5-1.fc44.aarch64 946e1643e49d4eb9a30a976979fbef876de2b3349d566f7cf035f831d2144b53 xorg-x11-xauth
-xorg-x11-xinit 0:1.4.3-4.fc44.aarch64 6c0d43c911b56c828316da065741ccbeff4e2a7a831f545c8290584e48b1d160 xorg-x11-xinit
 xprop 0:1.2.8-5.fc44.aarch64 f3aa4fcb950f824309dc2485540d2b6cb116b3c5df8048c50c6c3cc581963ab8 xprop
 xrdb 0:1.2.2-7.fc44.aarch64 4ab03bc46db6495890c4092d509b1bd630a59614ef34fa7229ceb601a3d61380 xrdb
 xvidcore 0:1.3.7-19.fc44.aarch64 97b183f812e6a7bad147d113bc86027f0a20a95eceaa0f57240326e620d2707c xvidcore
