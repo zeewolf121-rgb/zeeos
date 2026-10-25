@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares job module (P4-9): marks the unattended sequence as finished.
+---
+type: "job"
+name: "zee-autodone"
+interface: "python"
+script: "main.py"
