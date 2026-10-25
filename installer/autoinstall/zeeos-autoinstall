@@ -34,6 +34,9 @@ CASES = ("erase", "luks", "alongside", "refuse-bitlocker", "refuse-hibernated")
 KEYS = ("case", "user", "password", "luks_passphrase")
 SHARE = Path("/usr/share/zeeos/autoinstall")
 MODULES = Path("/usr/lib/calamares/modules")
+# `calamares -c DIR` overrides the whole application-data dir, and Calamares 3.3.14 then requires
+# DIR/qml at startup (FATAL otherwise), so the temporary config links the packaged QML in.
+QML = Path("/usr/share/calamares/qml")
 RUN = Path("/run/zeeos-autoinstall")
 TIMEOUT = int(os.environ.get("ZEE_AUTOINSTALL_TIMEOUT", "5400"))
 USER_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,30}$")
@@ -120,6 +123,8 @@ def setup_problems() -> list[str]:
         probs.append(f"{SHARE}/settings.conf is missing")
     if not shutil.which("calamares"):
         probs.append("calamares is not installed")
+    if not QML.is_dir():
+        probs.append(f"{QML} is missing; calamares -c needs <dir>/qml")
     return probs
 
 
@@ -137,6 +142,7 @@ def config_dir() -> Path:
     brand = Path("/etc/calamares/branding/zeeos")
     if brand.is_dir():
         (cfg / "branding" / "zeeos").symlink_to(brand)
+    (cfg / "qml").symlink_to(QML)  # setup_problems() has checked that it exists
     return cfg
 
 

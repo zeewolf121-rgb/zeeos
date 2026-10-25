@@ -23,6 +23,33 @@ loader.exec_module(ai)
 GOOD = b"case=erase\nuser=zee\npassword=pw1\nluks_passphrase=lp\n"
 
 
+class CalamaresConfigDir(unittest.TestCase):
+    """`calamares -c DIR` makes DIR the app-data dir, and Calamares 3.3.14 aborts without DIR/qml."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        t = Path(self.tmp.name)
+        self.saved = (ai.RUN, ai.SHARE, ai.QML)
+        ai.RUN, ai.SHARE, ai.QML = t / "run", t / "share", t / "qml"
+        ai.SHARE.mkdir()
+        (ai.SHARE / "settings.conf").write_text("sequence: []\n")
+
+    def tearDown(self):
+        ai.RUN, ai.SHARE, ai.QML = self.saved
+        self.tmp.cleanup()
+
+    def test_missing_qml_is_a_setup_problem(self):
+        self.assertTrue(any("qml" in p for p in ai.setup_problems()))
+
+    def test_config_dir_links_packaged_qml(self):
+        ai.QML.mkdir()
+        cfg = ai.config_dir()
+        self.assertTrue((cfg / "qml").is_symlink())
+        self.assertEqual((cfg / "qml").resolve(), ai.QML.resolve())
+        self.assertTrue((cfg / "settings.conf").is_file())
+        self.assertFalse(any("qml" in p for p in ai.setup_problems()))
+
+
 class Preset(unittest.TestCase):
     def test_nul_padded(self):
         p = ai.parse_preset(GOOD + b"\0" * 4096 + b"case=luks\n")
