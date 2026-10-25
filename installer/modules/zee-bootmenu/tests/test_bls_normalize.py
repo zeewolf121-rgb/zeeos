@@ -64,6 +64,28 @@ class BlsNormalize(unittest.TestCase):
     def test_no_fstab_leaves_entries_alone(self):
         self.assertEqual(bootmenu.bls_edits(self.root, None), {})
 
+    def test_title_names_zeeos(self):
+        (self.root / "etc/fstab").write_text(FSTAB)
+        new = bootmenu.bls_edits(self.root, None)[self.entry]
+        self.assertIn(f"title ZeeOS ({VER})\n", new)
+        self.assertNotIn("Fedora Linux", new)
+
+
+class GrubCmdline(unittest.TestCase):
+    """kiwi's /etc/default/grub has the live arguments; grub2-mkconfig copies them into the entries."""
+    KIWI = 'GRUB_CMDLINE_LINUX="rd.live.image console=tty0 console=ttyAMA0"\n'
+
+    def test_live_args_dropped_without_console(self):
+        v = bootmenu.grub_values(self.KIWI, False)
+        self.assertEqual(v["GRUB_CMDLINE_LINUX"], "console=tty0 console=ttyAMA0")
+
+    def test_live_args_dropped_and_console_applied(self):
+        v = bootmenu.grub_values(self.KIWI, False, ["console=tty0", "console=ttyAMA0,115200"])
+        self.assertEqual(v["GRUB_CMDLINE_LINUX"], "console=tty0 console=ttyAMA0,115200")
+
+    def test_clean_cmdline_untouched_without_console(self):
+        self.assertNotIn("GRUB_CMDLINE_LINUX", bootmenu.grub_values('GRUB_CMDLINE_LINUX="rhgb quiet"\n', False))
+
 
 if __name__ == "__main__":
     unittest.main()

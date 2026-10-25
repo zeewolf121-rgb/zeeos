@@ -164,7 +164,9 @@ def bls_normalize(text: str, root: tuple[str, str | None]) -> str:
     out = []
     for line in lines:
         key = line.split(None, 1)[:1]
-        if key == ["linux"]:
+        if key == ["title"]:
+            line = f"title ZeeOS ({ver})"  # the image's entry says "Fedora Linux"
+        elif key == ["linux"]:
             line = f"linux /vmlinuz-{ver}"
         elif key == ["initrd"]:
             line = f"initrd /initramfs-{ver}.img"
@@ -207,9 +209,15 @@ def grub_values(old: str, theme: bool, console: list[str] | None = None) -> dict
         values["GRUB_THEME"] = "/" + THEME_DEST + "/theme.txt"
         m = re.search(r"^GRUB_TERMINAL_OUTPUT=[\"']?([^\"'\n]*)", old, re.M)
         values["GRUB_TERMINAL_OUTPUT"] = "gfxterm serial" if m and "serial" in m.group(1) else "gfxterm"
+    # kiwi's /etc/default/grub carries the live ISO's arguments (rd.live.image, console=), and
+    # grub2-mkconfig copies GRUB_CMDLINE_LINUX into every BLS entry (seen live on the installed
+    # system), so they are always dropped here, not only when a console is requested.
+    cur = re.findall(r"^GRUB_CMDLINE_LINUX=([\"']?)(.*?)\1[ \t]*$", old, re.M)
+    current = cur[-1][1] if cur else ""
+    cmdline = " ".join(t for t in current.split() if not t.startswith(LIVE_ARGS))
     if console:
-        cur = re.findall(r"^GRUB_CMDLINE_LINUX=([\"']?)(.*?)\1[ \t]*$", old, re.M)
-        cmdline = with_console(cur[-1][1] if cur else "", console)
+        cmdline = with_console(cmdline, console)
+    if console or cmdline != current.strip():
         if re.search(r"[\"'$`\\]", cmdline):
             raise ValueError(f"GRUB_CMDLINE_LINUX {cmdline!r} has quotes or expansions; not edited")
         values["GRUB_CMDLINE_LINUX"] = cmdline
