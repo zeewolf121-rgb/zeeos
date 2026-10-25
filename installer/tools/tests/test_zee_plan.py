@@ -22,7 +22,7 @@ class ShippedConfigTest(unittest.TestCase):
             for luks in (False, True):
                 lines = zee_plan.plan(CALAMARES, mode, luks)
                 self.assertEqual(lines[-1], "zee-plan: dry run, no disk opened")
-                for step in ("partition", "unpackfs", "zee-espbackup", "zee-bootloader@zeeos"):
+                for step in ("partition", "unpackfs", "zee-espbackup", "zee-bootloader@zeeos", "zee-bootmenu"):
                     self.assertTrue(any(f": {step}: " in l for l in lines), (mode, step))
 
     def test_luks_only_with_automated_partitioning(self):
@@ -69,6 +69,11 @@ class BrokenConfigTest(unittest.TestCase):
         self.edit("settings.conf", "      - zee-espbackup\n", "")
         self.edit("settings.conf", "      - umount", "      - zee-espbackup\n      - umount")
         self.assertFails("exec order")
+
+    def test_bootmenu_before_bootloader_fails(self):
+        self.edit("settings.conf", "      - zee-bootmenu\n", "")
+        self.edit("settings.conf", "      - zee-bootloader@zeeos", "      - zee-bootmenu\n      - zee-bootloader@zeeos")
+        self.assertFails("zee-bootmenu")
 
     def test_luks1_fails(self):
         self.edit("modules/partition.conf", "luksGeneration: luks2", "luksGeneration: luks1")
