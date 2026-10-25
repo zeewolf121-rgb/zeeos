@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares job module (P4-3/P4-4): read-only BitLocker and hibernated/dirty NTFS check.
 ---
 type: "job"
 name: "zee-preflight"
