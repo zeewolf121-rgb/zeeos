@@ -138,6 +138,13 @@ class Probe(Base):
         fat = image(self.tmp / "fat.img", b"MSWIN4.1")
         self.assertEqual(preflight.probe(fat, self.reader()), "other")
 
+    def test_short_or_empty_hiberfil_is_hibernated(self):
+        for content in (b"", b"wake" + bytes(100)):
+            with self.subTest(len(content)):
+                self.volumes[self.fx["ntfs"]] = {"hiberfil.sys": content}
+                self.assertEqual(preflight.probe(self.fx["ntfs"], self.reader()),
+                                 preflight.HIBERNATED)
+
     def test_hiberfil_name_is_case_insensitive(self):
         self.volumes[self.fx["ntfs"]] = {"HIBERFIL.SYS": b"hibr" + bytes(12)}
         self.assertEqual(preflight.probe(self.fx["ntfs"], self.reader()), preflight.HIBERNATED)

@@ -254,7 +254,9 @@ def ntfs_hibernated(path, reader):
     rc, out, err = reader.tool(["ntfscat", path, names[0].strip()], limit=4096)
     if rc != 0:
         raise ProbeError(_tool_error(f"ntfscat {names[0].strip()}", rc, err))
-    return out[:4].lower() == b"hibr"
+    # libntfs-3g treats a hiberfil.sys under 4096 bytes (even empty) as a hibernated
+    # non-system volume, so a short read is refused before the signature is compared.
+    return len(out) < 4096 or out[:4].lower() == b"hibr"
 
 
 def probe(path, reader):
