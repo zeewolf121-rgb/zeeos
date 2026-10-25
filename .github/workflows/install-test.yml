@@ -116,6 +116,20 @@ jobs:
           iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
           [[ -n "$iso" ]] || { echo "::error::no ISO in iso-$ARCH artifact"; exit 1; }
           ISO="$iso" vm/install-test.sh
+      # vm/install-test.sh reports checks it can't run yet as skipped and still exits 0 (e.g. the LUKS
+      # unlock at boot, the Windows Boot Manager NVRAM check). The exit criterion needs every check
+      # actually run, so a skipped check fails the cell (CLAUDE.md rule 8).
+      - name: No skipped checks
+        run: |
+          j="$OUT/junit.xml"
+          [[ -s "$j" ]] || { echo "::error::no junit.xml from vm/install-test.sh"; exit 1; }
+          skipped="$(grep -o '<testcase [^>]*name="[^"]*"[^>]*>[^<]*<skipped message="[^"]*"' "$j" \
+            | sed -E 's/.*name="([^"]*)".*<skipped message="([^"]*)"/\1: \2/' || true)"
+          if [[ -n "$skipped" ]]; then
+            while IFS= read -r s; do echo "::error::skipped check counts as not passed: $s"; done <<<"$skipped"
+            exit 1
+          fi
+          echo "no skipped checks"
       - name: Summary
         if: always()
         run: |
