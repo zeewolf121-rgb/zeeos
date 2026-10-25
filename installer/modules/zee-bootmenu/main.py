@@ -3,7 +3,8 @@
 
 Runs after zee-bootloader. Logic and tests live in bootmenu.py. Dry run: globalstorage key
 `zeeDryRun` true, or ZEE_DRY_RUN=1. ZeeOS goes first in BootOrder unless the module config's
-`nvramFirst` or the globalstorage key `zeeNvramFirst` is false.
+`nvramFirst` or the globalstorage key `zeeNvramFirst` is false. Globalstorage `zeeConsole` (set
+only by zee-autopreset in unattended CI installs, #250) adds console= to the kernel command line.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ def run():
             esp_device=esp["device"],
             first=first,
             dry_run=dry,
+            console=gs.value("zeeConsole") or None,
             log=libcalamares.utils.debug,
             run=target_output,
         )

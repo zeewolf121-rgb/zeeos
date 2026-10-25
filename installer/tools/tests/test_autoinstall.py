@@ -69,10 +69,21 @@ class Preset(unittest.TestCase):
             "luks without passphrase": b"case=luks\nuser=zee\npassword=x\n",
             "not utf-8": b"case=erase\nuser=\xff\npassword=x\n",
             "empty disk": b"\0" * 1024,
+            "console: unknown tty": GOOD + b"console=ttyUSB0\n",
+            "console: extra kernel argument": GOOD + b"console=ttyS0 init=/bin/sh\n",
+            "console: shell metacharacters": GOOD + b"console=ttyS0;reboot\n",
+            "console: empty": GOOD + b"console=\n",
+            "console: given twice": GOOD + b"console=ttyS0\nconsole=tty0\n",
         }
         for why, raw in bad.items():
             with self.subTest(why), self.assertRaises(ai.PresetError):
                 ai.parse_preset(raw)
+
+    def test_console_optional(self):
+        self.assertNotIn("console", ai.parse_preset(GOOD))
+        for c in ("tty0 ttyS0,115200", "tty0 ttyAMA0,115200", "ttyS0"):
+            with self.subTest(c):
+                self.assertEqual(ai.parse_preset(GOOD + f"console={c}\n".encode())["console"], c)
 
     def test_marker_case(self):
         self.assertEqual(ai.marker_case("refuse-bitlocker"), "refuse")
@@ -123,6 +134,11 @@ class DryRun(unittest.TestCase):
         self.assertIn("ZEEOS_INSTALL_START case=erase", r.stdout)
         self.assertIn("dry run:", r.stdout)
         self.assertNotIn("ZEEOS_INSTALL_DONE", r.stdout)
+
+    def test_console_in_plan(self):
+        r = self.run_runner(GOOD + b"console=tty0 ttyS0,115200\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("console=tty0 ttyS0,115200;", r.stdout)
 
     def test_missing_preflight_reported(self):
         if (ai.MODULES / "zee-preflight" / "module.desc").is_file():

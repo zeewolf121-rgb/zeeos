@@ -5,7 +5,8 @@ Only in the unattended sequence and only while /run/zeeos-autoinstall/preset.jso
 the preset user (wheel, password from the preset via chpasswd stdin, never on a command line or in
 the log) and installs the test-only first-boot marker unit (zeeos-install-markers), which prints
 ZEEOS_BOOTMENU, ZEEOS_ROOTFS and ZEEOS_DESKTOP_READY on the installed system. Interactive installs
-never run this job, so they never get that unit. Writes only inside the target root, no disk
+never run this job, so they never get that unit. The preset's optional console= value goes to
+globalstorage `zeeConsole` for zee-bootmenu (serial console on the installed system, #250). Writes only inside the target root, no disk
 device. Dry run: globalstorage `zeeDryRun` true, or ZEE_DRY_RUN=1.
 """
 
@@ -57,6 +58,8 @@ def run():
     except (OSError, ValueError):
         return fail("no unattended preset; this job only runs from zeeos-autoinstall")
     user = preset["user"]
+    if preset.get("console"):
+        gs.insert("zeeConsole", preset["console"])  # checked by zeeos-autoinstall and zee-bootmenu
     try:
         chroot(root, ["useradd", "-m", "-U", "-G", "wheel", "-s", "/bin/bash", user], dry)
         chroot(root, ["chpasswd"], dry, stdin=f"{user}:{preset['password']}\n")

@@ -25,7 +25,7 @@ first() { for f in "$@"; do [ -r "$f" ] && { echo "$f"; return 0; }; done; retur
 # Firmware: same choices as vm/boot-test.sh (kept in step by hand; see that file for the reasons).
 case $ARCH in
   x86_64)
-    qemu=qemu-system-x86_64; cpu=max
+    qemu=qemu-system-x86_64; cpu=max; console='tty0 ttyS0,115200'
     machine=(-machine q35,smm=on -global driver=cfi.pflash01,property=secure,value=on)
     if [ "$SECUREBOOT" = on ]; then
       code=$(first /usr/share/edk2/ovmf/OVMF_CODE.secboot.fd /usr/share/OVMF/OVMF_CODE_4M.secboot.fd /usr/share/OVMF/OVMF_CODE.secboot.fd || true)
@@ -35,7 +35,7 @@ case $ARCH in
       vars=$(first /usr/share/edk2/ovmf/OVMF_VARS.fd /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd || true)
     fi ;;
   aarch64)
-    qemu=qemu-system-aarch64; cpu=max; machine=(-machine virt,gic-version=max)
+    qemu=qemu-system-aarch64; cpu=max; console='tty0 ttyAMA0,115200'; machine=(-machine virt,gic-version=max)
     if [ "$SECUREBOOT" = on ]; then
       code=$(first /usr/share/AAVMF/AAVMF_CODE.ms.fd /usr/share/AAVMF/AAVMF_CODE.secboot.fd || true)
       vars=$(first /usr/share/AAVMF/AAVMF_VARS.ms.fd || true)
@@ -81,7 +81,8 @@ has_parts=$(python3 -I -c 'import json,sys; s=json.load(open(sys.argv[1])); prin
 # 2. Preset disk. The secrets are per run and stay in OUT (never committed).
 pw=$(python3 -I -c 'import secrets; print(secrets.token_urlsafe(12))')
 luks_pw=$(python3 -I -c 'import secrets; print(secrets.token_urlsafe(12))')
-printf 'case=%s\nuser=zee\npassword=%s\nluks_passphrase=%s\n' "$CASE" "$pw" "$luks_pw" > "$OUT/preset.conf"
+# console=: the installed system's kernel log and LUKS prompt reach serial-installed.log (#250).
+printf 'case=%s\nuser=zee\npassword=%s\nluks_passphrase=%s\nconsole=%s\n' "$CASE" "$pw" "$luks_pw" "$console" > "$OUT/preset.conf"
 cp "$OUT/preset.conf" "$OUT/preset.img"; python3 -I -c 'import os,sys; os.truncate(sys.argv[1], 1 << 20)' "$OUT/preset.img"
 
 # 3. Checksums before.
