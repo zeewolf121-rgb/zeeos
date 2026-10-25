@@ -221,6 +221,16 @@ def grub_values(old: str, theme: bool, console: list[str] | None = None) -> dict
         if re.search(r"[\"'$`\\]", cmdline):
             raise ValueError(f"GRUB_CMDLINE_LINUX {cmdline!r} has quotes or expansions; not edited")
         values["GRUB_CMDLINE_LINUX"] = cmdline
+    # kiwi also sets GRUB_CMDLINE_LINUX_DEFAULT="rd.live.image console=...", which grub2-mkconfig
+    # appends to every entry, /etc/kernel/cmdline and kernelopts (seen live). Drop the live args, and
+    # console= too: GRUB_CMDLINE_LINUX owns the console.
+    curd = re.findall(r"^GRUB_CMDLINE_LINUX_DEFAULT=([\"']?)(.*?)\1[ \t]*$", old, re.M)
+    if curd:
+        dflt = " ".join(t for t in curd[-1][1].split() if not t.startswith(LIVE_ARGS) and not t.startswith("console="))
+        if dflt != curd[-1][1].strip():
+            if re.search(r"[\"'$`\\]", dflt):
+                raise ValueError(f"GRUB_CMDLINE_LINUX_DEFAULT {dflt!r} has quotes or expansions; not edited")
+            values["GRUB_CMDLINE_LINUX_DEFAULT"] = dflt
     return values
 
 

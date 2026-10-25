@@ -83,6 +83,10 @@ class GrubCmdline(unittest.TestCase):
         v = bootmenu.grub_values(self.KIWI, False, ["console=tty0", "console=ttyAMA0,115200"])
         self.assertEqual(v["GRUB_CMDLINE_LINUX"], "console=tty0 console=ttyAMA0,115200")
 
+    def test_default_cmdline_loses_live_and_console_args(self):
+        old = 'GRUB_CMDLINE_LINUX_DEFAULT="rd.live.image console=tty0 console=ttyAMA0,115200"\n'
+        self.assertEqual(bootmenu.grub_values(old, False)["GRUB_CMDLINE_LINUX_DEFAULT"], "")
+
     def test_clean_cmdline_untouched_without_console(self):
         self.assertNotIn("GRUB_CMDLINE_LINUX", bootmenu.grub_values('GRUB_CMDLINE_LINUX="rhgb quiet"\n', False))
 
