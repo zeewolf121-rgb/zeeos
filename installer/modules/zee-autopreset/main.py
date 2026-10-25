@@ -62,6 +62,9 @@ def run():
         gs.insert("zeeConsole", preset["console"])  # checked by zeeos-autoinstall and zee-bootmenu
     try:
         chroot(root, ["useradd", "-m", "-U", "-G", "wheel", "-s", "/bin/bash", user], dry)
+        # useradd replaces these files by rename and the new ones come out etc_t, so chpasswd
+        # (passwd_t) is denied writing them (seen live). Restore their labels first.
+        chroot(root, ["restorecon", "-F", "/etc/passwd", "/etc/shadow", "/etc/group", "/etc/gshadow"], dry)
         chroot(root, ["chpasswd"], dry, stdin=f"{user}:{preset['password']}\n")
         if not dry:
             Path(root, "etc/hostname").write_text("zeeos-autoinstall\n")
