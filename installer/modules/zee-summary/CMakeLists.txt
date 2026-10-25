@@ -16,6 +16,8 @@ add_executable(test_diskplan DiskPlan.cpp cpptests/test_diskplan.cpp)
 target_include_directories(test_diskplan PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME diskplan COMMAND test_diskplan)
 
+# Calamares::calamares links KF6::CoreAddons, so that target must exist before Calamares' targets load.
+find_package(KF6CoreAddons QUIET)
 find_package(Calamares QUIET)
 if(NOT Calamares_FOUND)
     message(STATUS "calamares-devel not found: building the DiskPlan test only")
