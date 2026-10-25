@@ -153,8 +153,11 @@ check_sb() { # name serial-log
 }
 
 start=$SECONDS
+# The preset disk's serial is a virtio-blk device property: QEMU 8.2 (ubuntu-24.04) rejects
+# `-drive ...,serial=` ("Block format 'raw' does not support the option 'serial'") and exits.
 launch "$OUT/serial-install.log" -drive "file=$ISO,media=cdrom,readonly=on" \
-  -drive "file=$OUT/preset.img,if=virtio,format=raw,readonly=on,serial=ZEEOS-AUTOINSTALL"
+  -drive "file=$OUT/preset.img,if=none,id=zeepreset,format=raw,readonly=on" \
+  -device "virtio-blk-pci,drive=zeepreset,serial=ZEEOS-AUTOINSTALL"
 rc=0; wait_for "$OUT/serial-install.log" '^ZEEOS_INSTALL_DONE' '^ZEEOS_INSTALL_FAIL' "$INSTALL_TIMEOUT" || rc=$?
 fail_line=$(grep -aom1 '^ZEEOS_INSTALL_FAIL.*' "$OUT/serial-install.log" || true)
 case $CASE in
