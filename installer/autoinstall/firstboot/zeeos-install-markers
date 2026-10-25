@@ -1,0 +1,64 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Installed system, CI only (P4-9, #181): installed by zee-autopreset in unattended installs, never
+# in interactive ones. Prints the first-boot markers of docs/phases/phase-4.md to the serial console:
+#   ZEEOS_BOOTMENU zeeos=<0|1> windows=<0|1> default=<entry> timeout=<s>
+#   ZEEOS_ROOTFS fstype=<fs> luks=<0|2>
+#   ZEEOS_DESKTOP_READY   (SDDM's Wayland greeter is up: installed systems have no auto-login)
+# Reads only. DRY_RUN=1 prints to stdout only. ROOT=<dir> reads the boot config below <dir> (tests).
+set -u
+DRY_RUN=${DRY_RUN:-0}
+ROOT=${ROOT:-}
+TIMEOUT=${TIMEOUT:-840}
+
+ttys=()
+if [ "$DRY_RUN" != 1 ]; then
+    for t in ttyS0 ttyAMA0; do
+        read -r type <"/sys/class/tty/$t/type" 2>/dev/null && [ "$type" != 0 ] && [ -w "/dev/$t" ] \
+            && ttys+=("/dev/$t")
+    done
+fi
+say() { echo "$1" | timeout -k 5 10 tee -- "${ttys[@]+"${ttys[@]}"}" || true; }
+
+# Boot menu: BLS entries (Fedora) plus menuentries in grub.cfg (os-prober's Windows entry).
+titles=$( { grep -h '^title ' "$ROOT"/boot/loader/entries/*.conf 2>/dev/null | cut -d' ' -f2-
+            grep -ho "^menuentry '[^']*'" "$ROOT"/boot/grub2/grub.cfg 2>/dev/null | cut -d"'" -f2; } )
+zeeos=0; grep -qi 'zeeos' <<<"$titles" && zeeos=1
+windows=0; grep -qi 'windows' <<<"$titles" && windows=1
+grub_var() { sed -n "s/^$1=[\"']\{0,1\}\([^\"']*\)[\"']\{0,1\}\$/\1/p" "$ROOT/etc/default/grub" 2>/dev/null | tail -n1; }
+default=$(grub_var GRUB_DEFAULT)
+if [ "$default" = saved ] && [ -z "$ROOT" ]; then
+    default=$(grub2-editenv - list 2>/dev/null | sed -n 's/^saved_entry=//p')
+fi
+default=${default:-0}
+timeout_s=$(grub_var GRUB_TIMEOUT)
+say "ZEEOS_BOOTMENU zeeos=$zeeos windows=$windows default=${default// /_} timeout=${timeout_s:-unset}"
+
+# Root filesystem, and the LUKS version of the device under it.
+fstype=$(findmnt -no FSTYPE / 2>/dev/null)
+src=$(findmnt -no SOURCE / 2>/dev/null); src=${src%%\[*}
+luks=0
+if [ "$(lsblk -dno TYPE "$src" 2>/dev/null)" = crypt ]; then
+    dev=$(cryptsetup status "$src" 2>/dev/null | awk '$1 == "device:" {print $2}')
+    luks=$(cryptsetup luksDump "$dev" 2>/dev/null | awk '$1 == "Version:" {print $2}')
+    luks=${luks:-unknown}
+fi
+say "ZEEOS_ROOTFS fstype=${fstype:-unknown} luks=$luks"
+
+[ "$DRY_RUN" = 1 ] && { say "ZEEOS_DESKTOP_READY (dry run)"; exit 0; }
+# The login screen: SDDM's greeter on Wayland (no Xorg anywhere, ADR-0011).
+start=$SECONDS
+while (( SECONDS - start < TIMEOUT )); do
+    greeter=0 xorg=0
+    for p in /proc/[0-9]*; do
+        read -r comm <"$p/comm" 2>/dev/null || continue
+        case $comm in sddm-greeter*) greeter=1 ;; Xorg) xorg=1 ;; esac
+    done
+    if systemctl -q is-active display-manager.service && (( greeter && ! xorg )); then
+        say "ZEEOS_DESKTOP_READY"
+        exit 0
+    fi
+    sleep 2
+done
+say "ZEEOS_DESKTOP_FAIL login screen not up after ${TIMEOUT}s"
+exit 1

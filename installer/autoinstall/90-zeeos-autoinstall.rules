@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Start the unattended install (P4-9, #181) only for a virtio disk with serial ZEEOS-AUTOINSTALL,
+# and only in the live session (the unit checks rd.live.image). No such disk: nothing runs.
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="vd*", ATTRS{serial}=="ZEEOS-AUTOINSTALL", TAG+="systemd", ENV{SYSTEMD_WANTS}+="zeeos-autoinstall.service"

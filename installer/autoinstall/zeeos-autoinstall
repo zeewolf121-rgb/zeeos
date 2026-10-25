@@ -1,0 +1,262 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Unattended install for CI (P4-9, #181). installer-disk.
+
+Runs only from zeeos-autoinstall.service, which udev starts only when a virtio disk with serial
+ZEEOS-AUTOINSTALL is present (90-zeeos-autoinstall.rules). Reads the preset from byte 0 of that
+disk (key=value lines, NUL-padded), runs Calamares headless with the exec-only sequence in
+/usr/share/zeeos/autoinstall/settings.conf, prints the live markers of docs/phases/phase-4.md to
+the serial console and powers off:
+
+    ZEEOS_INSTALL_START case=<case>
+    ZEEOS_INSTALL_DONE case=<case>
+    ZEEOS_INSTALL_FAIL <module>: <reason>
+
+zee-preflight is the first job of that sequence and the preset has no key to remove it.
+Dry run: --dry-run (or ZEE_DRY_RUN=1) parses the preset and checks the setup, prints the plan and
+starts nothing; Calamares is never run and nothing is powered off.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PRESET_DEV = "/dev/disk/by-id/virtio-ZEEOS-AUTOINSTALL"
+PRESET_MAX = 1 << 20
+CASES = ("erase", "luks", "alongside", "refuse-bitlocker", "refuse-hibernated")
+KEYS = ("case", "user", "password", "luks_passphrase")
+SHARE = Path("/usr/share/zeeos/autoinstall")
+MODULES = Path("/usr/lib/calamares/modules")
+RUN = Path("/run/zeeos-autoinstall")
+TIMEOUT = int(os.environ.get("ZEE_AUTOINSTALL_TIMEOUT", "5400"))
+USER_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,30}$")
+
+
+class PresetError(Exception):
+    pass
+
+
+def parse_preset(raw: bytes) -> dict[str, str]:
+    """key=value lines from byte 0 up to the first NUL. Unknown or repeated keys are errors."""
+    text = raw[:PRESET_MAX].split(b"\0", 1)[0]
+    try:
+        text = text.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise PresetError(f"preset is not UTF-8 ({e})") from None
+    out: dict[str, str] = {}
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        key = key.strip()
+        if not sep or key not in KEYS:
+            raise PresetError(f"line {n}: unknown key {key!r} (allowed: {', '.join(KEYS)})")
+        if key in out:
+            raise PresetError(f"line {n}: {key} given twice")
+        out[key] = value
+    for key in ("case", "user", "password"):
+        if not out.get(key):
+            raise PresetError(f"missing {key}")
+    if out["case"] not in CASES:
+        raise PresetError(f"case {out['case']!r} is not one of {', '.join(CASES)}")
+    if not USER_RE.match(out["user"]) or out["user"] in ("root", "liveuser"):
+        raise PresetError(f"user {out['user']!r} is not an allowed login name")
+    if out["case"] == "luks" and not out.get("luks_passphrase"):
+        raise PresetError("case luks needs luks_passphrase")
+    return out
+
+
+def marker_case(case: str) -> str:
+    """The marker protocol names both refuse-* presets `refuse`."""
+    return "refuse" if case.startswith("refuse-") else case
+
+
+def serial_ttys() -> list[str]:
+    """Serial ttys with a real UART behind them, as in zeeos-desktop-ready (#105)."""
+    out = []
+    for t in ("ttyS0", "ttyAMA0"):
+        try:
+            if Path(f"/sys/class/tty/{t}/type").read_text().strip() != "0":
+                out.append(f"/dev/{t}")
+        except OSError:
+            pass
+    return out
+
+
+def say(line: str) -> None:
+    """One line to stdout (the journal) and every serial tty, each write on its own."""
+    print(line, flush=True)
+    for tty in serial_ttys():
+        try:
+            fd = os.open(tty, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
+            try:
+                os.write(fd, (line + "\r\n").encode())
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+
+
+def one_line(s: str) -> str:
+    return " ".join(s.split())[:300] or "no reason given"
+
+
+def setup_problems() -> list[str]:
+    """What must be installed before an unattended run may start."""
+    probs = []
+    if not (MODULES / "zee-preflight" / "module.desc").is_file():
+        probs.append("zee-preflight is not installed; the preset cannot skip it (P4-3/P4-4)")
+    for m in ("zee-autopart", "zee-autopreset", "zee-autodone", "zee-espbackup", "zee-bootloader"):
+        if not (MODULES / m / "module.desc").is_file():
+            probs.append(f"{m} is not installed")
+    if not (SHARE / "settings.conf").is_file():
+        probs.append(f"{SHARE}/settings.conf is missing")
+    if not shutil.which("calamares"):
+        probs.append("calamares is not installed")
+    return probs
+
+
+def config_dir() -> Path:
+    """Calamares config dir: the unattended settings.conf, the shipped module configs with the
+    unattended overrides on top, and the branding."""
+    cfg = RUN / "calamares"
+    shutil.rmtree(cfg, ignore_errors=True)
+    (cfg / "modules").mkdir(parents=True)
+    (cfg / "branding").mkdir()
+    shutil.copy(SHARE / "settings.conf", cfg / "settings.conf")
+    for src in (Path("/etc/calamares/modules"), SHARE / "modules"):
+        for conf in sorted(src.glob("*.conf")) if src.is_dir() else []:
+            shutil.copy(conf, cfg / "modules" / conf.name)
+    brand = Path("/etc/calamares/branding/zeeos")
+    if brand.is_dir():
+        (cfg / "branding" / "zeeos").symlink_to(brand)
+    return cfg
+
+
+def read_status(name: str) -> str | None:
+    try:
+        return (RUN / name).read_text().strip() or None
+    except OSError:
+        return None
+
+
+def last_job(log: Path) -> str:
+    """The module Calamares was running when it stopped, from its session log."""
+    try:
+        text = log.read_text(errors="replace")
+    except OSError:
+        return "calamares"
+    jobs = re.findall(r'Starting job "([^"]+)"', text)
+    return one_line(jobs[-1]) if jobs else "calamares"
+
+
+def run_calamares(preset: dict[str, str]) -> str | None:
+    """Run Calamares; None when zee-autodone ran, else `<module>: <reason>`."""
+    cfg = config_dir()
+    xdg = RUN / "xdg"
+    xdg.mkdir(mode=0o700, exist_ok=True)
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", XDG_RUNTIME_DIR=str(xdg),
+               HOME="/root", LANG="en_US.UTF-8")
+    log = Path("/root/.cache/calamares/session.log")
+    proc = subprocess.Popen(["calamares", "-D", "6", "-c", str(cfg)], env=env,
+                            stdin=subprocess.DEVNULL)
+    start = time.monotonic()
+    while True:
+        if read_status("done"):
+            break
+        if read_status("fail"):
+            break
+        if proc.poll() is not None:
+            break
+        # A failed job opens a modal dialog that nobody will close: spot it in the log.
+        try:
+            if "Installation failed" in log.read_text(errors="replace"):
+                break
+        except OSError:
+            pass
+        if time.monotonic() - start > TIMEOUT:
+            proc.kill()
+            return f"{last_job(log)}: timeout after {TIMEOUT}s"
+        time.sleep(2)
+    # zee-autodone is the last job: give Calamares a moment to quit on its own (quit-at-end).
+    try:
+        proc.wait(timeout=60)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+    if read_status("done"):
+        return None
+    fail = read_status("fail")
+    if fail:
+        return one_line(fail)
+    return f"{last_job(log)}: Calamares stopped before the end of the sequence (rc={proc.returncode})"
+
+
+def dump_log() -> None:
+    log = Path("/root/.cache/calamares/session.log")
+    try:
+        tail = log.read_text(errors="replace").splitlines()[-60:]
+    except OSError:
+        return
+    say("=== zeeos-autoinstall: Calamares session.log (tail) ===")
+    for line in tail:
+        say(line[:400])
+    say("=== end session.log ===")
+
+
+def poweroff() -> None:
+    time.sleep(3)  # let the serial console drain
+    subprocess.run(["systemctl", "--no-block", "poweroff"], check=False)
+
+
+def main(argv: list[str]) -> int:
+    dry = "--dry-run" in argv or os.environ.get("ZEE_DRY_RUN") == "1"
+    dev = os.environ.get("ZEE_AUTOINSTALL_DEV", PRESET_DEV)
+    try:
+        with open(dev, "rb") as f:
+            preset = parse_preset(f.read(PRESET_MAX))
+    except (OSError, PresetError) as e:
+        say(f"ZEEOS_INSTALL_FAIL preset: {one_line(str(e))}")
+        if not dry:
+            poweroff()
+        return 1
+    case = preset["case"]
+    say(f"ZEEOS_INSTALL_START case={marker_case(case)}")
+    probs = setup_problems()
+    if dry:
+        print(f"dry run: case={case} user={preset['user']}; would run calamares -c {RUN}/calamares "
+              f"with {SHARE}/settings.conf and power off")
+        for p in probs:
+            print(f"dry run: setup problem: {p}")
+        return 0
+    if probs:
+        say(f"ZEEOS_INSTALL_FAIL autoinstall: {one_line('; '.join(probs))}")
+        poweroff()
+        return 1
+    RUN.mkdir(mode=0o700, exist_ok=True)
+    for name in ("done", "fail"):
+        (RUN / name).unlink(missing_ok=True)
+    # Jobs read the preset from here (root-only); it never goes into globalstorage or the log.
+    fd = os.open(RUN / "preset.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(preset, f)
+    fail = run_calamares(preset)
+    (RUN / "preset.json").unlink(missing_ok=True)
+    if fail is None:
+        say(f"ZEEOS_INSTALL_DONE case={marker_case(case)}")
+    else:
+        dump_log()
+        say(f"ZEEOS_INSTALL_FAIL {fail}")
+    poweroff()
+    return 0 if fail is None else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

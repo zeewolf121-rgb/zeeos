@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# CI only (P4-9, #181): installed and enabled by zee-autopreset in unattended installs.
+[Unit]
+Description=ZeeOS install-test first-boot markers (serial console)
+After=display-manager.service
+Wants=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zeeos-install-markers
+TimeoutStartSec=900
+
+[Install]
+WantedBy=graphical.target

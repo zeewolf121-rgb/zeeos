@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares job module (P4-9): unattended CI preset user and first-boot marker unit on the target.
+---
+type: "job"
+name: "zee-autopreset"
+interface: "python"
+script: "main.py"

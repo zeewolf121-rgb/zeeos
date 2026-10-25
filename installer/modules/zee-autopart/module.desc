@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares job module (P4-9): unattended erase / LUKS2 partitioning of a blank disk, CI only.
+---
+type: "job"
+name: "zee-autopart"
+interface: "python"
+script: "main.py"
