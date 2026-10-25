@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares job module (ADR-0004, P4-7): /etc/default/grub, Windows entry, NVRAM entry ZeeOS.
+---
+type: "job"
+name: "zee-bootmenu"
+interface: "python"
+script: "main.py"

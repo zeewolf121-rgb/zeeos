@@ -52,6 +52,10 @@ DISK_OPS = {
     "zee-bootloader@zeeos": {"*": ["mkdir \\EFI\\fedora\\ on the ESP (refused if not empty)",
                                    "copy Fedora's signed shim + GRUB into \\EFI\\fedora\\ only",
                                    "write \\EFI\\fedora\\grub.cfg stub; grub2-mkconfig on the target /boot"]},
+    "zee-bootmenu": {"*": ["write /etc/default/grub (ZeeOS default, 5 s, os-prober) on the target root",
+                           "write /etc/grub.d/35_zeeos_windows if \\EFI\\Microsoft\\Boot\\bootmgfw.efi is on the ESP",
+                           "grub2-mkconfig on the target /boot (no ESP write)",
+                           "NVRAM: add Boot#### ZeeOS, put it first; no entry removed or renumbered"]},
     "umount": {"*": ["unmount the target"]},
 }
 LUKS_OPS = ["LUKS2-format the / partition (cryptsetup, luks2) before creating btrfs in it"]
@@ -115,6 +119,8 @@ def check(calamares: Path) -> tuple[dict, list[str]]:
 
     if not pos("partition") < pos("mount") < pos("unpackfs") < pos("zee-espbackup") < pos("zee-bootloader") < pos("umount"):
         raise PlanError("exec order must be partition < mount < unpackfs < zee-espbackup < zee-bootloader < umount")
+    if not pos("zee-bootloader") < pos("zee-bootmenu") < pos("umount"):
+        raise PlanError("exec order must be zee-bootloader < zee-bootmenu < umount (the NVRAM entry needs the shim)")
     if not pos("unpackfs") < pos("shellprocess@zeelivecleanup") < pos("removeuser"):
         raise PlanError("the live cleanup must run after unpackfs and before removeuser")
 
