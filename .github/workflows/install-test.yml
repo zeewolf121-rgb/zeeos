@@ -111,14 +111,21 @@ jobs:
           path: out/${{ matrix.arch }}/image
           run-id: ${{ needs.source.outputs.run_id }}
           github-token: ${{ github.token }}
+      # The NVRAM check (#248) reads the VM's UEFI variable store with virt-fw-vars. Pinned; it
+      # doesn't build on Python 3.14 (Homebrew's default on the Mac), so use 3.12 where present.
+      - name: virt-firmware (NVRAM check)
+        run: |
+          py="$(command -v python3.12 || command -v python3)"
+          "$py" -m venv "$RUNNER_TEMP/vfw"
+          "$RUNNER_TEMP/vfw/bin/pip" install -q virt-firmware==26.9
+          echo "VIRT_FW_VARS=$RUNNER_TEMP/vfw/bin/virt-fw-vars" >>"$GITHUB_ENV"
       - name: Install, reboot from disk, check
         run: |
           iso="$(find "out/$ARCH/image" -name '*.iso' | head -n1)"
           [[ -n "$iso" ]] || { echo "::error::no ISO in iso-$ARCH artifact"; exit 1; }
           ISO="$iso" vm/install-test.sh
-      # vm/install-test.sh reports checks it can't run yet as skipped and still exits 0 (e.g. the LUKS
-      # unlock at boot, the Windows Boot Manager NVRAM check). The exit criterion needs every check
-      # actually run, so a skipped check fails the cell (CLAUDE.md rule 8).
+      # vm/install-test.sh reports a check it can't run as skipped and still exits 0. The exit
+      # criterion needs every check actually run, so a skipped check fails the cell (CLAUDE.md rule 8).
       - name: No skipped checks
         run: |
           j="$OUT/junit.xml"
@@ -138,14 +145,32 @@ jobs:
           } >>"$GITHUB_STEP_SUMMARY"
           fail="$(grep -a -h -m1 -E '^ZEEOS_INSTALL_FAIL' "$OUT"/serial-*.log 2>/dev/null || true)"
           if [[ -n "$fail" ]]; then echo "::error::$fail"; fi
+      # Uploads from the self-hosted Mac sometimes stall on the artifact blob ("Upload progress
+      # stalled", PR #247's boot run); one retry before the evidence counts as lost.
       - name: Upload serial logs, checksums and JUnit
+        id: upload
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: install-${{ matrix.arch }}-${{ matrix.case }}
           path: |
             ${{ env.OUT }}/serial-*.log
             ${{ env.OUT }}/checksums-*.json
+            ${{ env.OUT }}/nvram-*.json
+            ${{ env.OUT }}/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload serial logs, checksums and JUnit (retry)
+        if: always() && steps.upload.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          name: install-${{ matrix.arch }}-${{ matrix.case }}
+          overwrite: true
+          path: |
+            ${{ env.OUT }}/serial-*.log
+            ${{ env.OUT }}/checksums-*.json
+            ${{ env.OUT }}/nvram-*.json
             ${{ env.OUT }}/junit.xml
           if-no-files-found: ignore
           retention-days: 14
