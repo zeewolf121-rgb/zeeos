@@ -5,8 +5,13 @@
 install-test (tests/install-selftest.sh): the boot with the ISO attached uses $FAKE_SERIAL_INSTALL and the
 installed-system boot $FAKE_SERIAL_INSTALLED. During the install boot, $FAKE_FLIP=<offset> flips one byte of
 disk.img, $FAKE_GPT=<op> rewrites its partition table (tests/gpt-fixture.py mutate) and $FAKE_POWEROFF=1 exits
-right away, as the guest powers off.
+right away, as the guest powers off, and $FAKE_NVRAM=<op>[,<op>...] edits the JSON "VARS file" (see
+tests/fake-virt-fw-vars.py): zeeos-first / zeeos-last add a ZeeOS entry, drop-windows removes the Windows Boot
+Manager entry, noise adds a firmware entry and puts it last.
+A fixture line "@@UNLOCK" holds back the rest of the serial log until the typed keys (QMP send-key, as vm/qmp.py
+type sends them) spell the luks_passphrase in OUT/preset.conf, or $FAKE_EXPECT_PASSPHRASE if set.
 """
+import importlib.util
 import json
 import os
 import shutil
@@ -14,6 +19,7 @@ import socket
 import subprocess
 import sys
 
+sys.dont_write_bytecode = True  # importing vm/install-nvram.py must not leave a __pycache__ there
 args = sys.argv[1:]
 serial = next(a for i, a in enumerate(args) if args[i - 1] == "-serial")[len("file:"):]
 qmp = next(a for i, a in enumerate(args) if args[i - 1] == "-qmp")[len("unix:"):].split(",")[0]
@@ -23,7 +29,11 @@ if installing and os.environ.get("FAKE_SERIAL_INSTALL"):
     fixture = os.environ["FAKE_SERIAL_INSTALL"]
 elif not installing and os.environ.get("FAKE_SERIAL_INSTALLED"):
     fixture = os.environ["FAKE_SERIAL_INSTALLED"]
-shutil.copy(fixture, serial)
+text = open(fixture, "rb").read()
+head, sep, tail = text.partition(b"@@UNLOCK\n")
+with open(serial, "wb") as f:
+    f.write(head)
+here = os.path.dirname(os.path.abspath(__file__))
 disk = next((a.split("file=", 1)[1].split(",")[0] for a in args if "disk.img" in a), None)
 if installing and os.environ.get("FAKE_GPT"):
     fixture_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gpt-fixture.py")
@@ -34,8 +44,48 @@ if installing and os.environ.get("FAKE_FLIP"):
         b = d.read(1)
         d.seek(-1, os.SEEK_CUR)
         d.write(bytes([b[0] ^ 0xFF]))
+if installing and os.environ.get("FAKE_NVRAM"):
+    vars_fd = next(a.split("file=", 1)[1] for a in args if a.endswith("vars.fd"))
+    spec = importlib.util.spec_from_file_location("install_nvram", os.path.join(here, "..", "vm", "install-nvram.py"))
+    nv = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(nv)
+    raw = open(vars_fd, "rb").read()
+    doc = json.loads(raw)
+    var = {v["name"]: v for v in doc["variables"]}
+    order = [int.from_bytes(bytes.fromhex(var["BootOrder"]["data"])[i:i + 2], "little")
+             for i in range(0, len(bytes.fromhex(var["BootOrder"]["data"])), 2)] if "BootOrder" in var else []
+
+    def add(title, path, front):
+        n = max([int(k[4:], 16) for k in var if k.startswith("Boot") and k != "BootOrder"] + [-1]) + 1
+        var["Boot%04X" % n] = {"name": "Boot%04X" % n, "guid": nv.GLOBAL_GUID, "attr": 7,
+                               "data": nv.load_option(title, path).hex()}
+        order.insert(0, n) if front else order.append(n)
+    for op in os.environ["FAKE_NVRAM"].split(","):
+        if op in ("zeeos-first", "zeeos-last"):
+            add("ZeeOS", nv.file_node("\\EFI\\fedora\\shimx64.efi"), op == "zeeos-first")
+        elif op == "noise":
+            add("UEFI PXEv4 (MAC:525400123456)", bytes.fromhex("02010c00d041030a00000000"), False)
+        elif op == "drop-windows":
+            for k in [k for k, v in var.items() if k != "BootOrder" and k.startswith("Boot")
+                      and nv.parse_boot(v["data"])[0] == nv.WINDOWS]:
+                del var[k]
+                order = [x for x in order if x != int(k[4:], 16)]
+        else:
+            sys.exit("fake-qemu: bad FAKE_NVRAM op " + op)
+    var["BootOrder"] = {"name": "BootOrder", "guid": nv.GLOBAL_GUID, "attr": 7,
+                        "data": b"".join(x.to_bytes(2, "little") for x in order).hex()}
+    out = json.dumps({"version": 2, "variables": list(var.values())}).encode()
+    open(vars_fd, "wb").write(out + b" " * (len(raw) - len(out)))
 if installing and os.environ.get("FAKE_POWEROFF"):
     sys.exit(0)
+qcodes = {"minus": "-", "spc": " "}
+typed = ""
+shift = False
+passphrase = os.environ.get("FAKE_EXPECT_PASSPHRASE")
+if passphrase is None:
+    preset = os.path.join(os.path.dirname(qmp), "preset.conf")
+    passphrase = next((l.split("=", 1)[1].rstrip("\n") for l in open(preset) if l.startswith("luks_passphrase=")), "") \
+        if os.path.exists(preset) else ""
 srv = socket.socket(socket.AF_UNIX)
 srv.bind(qmp)
 srv.listen(4)
@@ -49,6 +99,17 @@ while True:
         if req["execute"] == "screendump":
             with open(req["arguments"]["filename"], "w") as img:
                 img.write("P6\n1 1\n255\n\0\0\0")
+        if req["execute"] == "send-key":
+            keys = [k["data"] for k in req["arguments"]["keys"]]
+            if keys == ["ret"]:
+                if sep and typed == passphrase:
+                    with open(serial, "ab") as out:
+                        out.write(tail)
+                sep = b"" if typed == passphrase else sep
+                typed = ""
+            else:
+                ch = qcodes.get(keys[-1], keys[-1])
+                typed += ch.upper() if keys[0] == "shift" and ch.isalpha() else ("_" if keys[0] == "shift" and ch == "-" else ch)
         f.write(json.dumps({"return": {}}) + "\n")
         f.flush()
         if req["execute"] == "quit":
