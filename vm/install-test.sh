@@ -25,7 +25,7 @@ first() { for f in "$@"; do [ -r "$f" ] && { echo "$f"; return 0; }; done; retur
 # Firmware: same choices as vm/boot-test.sh (kept in step by hand; see that file for the reasons).
 case $ARCH in
   x86_64)
-    qemu=qemu-system-x86_64; cpu=max; console='tty0 ttyS0,115200'
+    qemu=qemu-system-x86_64; cpu=max
     machine=(-machine q35,smm=on -global driver=cfi.pflash01,property=secure,value=on)
     if [ "$SECUREBOOT" = on ]; then
       code=$(first /usr/share/edk2/ovmf/OVMF_CODE.secboot.fd /usr/share/OVMF/OVMF_CODE_4M.secboot.fd /usr/share/OVMF/OVMF_CODE.secboot.fd || true)
@@ -35,7 +35,7 @@ case $ARCH in
       vars=$(first /usr/share/edk2/ovmf/OVMF_VARS.fd /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd || true)
     fi ;;
   aarch64)
-    qemu=qemu-system-aarch64; cpu=max; console='tty0 ttyAMA0,115200'; machine=(-machine virt,gic-version=max)
+    qemu=qemu-system-aarch64; cpu=max; machine=(-machine virt,gic-version=max)
     if [ "$SECUREBOOT" = on ]; then
       code=$(first /usr/share/AAVMF/AAVMF_CODE.ms.fd /usr/share/AAVMF/AAVMF_CODE.secboot.fd || true)
       vars=$(first /usr/share/AAVMF/AAVMF_VARS.ms.fd || true)
@@ -46,6 +46,11 @@ case $ARCH in
   *) echo "unsupported ARCH=$ARCH" >&2; exit 2;;
 esac
 qemu=${QEMU_BIN:-$qemu}; code=${FW_CODE:-${code:-}}; vars=${FW_VARS:-${vars:-}}
+# Installed system's serial console (#250), taken from the live ISO's kernelcmdline in
+# build/arch/<arch>/config.xml, where arch differences live (rule 4); e.g. "tty0 ttyS0,115200".
+console=$(sed -n 's/.*kernelcmdline="\([^"]*\)".*/\1/p' "$here/../build/arch/$ARCH/config.xml" 2>/dev/null \
+  | tr ' ' '\n' | sed -n 's/^console=//p' | paste -sd' ' -)
+[ -n "$console" ] || { echo "no console= in build/arch/$ARCH/config.xml kernelcmdline" >&2; exit 2; }
 command -v "$qemu" >/dev/null || { echo "$qemu not installed" >&2; exit 2; }
 [ -n "$code" ] && [ -n "$vars" ] || { echo "no $ARCH firmware (SB=$SECUREBOOT) found" >&2; exit 2; }
 [ -n "$ISO" ] && [ -r "$ISO" ] || { echo "ISO not found; set ISO=<path>" >&2; exit 2; }
