@@ -116,7 +116,8 @@ def setup_problems() -> list[str]:
     probs = []
     if not (MODULES / "zee-preflight" / "module.desc").is_file():
         probs.append("zee-preflight is not installed; the preset cannot skip it (P4-3/P4-4)")
-    for m in ("zee-autopart", "zee-autopreset", "zee-autodone", "zee-espbackup", "zee-bootloader"):
+    for m in ("zee-autopart", "zee-autopreset", "zee-autodone", "zee-espbackup", "zee-bootloader",
+              "zee-bootmenu"):
         if not (MODULES / m / "module.desc").is_file():
             probs.append(f"{m} is not installed")
     if not (SHARE / "settings.conf").is_file():

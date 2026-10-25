@@ -83,6 +83,31 @@ class Preset(unittest.TestCase):
             ai.parse_preset(f"case={c}\nuser=zee\npassword=x\nluks_passphrase=y\n".encode())
 
 
+def exec_jobs(settings: Path) -> list[str]:
+    """The exec-phase job names of a Calamares settings.conf, in order (no YAML parser needed)."""
+    jobs, in_exec = [], False
+    for line in settings.read_text().splitlines():
+        if line.startswith("  - "):
+            in_exec = line.strip() == "- exec:"
+        elif in_exec and line.startswith("      - "):
+            jobs.append(line.strip()[2:])
+    return jobs
+
+
+class Sequence(unittest.TestCase):
+    def test_disk_jobs_match_interactive(self):
+        """The disk and boot jobs of the interactive install also run unattended, in the same
+        order, with zee-preflight first and zee-autodone last."""
+        unattended = exec_jobs(HERE / "settings.conf")
+        interactive = exec_jobs(HERE.parent / "calamares" / "settings.conf")
+        shared = ("mount", "unpackfs", "fstab", "dracut", "zee-espbackup", "zee-bootloader@zeeos",
+                  "zee-bootmenu", "umount")
+        self.assertEqual([j for j in interactive if j in shared], list(shared))
+        self.assertEqual([j for j in unattended if j in shared], list(shared))
+        self.assertEqual(unattended[0], "zee-preflight")
+        self.assertEqual(unattended[-1], "zee-autodone")
+
+
 class DryRun(unittest.TestCase):
     def run_runner(self, raw):
         with tempfile.NamedTemporaryFile() as f:
