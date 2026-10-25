@@ -48,6 +48,11 @@ case $ARCH in
   *) echo "unsupported ARCH=$ARCH" >&2; exit 2;;
 esac
 qemu=${QEMU_BIN:-$qemu}; code=${FW_CODE:-${code:-}}; vars=${FW_VARS:-${vars:-}}
+# Installed system's serial console (#250), taken from the live ISO's kernelcmdline in
+# build/arch/<arch>/config.xml, where arch differences live (rule 4); e.g. "tty0 ttyS0,115200".
+console=$(sed -n 's/.*kernelcmdline="\([^"]*\)".*/\1/p' "$here/../build/arch/$ARCH/config.xml" 2>/dev/null \
+  | tr ' ' '\n' | sed -n 's/^console=//p' | paste -sd' ' -)
+[ -n "$console" ] || { echo "no console= in build/arch/$ARCH/config.xml kernelcmdline" >&2; exit 2; }
 command -v "$qemu" >/dev/null || { echo "$qemu not installed" >&2; exit 2; }
 [ -n "$code" ] && [ -n "$vars" ] || { echo "no $ARCH firmware (SB=$SECUREBOOT) found" >&2; exit 2; }
 [ -n "$ISO" ] && [ -r "$ISO" ] || { echo "ISO not found; set ISO=<path>" >&2; exit 2; }
@@ -87,7 +92,8 @@ has_parts=$(python3 -I -c 'import json,sys; s=json.load(open(sys.argv[1])); prin
 # 2. Preset disk. The secrets are per run and stay in OUT (never committed).
 pw=$(python3 -I -c 'import secrets; print(secrets.token_urlsafe(12))')
 luks_pw=$(python3 -I -c 'import secrets; print(secrets.token_urlsafe(12))')
-printf 'case=%s\nuser=zee\npassword=%s\nluks_passphrase=%s\n' "$CASE" "$pw" "$luks_pw" > "$OUT/preset.conf"
+# console=: the installed system's kernel log and LUKS prompt reach serial-installed.log (#250).
+printf 'case=%s\nuser=zee\npassword=%s\nluks_passphrase=%s\nconsole=%s\n' "$CASE" "$pw" "$luks_pw" "$console" > "$OUT/preset.conf"
 cp "$OUT/preset.conf" "$OUT/preset.img"; python3 -I -c 'import os,sys; os.truncate(sys.argv[1], 1 << 20)' "$OUT/preset.img"
 
 # 3. Checksums before.

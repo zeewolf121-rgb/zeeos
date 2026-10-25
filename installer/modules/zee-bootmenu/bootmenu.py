@@ -13,13 +13,19 @@ Runs after zee-bootloader, which put Fedora's signed shim + GRUB into \\EFI\\fed
 5. adds one NVRAM entry `ZeeOS` for \\EFI\\fedora\\shim<arch>.efi and puts it first in BootOrder
    (or last, with first=False). Every other entry keeps its number and relative order.
 
+Unattended CI installs only (#250): with console="tty0 ttyS0,115200" (the preset's console= key,
+passed on by zee-autopreset as globalstorage `zeeConsole`), step 1 also adds console=<each> to
+GRUB_CMDLINE_LINUX and drops rhgb/quiet. The same edit goes into the `options` line of every BLS
+entry in /boot/loader/entries/, because Fedora's grub2-mkconfig doesn't rewrite those. Interactive
+installs never pass it and keep Fedora's command line.
+
 Nothing on the ESP is written: \\EFI\\Microsoft\\ is only checked for bootmgfw.efi, never opened.
 No NVRAM entry is deleted or changed; the job fails if one went missing. Every planned operation is
 logged first; dry_run=True only logs and reads the current NVRAM entries. Generated titles are ASCII
 (the GRUB theme's PF2 fonts cover U+0020-U+007E only, #200).
 
 CLI (tests and manual checks):
-    python3 bootmenu.py [--dry-run] [--not-first] --esp-uuid UUID --esp-device DEV ESP_DIR TARGET_ROOT
+    python3 bootmenu.py [--dry-run] [--not-first] [--console C] --esp-uuid UUID --esp-device DEV ESP_DIR TARGET_ROOT
 """
 
 from __future__ import annotations
@@ -58,6 +64,10 @@ EOF
 SAFE_UUID = re.compile(r"^[0-9A-Za-z-]{4,64}$")
 SHIM = re.compile(r"^shim(?!ia32)[a-z0-9]+\.efi$")  # shimx64.efi / shimaa64.efi, not shim.efi
 ENTRY = re.compile(r"^Boot([0-9A-Fa-f]{4})\*?\s+(.*)$")
+# Same pattern as the preset parser in installer/autoinstall/zeeos-autoinstall (a test checks it).
+CONSOLE = re.compile(r"^(tty0|ttyS0|ttyAMA0)(,[0-9]+)?( (tty0|ttyS0|ttyAMA0)(,[0-9]+)?)*$")
+QUIET = ("rhgb", "quiet")
+BLS_DIR = "boot/loader/entries"
 
 
 @dataclass
@@ -107,7 +117,33 @@ def edit_defaults(text: str, values: dict[str, str]) -> str:
     return "\n".join(out) + "\n"
 
 
-def grub_values(old: str, theme: bool) -> dict[str, str]:
+def console_args(console: str) -> list[str]:
+    """"tty0 ttyS0,115200" -> ["console=tty0", "console=ttyS0,115200"]; anything else is refused."""
+    if not CONSOLE.fullmatch(console):  # not .match: "$" also matches before a final "\n"
+        raise ValueError(f"bad console value {console!r}")
+    return [f"console={c}" for c in console.split()]
+
+
+def with_console(cmdline: str, args: list[str]) -> str:
+    """The command line without rhgb, quiet or any console=, then the given console= entries."""
+    kept = [t for t in cmdline.split() if t not in QUIET and not t.startswith("console=")]
+    return " ".join(kept + args)
+
+
+def bls_edits(target_root: Path, console: list[str]) -> dict[Path, str]:
+    """New text of each BLS entry whose `options` line changes."""
+    out = {}
+    for entry in sorted((target_root / BLS_DIR).glob("*.conf")):
+        text = entry.read_text(encoding="utf-8")
+        lines = [f"options {with_console(line[len('options'):], console)}"
+                 if line.split(None, 1)[:1] == ["options"] else line for line in text.splitlines()]
+        new = "\n".join(lines) + "\n"
+        if new != text:
+            out[entry] = new
+    return out
+
+
+def grub_values(old: str, theme: bool, console: list[str] | None = None) -> dict[str, str]:
     values = {
         "GRUB_DEFAULT": "0",  # the first entry: the newest ZeeOS kernel (BLS entries come first)
         "GRUB_SAVEDEFAULT": "false",
@@ -121,6 +157,12 @@ def grub_values(old: str, theme: bool) -> dict[str, str]:
         values["GRUB_THEME"] = "/" + THEME_DEST + "/theme.txt"
         m = re.search(r"^GRUB_TERMINAL_OUTPUT=[\"']?([^\"'\n]*)", old, re.M)
         values["GRUB_TERMINAL_OUTPUT"] = "gfxterm serial" if m and "serial" in m.group(1) else "gfxterm"
+    if console:
+        cur = re.findall(r"^GRUB_CMDLINE_LINUX=([\"']?)(.*?)\1[ \t]*$", old, re.M)
+        cmdline = with_console(cur[-1][1] if cur else "", console)
+        if re.search(r"[\"'$`\\]", cmdline):
+            raise ValueError(f"GRUB_CMDLINE_LINUX {cmdline!r} has quotes or expansions; not edited")
+        values["GRUB_CMDLINE_LINUX"] = cmdline
     return values
 
 
@@ -132,6 +174,7 @@ def install(
     esp_device: str,
     first: bool = True,
     dry_run: bool = False,
+    console: str | None = None,
     log: Callable[[str], None] = print,
     run: Callable[[list[str]], str],
 ) -> list[str]:
@@ -149,10 +192,13 @@ def install(
     theme = (theme_src / "theme.txt").is_file()
     defaults = target_root / GRUB_DEFAULTS
     old = defaults.read_text(encoding="utf-8") if defaults.is_file() else ""
-    values = grub_values(old, theme)
+    cons = console_args(console) if console else None
+    values = grub_values(old, theme, cons)
+    bls = bls_edits(target_root, cons) if cons else {}
     before = parse_efibootmgr(run(["efibootmgr"]))
 
     ops = [f"write {defaults}: " + " ".join(f"{k}={v}" for k, v in values.items())]
+    ops += [f"write {entry}: options with {' '.join(cons)}, without rhgb quiet" for entry in bls]
     if theme:
         ops.append(f"copy {theme_src} -> {target_root / THEME_DEST}")
     else:
@@ -174,6 +220,8 @@ def install(
 
     defaults.parent.mkdir(parents=True, exist_ok=True)
     defaults.write_text(edit_defaults(old, values), encoding="utf-8")
+    for entry, text in bls.items():
+        entry.write_text(text, encoding="utf-8")
     if theme:
         shutil.copytree(theme_src, target_root / THEME_DEST, dirs_exist_ok=True)
     if windows:
@@ -218,12 +266,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--not-first", action="store_true", help="append ZeeOS to BootOrder instead")
     ap.add_argument("--esp-uuid", required=True)
     ap.add_argument("--esp-device", required=True)
+    ap.add_argument("--console", help='unattended CI only, e.g. "tty0 ttyS0,115200"')
     ap.add_argument("esp", type=Path)
     ap.add_argument("target_root", type=Path)
     a = ap.parse_args(argv)
     try:
         install(a.esp, a.target_root, esp_uuid=a.esp_uuid, esp_device=a.esp_device,
-                first=not a.not_first, dry_run=a.dry_run, run=_chroot_run(a.target_root))
+                first=not a.not_first, dry_run=a.dry_run, console=a.console, run=_chroot_run(a.target_root))
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         print(f"zee-bootmenu: {e}", file=sys.stderr)
         return 1

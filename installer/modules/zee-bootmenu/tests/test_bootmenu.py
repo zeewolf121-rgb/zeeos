@@ -243,5 +243,63 @@ class Helpers(unittest.TestCase):
         self.assertEqual(nv.labels, {"0000": "Windows Boot Manager", "000A": "Off"})
 
 
+BLS_ENTRY = ("title ZeeOS (6.17.0) 44\nversion 6.17.0\nlinux /vmlinuz-6.17.0\n"
+             "options root=UUID=abcd ro rhgb quiet\ngrub_users $grub_users\n")
+
+
+class Console(Fixture):
+    """Unattended CI installs only (#250): console= from the preset reaches the kernel."""
+
+    def setUp(self):
+        super().setUp()
+        self.bls = self.root / "boot/loader/entries/abc-6.17.0.conf"
+        self.bls.parent.mkdir(parents=True)
+        self.bls.write_text(BLS_ENTRY)
+
+    def test_without_console_nothing_changes(self):
+        self.install()
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"], '"rhgb quiet"')
+        self.assertEqual(self.bls.read_text(), BLS_ENTRY)
+
+    def test_console_in_defaults_and_bls(self):
+        self.install(console="tty0 ttyS0,115200")
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"], '"console=tty0 console=ttyS0,115200"')
+        text = self.bls.read_text()
+        self.assertIn("options root=UUID=abcd ro console=tty0 console=ttyS0,115200\n", text)
+        self.assertEqual(text.replace("options root=UUID=abcd ro console=tty0 console=ttyS0,115200",
+                                      "options root=UUID=abcd ro rhgb quiet"), BLS_ENTRY,
+                         "only the options line changes")
+        self.assertEqual(self.defaults()["GRUB_TIMEOUT"], '"5"', "the other defaults still apply")
+
+    def test_existing_console_replaced_not_doubled(self):
+        (self.root / "etc/default/grub").write_text(
+            FEDORA_DEFAULTS.replace('"rhgb quiet"', '"rd.lvm=0 console=ttyS1 rhgb quiet"'))
+        self.bls.write_text(BLS_ENTRY.replace("ro rhgb", "ro console=tty1 rhgb"))
+        self.install(console="ttyAMA0,115200")
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"], '"rd.lvm=0 console=ttyAMA0,115200"')
+        self.assertIn("options root=UUID=abcd ro console=ttyAMA0,115200\n", self.bls.read_text())
+
+    def test_dry_run_plans_and_writes_nothing(self):
+        target = tree_digest(self.root)
+        ops = self.install(console="tty0 ttyS0,115200", dry_run=True)
+        self.assertEqual(tree_digest(self.root), target)
+        text = "\n".join(ops)
+        self.assertIn("GRUB_CMDLINE_LINUX=console=tty0 console=ttyS0,115200", text)
+        self.assertIn(f"write {self.bls}: options with console=tty0 console=ttyS0,115200", text)
+
+    def test_bad_console_refused_before_any_write(self):
+        target = tree_digest(self.root)
+        for bad in ("ttyS0;reboot", "ttyUSB0", "ttyS0,115200n8", "tty0  ttyS0", " ttyS0", "ttyS0\n",
+                    "ttyS0 init=/bin/sh"):
+            with self.subTest(bad), self.assertRaises(ValueError):
+                self.install(console=bad)
+        self.assertEqual(tree_digest(self.root), target)
+        self.assertEqual(self.nvram.writes(), [])
+
+    def test_same_pattern_as_the_preset_parser(self):
+        runner = Path(__file__).resolve().parents[3] / "autoinstall/zeeos-autoinstall"
+        self.assertIn(f're.compile(r"{bootmenu.CONSOLE.pattern}")', runner.read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

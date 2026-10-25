@@ -31,7 +31,7 @@ from pathlib import Path
 PRESET_DEV = "/dev/disk/by-id/virtio-ZEEOS-AUTOINSTALL"
 PRESET_MAX = 1 << 20
 CASES = ("erase", "luks", "alongside", "refuse-bitlocker", "refuse-hibernated")
-KEYS = ("case", "user", "password", "luks_passphrase")
+KEYS = ("case", "user", "password", "luks_passphrase", "console")
 SHARE = Path("/usr/share/zeeos/autoinstall")
 MODULES = Path("/usr/lib/calamares/modules")
 # `calamares -c DIR` overrides the whole application-data dir, and Calamares 3.3.14 then requires
@@ -40,6 +40,9 @@ QML = Path("/usr/share/calamares/qml")
 RUN = Path("/run/zeeos-autoinstall")
 TIMEOUT = int(os.environ.get("ZEE_AUTOINSTALL_TIMEOUT", "5400"))
 USER_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,30}$")
+# Optional `console=tty0 ttyS0,115200`: zee-bootmenu adds console=<each> to the installed system's
+# kernel command line and drops rhgb quiet (#250). Same pattern as zee-bootmenu's CONSOLE.
+CONSOLE_RE = re.compile(r"^(tty0|ttyS0|ttyAMA0)(,[0-9]+)?( (tty0|ttyS0|ttyAMA0)(,[0-9]+)?)*$")
 
 
 class PresetError(Exception):
@@ -71,6 +74,8 @@ def parse_preset(raw: bytes) -> dict[str, str]:
         raise PresetError(f"case {out['case']!r} is not one of {', '.join(CASES)}")
     if not USER_RE.match(out["user"]) or out["user"] in ("root", "liveuser"):
         raise PresetError(f"user {out['user']!r} is not an allowed login name")
+    if "console" in out and not CONSOLE_RE.fullmatch(out["console"]):
+        raise PresetError(f"console {out['console']!r} is not like 'tty0 ttyS0,115200'")
     if out["case"] == "luks" and not out.get("luks_passphrase"):
         raise PresetError("case luks needs luks_passphrase")
     return out
@@ -238,7 +243,8 @@ def main(argv: list[str]) -> int:
     say(f"ZEEOS_INSTALL_START case={marker_case(case)}")
     probs = setup_problems()
     if dry:
-        print(f"dry run: case={case} user={preset['user']}; would run calamares -c {RUN}/calamares "
+        print(f"dry run: case={case} user={preset['user']} console={preset.get('console', '-')}; "
+              f"would run calamares -c {RUN}/calamares "
               f"with {SHARE}/settings.conf and power off")
         for p in probs:
             print(f"dry run: setup problem: {p}")
