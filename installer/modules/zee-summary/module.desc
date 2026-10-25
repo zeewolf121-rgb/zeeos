@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Calamares view module (ADR-0003, P4-6): per-disk list of planned changes and the mandatory
+# backup checkbox; Install stays disabled until it is checked. Read-only: queues no jobs.
+# Built from CMakeLists.txt in this directory (C++ plugin + QML).
+---
+type: "view"
+name: "zee-summary"
+interface: "qtplugin"
+load: "libcalamares_viewmodule_zee-summary.so"

@@ -107,6 +107,16 @@ def check(calamares: Path) -> tuple[dict, list[str]]:
         if "@" in step and not conf.is_file():
             raise PlanError(f"{step}: missing config {conf}")
 
+    # The page right before the first exec block is the confirmation page. zee-summary (P4-6) adds
+    # the mandatory backup checkbox (ADR-0003). The stock summary stays until the image builds the
+    # zee-summary plugin; then this check requires zee-summary.
+    blocks = settings.get("sequence", [])
+    first_exec = next((i for i, b in enumerate(blocks) if "exec" in b), None)
+    before = [m for b in blocks[:first_exec] for m in b.get("show", [])]
+    pages = [m for m in shown if m in ("summary", "zee-summary")]
+    if len(pages) != 1 or not before or before[-1] != pages[0]:
+        raise PlanError("exactly one of summary / zee-summary, as the last page before the install")
+
     def pos(prefix: str) -> int:
         hits = [i for i, s in enumerate(steps) if s == prefix or s.startswith(prefix + "@")]
         if not hits:

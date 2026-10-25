@@ -85,6 +85,19 @@ class BrokenConfigTest(unittest.TestCase):
         self.edit("modules/shellprocess-zeelivecleanup.conf", "/etc/sddm.conf.d/10-zeeos-live-autologin.conf ", "")
         self.assertFails("10-zeeos-live-autologin")
 
+    def test_zee_summary_in_place_of_summary_passes(self):
+        self.edit("settings.conf", "      - summary\n", "      - zee-summary\n")
+        zee_plan.check(self.cal)
+
+    def test_summary_and_zee_summary_fails(self):
+        self.edit("settings.conf", "      - summary\n", "      - summary\n      - zee-summary\n")
+        self.assertFails("zee-summary")
+
+    def test_summary_not_last_before_install_fails(self):
+        self.edit("settings.conf", "      - users\n", "")
+        self.edit("settings.conf", "      - summary\n", "      - summary\n      - users\n")
+        self.assertFails("last page before the install")
+
     def test_unknown_module_fails(self):
         self.edit("settings.conf", "      - hwclock", "      - nosuchmodule")
         self.assertFails("unknown module")
