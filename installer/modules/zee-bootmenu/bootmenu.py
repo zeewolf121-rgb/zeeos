@@ -130,14 +130,64 @@ def with_console(cmdline: str, args: list[str]) -> str:
     return " ".join(kept + args)
 
 
-def bls_edits(target_root: Path, console: list[str]) -> dict[Path, str]:
-    """New text of each BLS entry whose `options` line changes."""
+# Kernel arguments that belong to the live ISO or its build, never to the installed system.
+LIVE_ARGS = ("rd.live.", "root=", "rootflags=", "BOOT_IMAGE=")
+
+
+def fstab_root(target_root: Path) -> tuple[str, str | None] | None:
+    """(root spec, btrfs subvolume or None) from the target's /etc/fstab, written by the fstab job."""
+    try:
+        text = (target_root / "etc/fstab").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        f = line.split()
+        if len(f) >= 4 and not f[0].startswith("#") and f[1] == "/":
+            sub = next((o[len("subvol="):] for o in f[3].split(",") if o.startswith("subvol=")), None)
+            return f[0], sub
+    return None
+
+
+def bls_normalize(text: str, root: tuple[str, str | None]) -> str:
+    """Point a BLS entry copied from the image at the installed system. kiwi writes the entries at
+    build time with the build host's paths (linux /home/runner/.../image-root/boot/vmlinuz-...) and
+    the live options (rd.live.image, the build root's UUID); GRUB then can't find the kernel (seen
+    live). /boot is a separate partition, so the paths are relative to it."""
+    lines = text.splitlines()
+    ver = next((l.split(None, 1)[1].strip() for l in lines if l.split(None, 1)[:1] == ["version"]), None)
+    if not ver:
+        m = next((re.search(r"vmlinuz-(\S+)$", l) for l in lines if l.split(None, 1)[:1] == ["linux"]), None)
+        ver = m.group(1) if m else None
+    if not ver:
+        return text
+    spec, sub = root
+    out = []
+    for line in lines:
+        key = line.split(None, 1)[:1]
+        if key == ["linux"]:
+            line = f"linux /vmlinuz-{ver}"
+        elif key == ["initrd"]:
+            line = f"initrd /initramfs-{ver}.img"
+        elif key == ["options"]:
+            kept = [t for t in line.split()[1:] if t != "ro" and not t.startswith(LIVE_ARGS)]
+            base = [f"root={spec}", "ro"] + ([f"rootflags=subvol={sub}"] if sub else [])
+            line = "options " + " ".join(base + kept)
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def bls_edits(target_root: Path, console: list[str] | None) -> dict[Path, str]:
+    """New text of each BLS entry that changes: pointed at the installed system (when the target
+    has an fstab root), and with the requested console= arguments."""
     out = {}
+    root = fstab_root(target_root)
     for entry in sorted((target_root / BLS_DIR).glob("*.conf")):
         text = entry.read_text(encoding="utf-8")
-        lines = [f"options {with_console(line[len('options'):], console)}"
-                 if line.split(None, 1)[:1] == ["options"] else line for line in text.splitlines()]
-        new = "\n".join(lines) + "\n"
+        new = bls_normalize(text, root) if root else text
+        if console is not None:
+            lines = [f"options {with_console(line[len('options'):], console)}"
+                     if line.split(None, 1)[:1] == ["options"] else line for line in new.splitlines()]
+            new = "\n".join(lines) + "\n"
         if new != text:
             out[entry] = new
     return out
@@ -194,11 +244,12 @@ def install(
     old = defaults.read_text(encoding="utf-8") if defaults.is_file() else ""
     cons = console_args(console) if console else None
     values = grub_values(old, theme, cons)
-    bls = bls_edits(target_root, cons) if cons else {}
+    bls = bls_edits(target_root, cons)
     before = parse_efibootmgr(run(["efibootmgr"]))
 
     ops = [f"write {defaults}: " + " ".join(f"{k}={v}" for k, v in values.items())]
-    ops += [f"write {entry}: options with {' '.join(cons)}, without rhgb quiet" for entry in bls]
+    ops += [(f"write {entry}: options with {' '.join(cons)}, without rhgb quiet; " if cons else f"write {entry}: ")
+            + "kernel/initrd paths and root for the installed system" for entry in bls]
     if theme:
         ops.append(f"copy {theme_src} -> {target_root / THEME_DEST}")
     else:
