@@ -171,6 +171,21 @@ class Probe(Base):
             os.environ["PATH"] = old
         self.assertEqual(found[self.fx["ntfs"]], preflight.UNREADABLE)
 
+    def test_hung_tool_is_killed_and_fails_closed(self):
+        old = preflight.TOOL_TIMEOUT
+        preflight.TOOL_TIMEOUT = 0.5
+        try:
+            with self.assertRaises(preflight.ProbeError) as cm:
+                preflight.Reader().tool([sys.executable, "-c", "import time; time.sleep(30)"])
+        finally:
+            preflight.TOOL_TIMEOUT = old
+        self.assertIn("no answer", str(cm.exception))
+
+    def test_tool_output_is_capped(self):
+        rc, out, _ = preflight.Reader().tool(
+            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'hibr' * 100000)"], limit=8)
+        self.assertEqual((rc, out), (0, b"hibrhibr"))
+
     def test_unreadable_device_fails_closed(self):
         missing = str(self.tmp / "missing")
         found, blocks, _ = preflight.scan([missing], self.reader())

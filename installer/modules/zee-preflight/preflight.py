@@ -24,6 +24,7 @@ import re
 import struct
 import subprocess
 import sys
+import threading
 
 SECTOR = 512
 BITLOCKER_GUID = bytes.fromhex("3bd66749292ed84a8399f6a339e3d001")  # 4967d63b-2e29-4ad8-8399-f6a339e3d001
@@ -46,6 +47,7 @@ AT_VOLUME_INFORMATION, AT_END = 0x70, 0xFFFFFFFF
 MFT_VOLUME = 3  # MFT record number of $Volume
 HIBERFIL = "hiberfil.sys"
 PRESET_SERIAL = "ZEEOS-AUTOINSTALL"
+TOOL_TIMEOUT = 120  # seconds for one ntfsls/ntfscat run
 
 FIX_STEPS = """\
 {path} is encrypted with BitLocker ({kind}). ZeeOS will not resize it: Linux tools
@@ -123,14 +125,28 @@ class Reader:
                                     stderr=subprocess.PIPE, env=dict(os.environ, LC_ALL="C"))
         except OSError as e:
             raise ProbeError(f"{argv[0]}: {e.strerror or e}") from None
-        out = proc.stdout.read(limit)
-        full = len(out) >= limit
-        if full:
+        # A hung tool must not stall the job until the runner's timeout: kill it after TOOL_TIMEOUT.
+        expired = threading.Event()
+
+        def expire():
+            expired.set()
             proc.kill()
-        proc.stdout.close()
-        err = proc.stderr.read(4096).decode(errors="replace")
-        proc.stderr.close()
-        rc = proc.wait()
+
+        timer = threading.Timer(TOOL_TIMEOUT, expire)
+        timer.start()
+        try:
+            out = proc.stdout.read(limit)
+            full = len(out) >= limit
+            if full:
+                proc.kill()
+            proc.stdout.close()
+            err = proc.stderr.read(4096).decode(errors="replace")
+            proc.stderr.close()
+            rc = proc.wait()
+        finally:
+            timer.cancel()
+        if expired.is_set():
+            raise ProbeError(f"{argv[0]}: no answer after {TOOL_TIMEOUT}s")
         return (0 if full else rc), out, err
 
 
