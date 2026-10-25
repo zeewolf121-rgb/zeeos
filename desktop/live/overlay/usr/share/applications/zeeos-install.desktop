@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=Install ZeeOS
+GenericName=System installer
+Comment=Install ZeeOS to this computer
+# Rule 7: stock-config Calamares as root can write disks with no dry-run. Start only if the
+# ZeeOS safety modules and config are present, and pin the config dir to /etc/calamares.
+Exec=kdesu --noignorebutton -c "test -f /usr/lib/calamares/modules/zee-bootloader/module.desc && test -f /etc/calamares/settings.conf && exec /usr/bin/calamares -c /etc/calamares"
+TryExec=/usr/bin/calamares
+Icon=system-software-install
+Terminal=false
+Categories=Qt;System;
+Keywords=install;installer;calamares;setup;
+StartupNotify=true
