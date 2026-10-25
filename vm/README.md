@@ -67,5 +67,6 @@ Needs python `virt-firmware` **26.9** (`virt-fw-vars`; Fedora `python3-virt-firm
 `VIRT_FW_VARS` overrides the command). Missing tool = failed `nvram` check, not a skip. Rules: the Windows entry and every
 entry that existed before keep title and device path and relative BootOrder order; alongside also needs a new `ZeeOS` entry
 first; refuse-* must not gain `ZeeOS` or an `\EFI\fedora` entry. Firmware-added entries (PXE, shell, DVD) are tolerated
-(verified with a real OVMF boot). No check is skipped any more.
+(a disk-only boot of real OVMF kept the seeded entry and added its own: DVD, PXE, setup; with the seeded stub failing to load, BDS fell through to the next entry). No check is skipped any more.
+Untested against a real guest: the LUKS prompt is answered through the usb-kbd, which reaches plymouth or a VT agent but not an agent reading only a serial `/dev/console`. If the first real run shows the prompt and then "passphrase typed, but the system did not come up", switch the installed boot to a bidirectional serial chardev (`-chardev socket,...,logfile=`) and type there.
 Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).

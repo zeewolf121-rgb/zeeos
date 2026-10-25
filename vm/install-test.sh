@@ -76,7 +76,7 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   exit 0
 fi
 mkdir -p "$OUT"
-rm -f "$OUT"/serial-*.log "$OUT"/checksums-*.json "$OUT"/nvram-*.json "$OUT"/junit.xml
+rm -f "$OUT"/serial-*.log "$OUT"/checksums-*.json "$OUT"/nvram-*.json "$OUT"/nvram.stderr "$OUT"/junit.xml
 # 1. Seed disk.
 if [ -n "${SEED_DIR:-}" ]; then cp "$SEED_DIR/disk.img" "$SEED_DIR/seed.json" "$OUT/"
 else python3 -I "$here/install-seed.py" "$CASE" "$OUT"; fi
