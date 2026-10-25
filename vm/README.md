@@ -54,5 +54,19 @@ individual ESP/NTFS files read from the partitions' current ranges. `DRY_RUN=1 v
 first. Preset transport (for #181, until the architect adds it to the plan): a raw virtio
 disk with serial `ZEEOS-AUTOINSTALL`, `key=value` lines from byte 0, NUL-padded to 1 MiB; keys `case`, `user`, `password`,
 `luks_passphrase`.
-Not yet implemented and reported as skipped in junit: typing the LUKS passphrase at boot, and the Windows Boot Manager
-NVRAM entry check. Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).
+LUKS (case c): the harness boots the installed disk, waits for the passphrase prompt on the serial console
+(`UNLOCK_TIMEOUT`, default `BOOT_TIMEOUT`), types the preset `luks_passphrase` with `vm/qmp.py SOCK type` (one QMP
+`send-key` per key through the usb-kbd, because the serial port is an output-only file and plymouth/systemd-ask-password
+read the keyboard), then runs the same `boot`/`bootmenu`/`rootfs` checks as erase with `ZEEOS_ROOTFS ... luks=2`. junit
+has an `unlock` check: no prompt, a plaintext root, or a passphrase that doesn't bring the system up fail it.
+The installed kernel must log to the serial console (`console=ttyS0`/`ttyAMA0`) for any installed-boot check.
+NVRAM (alongside, refuse-*): `vm/install-nvram.py` writes a `Windows Boot Manager` Boot#### entry (HD(ESP) +
+`\EFI\Microsoft\Boot\bootmgfw.efi`) into the run's `OUT/vars.fd` copy (a fresh VARS template only has the firmware's
+own entries), snapshots it (`nvram-before.json`), and after the install reads `vars.fd` again (`nvram-after.json`).
+Needs python `virt-firmware` **26.9** (`virt-fw-vars`; Fedora `python3-virt-firmware`, or `pip install virt-firmware==26.9`;
+`VIRT_FW_VARS` overrides the command). Missing tool = failed `nvram` check, not a skip. Rules: the Windows entry and every
+entry that existed before keep title and device path and relative BootOrder order; alongside also needs a new `ZeeOS` entry
+first; refuse-* must not gain `ZeeOS` or an `\EFI\fedora` entry. Firmware-added entries (PXE, shell, DVD) are tolerated
+(a disk-only boot of real OVMF kept the seeded entry and added its own: DVD, PXE, setup; with the seeded stub failing to load, BDS fell through to the next entry). No check is skipped any more.
+Untested against a real guest: the LUKS prompt is answered through the usb-kbd, which reaches plymouth or a VT agent but not an agent reading only a serial `/dev/console`. If the first real run shows the prompt and then "passphrase typed, but the system did not come up", switch the installed boot to a bidirectional serial chardev (`-chardev socket,...,logfile=`) and type there.
+Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).

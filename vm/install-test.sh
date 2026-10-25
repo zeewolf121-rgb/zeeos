@@ -5,19 +5,21 @@
 # Env: ARCH=x86_64|aarch64  CASE=erase|luks|alongside|refuse-bitlocker|refuse-hibernated
 #      ISO=<path>  OUT=<result dir>  SECUREBOOT=on|off (default on)
 #      INSTALL_TIMEOUT (s, default 3600)  BOOT_TIMEOUT (s, default 900)
+#      UNLOCK_TIMEOUT (s, default BOOT_TIMEOUT): the luks case waits this long for the passphrase prompt
+#      VIRT_FW_VARS=<command> overrides virt-fw-vars (python virt-firmware 26.9), which alongside/refuse-* need
 #      SEED_DIR=<dir with disk.img + seed.json> skips seeding (tests/install-selftest.sh)
 #      QEMU_BIN / FW_CODE / FW_VARS override the emulator and firmware, as in vm/boot-test.sh
 #      DRY_RUN=1 prints the seed plan (install-seed.py --dry-run) and every planned write and QEMU run,
 #      then exits without creating or touching anything (not even OUT)
 # Preset transport (#181): a raw virtio disk with serial ZEEOS-AUTOINSTALL whose first bytes are
 # key=value lines (NUL-padded); the guest reads /dev/disk/by-id/virtio-ZEEOS-AUTOINSTALL.
-# Writes OUT/{serial-install.log,serial-installed.log,checksums-*.json,junit.xml}. Only image files
+# Writes OUT/{serial-install.log,serial-installed.log,checksums-*.json,nvram-*.json,junit.xml}. Only image files
 # under OUT are ever written; OUT/disk.img must be a regular file.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ARCH=${ARCH:-x86_64}; CASE=${CASE:-erase}; SECUREBOOT=${SECUREBOOT:-on}
 OUT=${OUT:-out/install-test/$ARCH-$CASE}; ISO=${ISO:-}
-INSTALL_TIMEOUT=${INSTALL_TIMEOUT:-3600}; BOOT_TIMEOUT=${BOOT_TIMEOUT:-900}
+INSTALL_TIMEOUT=${INSTALL_TIMEOUT:-3600}; BOOT_TIMEOUT=${BOOT_TIMEOUT:-900}; UNLOCK_TIMEOUT=${UNLOCK_TIMEOUT:-$BOOT_TIMEOUT}
 case $CASE in erase|luks|alongside|refuse-bitlocker|refuse-hibernated) ;; *) echo "bad CASE=$CASE" >&2; exit 2;; esac
 case $SECUREBOOT in on|off) ;; *) echo "SECUREBOOT must be on|off" >&2; exit 2;; esac
 
@@ -64,13 +66,17 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   else python3 -I "$here/install-seed.py" --dry-run "$CASE" "$OUT"; fi
   echo "  would remove $OUT/{serial-*.log,checksums-*.json,junit.xml}"
   echo "  would write $OUT/{preset.conf,preset.img,vars.fd} (vars copied from $vars)"
+  case $CASE in erase|luks) ;; *)
+    echo "  would add a Windows Boot Manager Boot#### entry to $OUT/vars.fd (virt-fw-vars --inplace) and dump it to $OUT/nvram-before.json"
+    echo "  would dump $OUT/vars.fd to $OUT/nvram-after.json after the install and compare (read only)";; esac
+  [ "$CASE" != luks ] || echo "  would type the preset luks_passphrase at the unlock prompt of the installed boot (QMP send-key)"
   echo "  would hash the pre-existing data of $disk (read only)"
   echo "  would run $qemu with $code, $disk and $ISO (serial-install.log), then $disk alone (serial-installed.log)"
   echo "  would write $OUT/{checksums-*.json,junit.xml}"
   exit 0
 fi
 mkdir -p "$OUT"
-rm -f "$OUT"/serial-*.log "$OUT"/checksums-*.json "$OUT"/junit.xml
+rm -f "$OUT"/serial-*.log "$OUT"/checksums-*.json "$OUT"/nvram-*.json "$OUT"/nvram.stderr "$OUT"/junit.xml
 # 1. Seed disk.
 if [ -n "${SEED_DIR:-}" ]; then cp "$SEED_DIR/disk.img" "$SEED_DIR/seed.json" "$OUT/"
 else python3 -I "$here/install-seed.py" "$CASE" "$OUT"; fi
@@ -94,6 +100,20 @@ fi
 
 # 4. Two boots share one NVRAM vars file, so the installer's boot entry survives into the second.
 cp "$vars" "$OUT/vars.fd"
+# A fresh VARS template has no Windows Boot Manager entry (the firmware only adds its own), so for the cases
+# with a Windows disk the harness writes one into the OUT copy, then snapshots NVRAM as the "before" state.
+# Only that copy is ever written. Failures are recorded as results below, never skipped.
+nvram=0; nvram_seed_msg=
+case $CASE in erase|luks) ;; *)
+  nvram=1
+  if out=$(python3 -I "$here/install-nvram.py" seed-windows "$OUT/vars.fd" "$OUT/seed.json" 2>&1) \
+     && python3 -I "$here/install-nvram.py" dump "$OUT/vars.fd" > "$OUT/nvram-before.json" 2>"$OUT/nvram.stderr"; then
+    :
+  else
+    nvram_seed_msg="seeding NVRAM: $(echo "$out" | tail -n 3 | tr '\n' ' ')$( [ ! -f "$OUT/nvram.stderr" ] || tr '\n' ' ' < "$OUT/nvram.stderr")"
+  fi ;;
+esac
+fwvars_ver=$(python3 -I "$here/install-nvram.py" version 2>/dev/null || true)
 sock=$OUT/qmp.sock
 base=(-accel "$accel" -cpu "$cpu" -m 4096 -smp "$smp" "${machine[@]}"
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=$code"
@@ -151,30 +171,60 @@ esac
 # The guest powers off after DONE/FAIL; give it a minute, then stop QEMU ourselves.
 t=$SECONDS; while kill -0 "$qpid" 2>/dev/null && (( SECONDS - t < 60 )); do sleep 2; done; stop
 check_sb secureboot-install "$OUT/serial-install.log"
+# NVRAM after the install, read from the stopped VM's VARS copy (the installed boot comes later, so firmware
+# noise from it can't mask what the installer did). Windows Boot Manager must survive; alongside puts ZeeOS
+# first in BootOrder; refuse leaves the old entries alone (rules: vm/install-nvram.py).
+if [ "$nvram" = 1 ]; then
+  if [ -n "$nvram_seed_msg" ]; then record nvram "$nvram_seed_msg"
+  elif ! out=$(python3 -I "$here/install-nvram.py" dump "$OUT/vars.fd" 2>&1 > "$OUT/nvram-after.json"); then
+    record nvram "reading NVRAM: $(echo "$out" | tail -n 3 | tr '\n' ' ')"
+  elif out=$(python3 -I "$here/install-nvram.py" check "$CASE" "$OUT/nvram-before.json" "$OUT/nvram-after.json"); then
+    record nvram ok
+  else record nvram "$(echo "$out" | tr '\n' ' ')"; fi
+fi
 
-# 5. Boot the installed system (cases that install). LUKS needs the passphrase typed at the
-# prompt, which isn't implemented yet: reported as skipped, not passed (CLAUDE.md rule 8).
+# 5. Boot the installed system (cases that install). The luks case first meets the unlock prompt: the
+# passphrase is typed through QMP send-key (vm/qmp.py type), because the guest's prompt is answered from a
+# keyboard (usb-kbd here): plymouth and systemd-ask-password both read the console/VT input, and the serial
+# chardev is a plain output file. No prompt, or a prompt the passphrase doesn't open, fails the cell.
 installed=0
 if [ "${results[0]}" = ok ] && [[ "$CASE" != refuse-* ]]; then
+  installed=1
+  launch "$OUT/serial-installed.log"
+  slog=$OUT/serial-installed.log
+  rc=0
   if [ "$CASE" = luks ]; then
-    record boot "skipped:LUKS passphrase entry at boot not implemented yet (#180 follow-up)"
+    prompt_re='[Pp]lease enter passphrase|[Ee]nter passphrase for|[Pp]assphrase for |Please enter .*(passphrase|password)'
+    wait_for "$slog" "$prompt_re|^ZEEOS_DESKTOP_READY" '^ZEEOS_[A-Z_]*FAIL' "$UNLOCK_TIMEOUT" || rc=$?
+    if [ "$rc" = 0 ] && grep -aqE -- "$prompt_re" "$slog"; then
+      sleep 3  # the prompt is printed just before the agent starts reading
+      typing=$(python3 -I -c 'import json,sys
+for l in open(sys.argv[1]):
+    if l.startswith("luks_passphrase="): print(json.dumps({"text": l.split("=", 1)[1].rstrip("\n"), "enter": True}))' "$OUT/preset.conf")
+      if python3 -I "$here/qmp.py" "$sock" type "$typing" >/dev/null; then
+        rc=0; wait_for "$slog" '^ZEEOS_DESKTOP_READY' '^ZEEOS_[A-Z_]*FAIL' "$BOOT_TIMEOUT" || rc=$?
+        if [ "$rc" = 0 ]; then record unlock ok; else record unlock "passphrase typed, but the system did not come up (rc=$rc)"; fi
+      else record unlock "could not type the passphrase through QMP"; rc=9; fi
+    elif [ "$rc" = 0 ]; then
+      record unlock "reached the login screen without a passphrase prompt: root is not encrypted"
+    elif [ "$rc" = 1 ]; then record unlock "$(grep -aom1 '^ZEEOS_[A-Z_]*FAIL.*' "$slog") before any passphrase prompt"
+    elif [ "$rc" = 2 ]; then record unlock "no passphrase prompt on the serial console after ${UNLOCK_TIMEOUT}s"
+    else record unlock "QEMU exited before a passphrase prompt"; fi
   else
-    installed=1
-    launch "$OUT/serial-installed.log"
-    rc=0; wait_for "$OUT/serial-installed.log" '^ZEEOS_DESKTOP_READY' '^ZEEOS_[A-Z_]*FAIL' "$BOOT_TIMEOUT" || rc=$?
-    if [ "$rc" = 0 ]; then record boot ok; else record boot "installed system: no ZEEOS_DESKTOP_READY (rc=$rc)"; fi
-    stop
-    check_sb secureboot-installed "$OUT/serial-installed.log"
-    bm=$(grep -aom1 '^ZEEOS_BOOTMENU .*' "$OUT/serial-installed.log" || true)
-    want_win=0; [ "$CASE" = alongside ] && want_win=1
-    if [[ "$bm" == *"zeeos=1"* && "$bm" == *"windows=$want_win"* ]]; then record bootmenu ok
-    else record bootmenu "want zeeos=1 windows=$want_win, got '${bm:-no ZEEOS_BOOTMENU}'"; fi
-    rf=$(grep -aom1 '^ZEEOS_ROOTFS .*' "$OUT/serial-installed.log" || true)
-    if [[ "$rf" == *"luks=0"* ]]; then record rootfs ok; else record rootfs "want luks=0, got '${rf:-no ZEEOS_ROOTFS}'"; fi
+    wait_for "$slog" '^ZEEOS_DESKTOP_READY' '^ZEEOS_[A-Z_]*FAIL' "$BOOT_TIMEOUT" || rc=$?
   fi
+  if [ "$rc" = 0 ]; then record boot ok; else record boot "installed system: no ZEEOS_DESKTOP_READY (rc=$rc)"; fi
+  stop
+  check_sb secureboot-installed "$slog"
+  bm=$(grep -aom1 '^ZEEOS_BOOTMENU .*' "$slog" | tr -d '\r' || true)
+  want_win=0; [ "$CASE" = alongside ] && want_win=1
+  if [[ "$bm" == *"zeeos=1"* && "$bm" == *"windows=$want_win"* ]]; then record bootmenu ok
+  else record bootmenu "want zeeos=1 windows=$want_win, got '${bm:-no ZEEOS_BOOTMENU}'"; fi
+  rf=$(grep -aom1 '^ZEEOS_ROOTFS .*' "$slog" | tr -d '\r' || true)
+  want_luks=0; [ "$CASE" = luks ] && want_luks=2
+  if [[ " $rf " == *" luks=$want_luks "* ]]; then record rootfs ok
+  else record rootfs "want luks=$want_luks (0 = none, 2 = LUKS2), got '${rf:-no ZEEOS_ROOTFS}'"; fi
 fi
-[ "$has_parts" = 0 ] || [ "$CASE" = erase ] || [ "$CASE" = luks ] || \
-  record nvram "skipped:Windows Boot Manager NVRAM check needs virt-fw-vars (#180 follow-up)"
 
 # 6. Checksums after: whole partitions must match for the refuse cases, files for alongside.
 if [[ "$CASE" == refuse-* ]]; then
@@ -208,7 +258,9 @@ xml() { sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   printf '<testsuite name="zeeos-install" tests="%d" failures="%d" skipped="%d" time="%d">\n' "${#checks[@]}" "$nfail" "$nskip" "$elapsed"
-  printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="case" value="%s"/><property name="secureboot" value="%s"/></properties>\n' "$accel" "$ARCH" "$CASE" "$SECUREBOOT"
+  printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="case" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$CASE" "$SECUREBOOT"
+  [ -z "$fwvars_ver" ] || printf '<property name="virt_firmware" value="%s"/>' "$fwvars_ver"
+  echo '</properties>'
   for i in "${!checks[@]}"; do
     printf '<testcase classname="install" name="%s.%s">' "$name" "${checks[$i]}"
     case ${results[$i]} in

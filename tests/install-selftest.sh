@@ -7,7 +7,11 @@ cd "$(dirname "$0")/.."
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fx=tests/fixtures
 printf '#!/bin/sh\nexec python3 -I "%s" "$@"\n' "$PWD/tests/fake-qemu.py" > "$tmp/qemu"; chmod +x "$tmp/qemu"
-: > "$tmp/code.fd"; : > "$tmp/vars.fd"; : > "$tmp/fake.iso"
+: > "$tmp/code.fd"; : > "$tmp/fake.iso"
+# The fake VARS file is the JSON dump of tests/fake-virt-fw-vars.py, space-padded (a real store never changes size).
+python3 -I -c 'import sys; open(sys.argv[1], "wb").write(b" " * 65536)' "$tmp/vars.fd"
+printf '#!/bin/sh\nexec python3 -I "%s" "$@"\n' "$PWD/tests/fake-virt-fw-vars.py" > "$tmp/virt-fw-vars"; chmod +x "$tmp/virt-fw-vars"
+export VIRT_FW_VARS=$tmp/virt-fw-vars
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # blank: a 64 KiB disk with no pre-existing partitions. win: a 4 MiB GPT disk (ESP, MSR, Windows) whose
@@ -29,7 +33,7 @@ run() {
   o=$tmp/out-$name
   FAKE_SERIAL_INSTALL=$fx/$fi FAKE_SERIAL_INSTALLED=$fx/$fd FAKE_POWEROFF=1 QEMU_BIN=$tmp/qemu \
     FW_CODE=$tmp/code.fd FW_VARS=$tmp/vars.fd ISO=$tmp/fake.iso SEED_DIR=$sd OUT=$o ARCH=x86_64 CASE=$case \
-    INSTALL_TIMEOUT=10 BOOT_TIMEOUT=10 vm/install-test.sh >"$o.log" 2>&1 || rc=$?
+    INSTALL_TIMEOUT=10 BOOT_TIMEOUT=10 UNLOCK_TIMEOUT=6 vm/install-test.sh >"$o.log" 2>&1 || rc=$?
   if { [ "$want" = pass ] && [ "$rc" != 0 ]; } || { [ "$want" = fail ] && [ "$rc" = 0 ]; }; then
     cat "$o.log" >&2; fail "$name expected $want, exit $rc"
   fi
@@ -41,18 +45,45 @@ run() {
 run erase-ok erase "$tmp/blank" serial-install-done.log serial-installed-ok.log pass \
   'failures="0"' 'name="install.x86_64.erase.bootmenu"' 'name="install.x86_64.erase.rootfs"'
 run erase-install-fail erase "$tmp/blank" serial-install-fail.log serial-installed-ok.log fail 'partition: no space'
-run luks-skips-boot luks "$tmp/blank" serial-install-done.log serial-installed-ok.log pass \
-  'skipped="1"' 'LUKS passphrase entry at boot not implemented'
-run refuse-ok refuse-bitlocker "$tmp/win" serial-install-refused.log serial-installed-ok.log pass \
-  'failures="0"' 'name="install.x86_64.refuse-bitlocker.checksums"' 'Windows Boot Manager NVRAM check'
+# LUKS: the prompt is answered through QMP (the fake only continues the log once the typed keys spell the preset's
+# passphrase) and root must be LUKS2. No skipped check is left anywhere.
+run luks-ok luks "$tmp/blank" serial-install-done.log serial-installed-luks.log pass \
+  'failures="0"' 'skipped="0"' 'name="install.x86_64.luks.unlock"' 'name="install.x86_64.luks.rootfs"'
+grep -q '<skipped' "$tmp/out-luks-ok/junit.xml" && fail "luks-ok left a skipped check"
+run luks-no-prompt luks "$tmp/blank" serial-install-done.log serial-installed-hang.log fail \
+  'no passphrase prompt on the serial console'
+run luks-not-encrypted luks "$tmp/blank" serial-install-done.log serial-installed-ok.log fail \
+  'without a passphrase prompt' 'want luks=2'
+run luks-version-1 luks "$tmp/blank" serial-install-done.log serial-installed-luks1.log fail \
+  'want luks=2 (0 = none, 2 = LUKS2), got .ZEEOS_ROOTFS fstype=btrfs luks=1'
+FAKE_EXPECT_PASSPHRASE=not-the-passphrase run luks-wrong-passphrase luks "$tmp/blank" serial-install-done.log \
+  serial-installed-luks.log fail 'passphrase typed, but the system did not come up'
+run erase-wants-no-luks erase "$tmp/blank" serial-install-done.log serial-installed-luks1.log fail 'want luks=0'
+# NVRAM: the harness seeds a Windows Boot Manager entry, so "still there" means something. Alongside needs a new
+# ZeeOS entry first in BootOrder; refuse may see firmware noise (entries added) but nothing of ZeeOS.
+FAKE_NVRAM=noise run refuse-ok refuse-bitlocker "$tmp/win" serial-install-refused.log serial-installed-ok.log pass \
+  'failures="0"' 'skipped="0"' 'name="install.x86_64.refuse-bitlocker.checksums"' 'name="install.x86_64.refuse-bitlocker.nvram"'
+run refuse-nvram-untouched refuse-hibernated "$tmp/win" serial-install-refused.log serial-installed-ok.log pass 'failures="0"'
+FAKE_NVRAM=zeeos-first run refuse-nvram-zeeos-added refuse-bitlocker "$tmp/win" serial-install-refused.log \
+  serial-installed-ok.log fail 'refused install still added'
+FAKE_NVRAM=drop-windows run refuse-nvram-windows-gone refuse-bitlocker "$tmp/win" serial-install-refused.log \
+  serial-installed-ok.log fail 'Windows Boot Manager is gone'
+FAKE_NVRAM=zeeos-first,drop-windows run alongside-nvram-windows-gone alongside "$tmp/win" serial-install-done.log \
+  serial-installed-windows.log fail 'Windows Boot Manager is gone'
+FAKE_NVRAM=zeeos-last run alongside-nvram-zeeos-last alongside "$tmp/win" serial-install-done.log \
+  serial-installed-windows.log fail 'want ZeeOS'
+run alongside-nvram-unchanged alongside "$tmp/win" serial-install-done.log serial-installed-windows.log fail \
+  'no new ZeeOS entry'
+FAKE_NVRAM=zeeos-first VIRT_FW_VARS=$tmp/no-such-tool run alongside-nvram-no-tool alongside "$tmp/win" \
+  serial-install-done.log serial-installed-windows.log fail 'VIRT_FW_VARS does not exist'
 FAKE_FLIP=$((win_off + 100)) run refuse-disk-changed refuse-bitlocker "$tmp/win" serial-install-refused.log \
   serial-installed-ok.log fail 'pre-existing partitions changed'
 run refuse-but-installed refuse-hibernated "$tmp/win" serial-install-done.log serial-installed-ok.log fail \
   'installed although the case must be refused'
-run alongside-no-windows-entry alongside "$tmp/win" serial-install-done.log serial-installed-ok.log fail \
+FAKE_NVRAM=zeeos-first run alongside-no-windows-entry alongside "$tmp/win" serial-install-done.log serial-installed-ok.log fail \
   'want zeeos=1 windows=1'
-run alongside-ok alongside "$tmp/win" serial-install-done.log serial-installed-windows.log pass 'failures="0"' \
-  'name="install.x86_64.alongside.layout"'
+FAKE_NVRAM=zeeos-first run alongside-ok alongside "$tmp/win" serial-install-done.log serial-installed-windows.log pass \
+  'failures="0"' 'name="install.x86_64.alongside.layout"' 'name="install.x86_64.alongside.nvram"'
 FAKE_FLIP=512 run refuse-gpt-changed refuse-bitlocker "$tmp/win" serial-install-refused.log \
   serial-installed-ok.log fail 'gpt-primary'
 run installed-without-secureboot erase "$tmp/blank" serial-install-done.log serial-installed-nosb.log fail \
@@ -62,12 +93,12 @@ run installed-without-secureboot erase "$tmp/blank" serial-install-done.log seri
 # Alongside: the post-install GPT is checked, not just bytes at the seed's offsets. Shrinking Windows
 # and adding ZeeOS is allowed; deleting, retyping, moving or growing a retained partition, an
 # invalid or inconsistent GPT, and a truncated disk are not.
-FAKE_GPT=shrink run alongside-shrink-ok alongside "$tmp/win" serial-install-done.log serial-installed-windows.log \
+FAKE_NVRAM=zeeos-first FAKE_GPT=shrink run alongside-shrink-ok alongside "$tmp/win" serial-install-done.log serial-installed-windows.log \
   pass 'failures="0"'
 for c in 'delete-msr:msr: deleted' 'type-esp:esp: type changed' 'move-esp:esp: moved' \
          'grow-windows:windows: grew' 'corrupt-backup:backup GPT header CRC mismatch' \
          'mismatch:primary and backup GPT differ' 'truncate:truncated or resized'; do
-  FAKE_GPT=${c%%:*} run "alongside-${c%%:*}" alongside "$tmp/win" serial-install-done.log \
+  FAKE_NVRAM=zeeos-first FAKE_GPT=${c%%:*} run "alongside-${c%%:*}" alongside "$tmp/win" serial-install-done.log \
     serial-installed-windows.log fail 'name="install.x86_64.alongside.layout"><failure' "${c#*:}"
 done
 python3 -I vm/install-checksums.py "$tmp/win/disk.img" "$tmp/win/seed.json" layout >/dev/null || fail "pristine GPT rejected"
