@@ -47,7 +47,7 @@ UEFI firmware ─► shim (signed by Microsoft, from base distro)
 ```
 
 - ZeeOS does **not** build or sign its own kernel, shim or GRUB in v1. That is the only way to boot with Secure Boot on stock Windows PCs without asking users to enroll keys.
-- Any out-of-tree module (none planned for v1) would need MOK enrollment. That path is written up in `security/secure-boot.md` (Phase 5).
+- Any out-of-tree module (none planned for v1) would need MOK enrollment. That path is written up in `security/SECURE-BOOT.md` (#9, PR #124).
 - Installed systems reuse the existing EFI System Partition. GRUB lists ZeeOS and Windows Boot Manager, found by os-prober or a static chainload entry.
 
 ## 4. Architecture isolation

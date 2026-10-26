@@ -12,5 +12,6 @@
 | [0008](0008-package-pinning.md) | Package pinning: per-arch closure lock + GHCR closure repo | Accepted |
 | [0009](0009-english-only-language-scope.md) | Language scope: English only (Arabic/RTL requirement dropped) | Proposed |
 | [0011](0011-installer-package-wayland-only.md) | Installer package: ZeeOS rebuild of Fedora's Calamares without setxkbmap (supersedes ADR-0003's package part) | Proposed |
+| [0012](0012-hardening-defaults.md) | Hardening defaults: firewalld, no sshd, security-only dnf5 automatic, SELinux enforcing | Proposed |
 
 New ADRs: copy `template.md`, use the next number, and open a PR labeled `decision`. An ADR becomes **Accepted** when its PR merges after cross-review (Claude/Codex) with all review threads resolved; no separate owner approval is needed. The owner can still reject one by closing the PR or superseding the ADR.
