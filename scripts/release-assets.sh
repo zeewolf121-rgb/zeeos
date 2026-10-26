@@ -48,7 +48,7 @@ done
 
 fail=0
 for name in "${!src[@]}"; do
-  size=$(stat -c %s "${src[$name]}")
+  size=$(stat -L -c %s "${src[$name]}")   # -L: a symlinked input is measured by its target
   if ((size >= limit)); then
     echo "ERROR: $name is $size bytes, at or over the 2 GiB release asset limit (open a decision issue; do not work around)" >&2
     fail=1

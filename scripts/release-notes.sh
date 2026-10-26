@@ -25,10 +25,13 @@ keysum() { keyline "$1" | tr -d '\n' | sha256sum | cut -d' ' -f1; }
 
 section() {
   [[ -f $log ]] || return 0
+  # The heading's first token, without [ ] and a leading v, must equal the version exactly:
+  # a substring match let "## v0.5.0-rc.10" stand in for v0.5.0-rc.1.
   awk -v v="$ver" '
     /^## / {
       if (on) exit
-      if (index($0, "[" v "]") || index($0, " v" v) || index($0, " " v)) { on = 1; next }
+      t = $2; gsub(/^\[|\]$/, "", t); sub(/^v/, "", t)
+      if (t == v) { on = 1; next }
     }
     on { print }' "$log"
 }

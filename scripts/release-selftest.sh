@@ -22,6 +22,8 @@ cat >"$tmp/CHANGELOG.md" <<'EOF'
 # Changelog
 ## [0.6.0] - 2026-12-01
 - NEWER-ENTRY
+## v0.5.0-rc.10
+- RC10-ENTRY
 ## [0.5.0-rc.1] - 2026-11-01
 - first candidate
 ### Added
@@ -32,7 +34,7 @@ EOF
 scripts/release-notes.sh v0.5.0-rc.1 -c "$tmp/CHANGELOG.md" >"$tmp/notes.md"
 grep -q 'first candidate' "$tmp/notes.md" || die "notes lack the changelog section"
 grep -q -- '- thing' "$tmp/notes.md" || die "notes lack the subsection"
-if grep -q -e NEWER-ENTRY -e OLDER-ENTRY "$tmp/notes.md"; then die "notes include other versions"; fi
+if grep -q -e NEWER-ENTRY -e OLDER-ENTRY -e RC10-ENTRY "$tmp/notes.md"; then die "notes include other versions (rc.10 for rc.1?)"; fi
 for s in 'sha256sum -c' 'shasum -a 256' 'Get-FileHash' 'minisign -Vm SHA256SUMS -p zeeos-ci.pub'; do
   grep -qF -- "$s" "$tmp/notes.md" || die "notes lack '$s'"
 done
@@ -56,6 +58,8 @@ pass "release-assets.sh naming and SHA256SUMS"
 truncate -s 2G "$tmp/big.x86_64.iso"   # exactly 2 GiB, sparse
 expect_fail "oversize asset (2 GiB) rejected" scripts/release-assets.sh -v 0.5.0 -o "$tmp/big" "$tmp/big.x86_64.iso"
 [[ ! -e $tmp/big ]] || die "oversize run created the output dir"
+ln -s "$tmp/big.x86_64.iso" "$tmp/link.x86_64.iso"   # the size gate measures the target, not the link
+expect_fail "oversize asset behind a symlink rejected" scripts/release-assets.sh -n -v 0.5.0 -o "$tmp/big" "$tmp/link.x86_64.iso"
 truncate -s 1G "$tmp/ok.x86_64.iso"
 scripts/release-assets.sh -n -v 0.5.0 -o "$tmp/big" "$tmp/ok.x86_64.iso" >/dev/null || die "1 GiB asset rejected"
 expect_fail "unclassifiable file rejected" scripts/release-assets.sh -v 0.5.0 -o "$tmp/x" "$tmp/CHANGELOG.md"
