@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Id": "ZeeOS-Plain-Dark",
+    "Name": "ZeeOS Plain Dark",
+    "Authors": [
+      {
+        "Name": "ZeeOS contributors"
+      }
+    ],
+    "Description": "Original ZeeOS window decoration, flat buttons",
+    "License": "CC-BY-SA-4.0"
+  }
+}

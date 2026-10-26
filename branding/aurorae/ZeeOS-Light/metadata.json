@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Id": "ZeeOS-Light",
+    "Name": "ZeeOS Light",
+    "Authors": [
+      {
+        "Name": "ZeeOS contributors"
+      }
+    ],
+    "Description": "Original ZeeOS window decoration, round traffic-light buttons",
+    "License": "CC-BY-SA-4.0"
+  }
+}

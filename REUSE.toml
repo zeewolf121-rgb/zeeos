@@ -16,6 +16,12 @@ path = ["branding/wallpapers/*/metadata.json", "branding/wallpapers/*/contents/*
 SPDX-FileCopyrightText = "2026 ZeeOS contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 
+# Original Aurorae window decoration themes (rendered by branding/aurorae/src/render.py).
+[[annotations]]
+path = ["branding/aurorae/ZeeOS-*/**", "branding/aurorae/preview.png", "branding/aurorae/src/preview.svg"]
+SPDX-FileCopyrightText = "2026 ZeeOS contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
 # Boot-test screenshot baselines (P3-11, #136): screenshots of the ZeeOS desktop, whose wallpaper is
 # the artwork above. The build/** entry below adds its notice too (aggregate).
 [[annotations]]
