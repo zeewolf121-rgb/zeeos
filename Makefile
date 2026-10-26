@@ -3,7 +3,7 @@ ARCH ?= x86_64
 SECUREBOOT ?= on
 # The ISO that `make iso ARCH=…` writes; override with ISO=<path>.
 ISO ?= $(firstword $(wildcard out/$(ARCH)/image/*.iso))
-.PHONY: iso iso-host pin-container pin-packages rpms rpms-source-lock test-build reproducible boot-test lint
+.PHONY: iso iso-host pin-container pin-packages rpms rpms-source-lock test-build reproducible boot-test lint cve-scan secret-scan
 iso:
 	build/container/run.sh $(ARCH)
 iso-host:
@@ -29,6 +29,12 @@ reproducible:
 	build/check-reproducible.sh $(ARCH)
 boot-test:
 	ARCH=$(ARCH) SECUREBOOT=$(SECUREBOOT) $(if $(ISO),ISO=$(ISO)) $(if $(OUT),OUT=$(OUT)) vm/boot-test.sh
+# P5-8 (#274): build/arch/$(ARCH)/packages.lock against Fedora's updateinfo, in the build container.
+cve-scan:
+	ZEEOS_ENTRY=scripts/cve-scan.sh build/container/run.sh $(ARCH)
+# P5-8 (#274): gitleaks (pinned version and SHA-256) over the whole git history.
+secret-scan:
+	scripts/secret-scan.sh
 lint:
 	shellcheck -x scripts/*.sh scripts/autopilot/*.sh build/*.sh build/common/*.sh build/container/*.sh build/pin/*.sh build/rpms/*.sh build/tests/*.sh security/*.sh
 	yamllint -d relaxed .github
@@ -37,6 +43,7 @@ lint:
 	scripts/sync-agent-docs.sh --check
 	scripts/autopilot/selftest.sh
 	bash build/tests/zeeos-closure-test.sh
+	bash tests/scan-selftest.sh
 	@for d in installer/modules/*/tests installer/tools/tests; do \
 	  if [ -d "$$d" ]; then python3 -m unittest discover -s "$$d" || exit 1; fi; \
 	done
