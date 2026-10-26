@@ -9,7 +9,7 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # --- rpm version order (scripts/cve_scan.py evr_cmp) ---
-python3 -I - <<'EOF' || fail "evr_cmp"
+python3 -I -B - <<'EOF' || fail "evr_cmp"
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("c", "scripts/cve_scan.py")
 c = importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
