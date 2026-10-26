@@ -23,6 +23,42 @@ loader.exec_module(ai)
 GOOD = b"case=erase\nuser=zee\npassword=pw1\nluks_passphrase=lp\n"
 
 
+class WriteAll(unittest.TestCase):
+    """A full tty buffer (EAGAIN) or a short write must not drop a marker line (CI: a lost
+    ZEEOS_INSTALL_FAIL after dump_log made a correct refusal look like a crash)."""
+
+    def test_retries_eagain_and_short_writes(self):
+        calls, out = [], bytearray()
+        real = ai.os.write
+
+        def fake(fd, data):
+            calls.append(len(data))
+            if len(calls) == 1:
+                raise BlockingIOError
+            n = min(4, len(data))  # short writes
+            out.extend(data[:n])
+            return n
+        ai.os.write = fake
+        try:
+            ai.write_all(99, b"ZEEOS_INSTALL_FAIL x\r\n")
+        finally:
+            ai.os.write = real
+        self.assertEqual(bytes(out), b"ZEEOS_INSTALL_FAIL x\r\n")
+        self.assertGreater(len(calls), 2)
+
+    def test_gives_up_after_timeout(self):
+        real = ai.os.write
+
+        def full(fd, data):
+            raise BlockingIOError
+        ai.os.write = full
+        try:
+            with self.assertRaises(BlockingIOError):
+                ai.write_all(99, b"x", timeout=0.1)
+        finally:
+            ai.os.write = real
+
+
 class CalamaresConfigDir(unittest.TestCase):
     """`calamares -c DIR` makes DIR the app-data dir, and Calamares 3.3.14 aborts without DIR/qml."""
 
