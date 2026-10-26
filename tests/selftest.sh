@@ -12,12 +12,15 @@ if ARCH=riscv DRY_RUN=1 OUT=$tmp vm/boot-test.sh 2>/dev/null; then echo "FAIL: b
 # Marker protocol (docs/phases/phase-3.md): replay fixture serial logs through the harness with a fake QEMU.
 fw=$tmp/fw; : > "$fw"; iso=$tmp/fake.iso; : > "$iso"
 printf '#!/bin/sh\nexec python3 -I "%s" "$@"\n' "$PWD/tests/fake-qemu.py" > "$tmp/qemu"; chmod +x "$tmp/qemu"
-# replay <fixture> <expect: pass|fail> <junit pattern> [junit pattern...]
+# Fake QEMU screendumps are 1x1, so never gate them against the real build/arch baselines (#266):
+# replays use an empty baselines dir unless base=DIR is set.
+mkdir "$tmp/baselines"
+# [base=DIR] replay <fixture> <expect: pass|fail> <junit pattern> [junit pattern...]
 replay() {
   local fx=$1 want=$2 o rc=0; shift 2
   o=$tmp/out-${fx%.log}
   FAKE_SERIAL=tests/fixtures/$fx QEMU_BIN=$tmp/qemu FW_CODE=$fw FW_VARS=$fw ISO=$iso OUT=$o ARCH=x86_64 \
-    SECUREBOOT=off SCREENSHOT_DELAY=0 TIMEOUT=20 THEME_TIMEOUT=6 vm/boot-test.sh >"$o.log" 2>&1 || rc=$?
+    BASELINES=${base:-$tmp/baselines} SECUREBOOT=off SCREENSHOT_DELAY=0 TIMEOUT=20 THEME_TIMEOUT=6 vm/boot-test.sh >"$o.log" 2>&1 || rc=$?
   if { [ "$want" = pass ] && [ "$rc" != 0 ]; } || { [ "$want" = fail ] && [ "$rc" = 0 ]; }; then
     echo "FAIL: $fx expected $want, exit $rc" >&2; cat "$o.log" >&2; exit 1
   fi
@@ -38,6 +41,12 @@ replay serial-layout-fail.log fail 'layout-fail-mac' '<skipped/>'
 # PID 1 froze in early boot: the harness boots once more; a second freeze ends in a timeout.
 replay serial-freeze.log fail 'boot_retry" value="1"' 'marker ZEEOS_DESKTOP_READY: timeout'
 [ -s "$tmp/out-serial-freeze/serial-attempt1.log" ] || { echo "FAIL: no serial-attempt1.log" >&2; exit 1; }
+# BASELINES reaches the gate: a matching 1x1 baseline passes, a different one fails the cell.
+mkdir "$tmp/base-same" "$tmp/base-diff"
+printf 'P6\n1 1\n255\n\0\0\0' > "$tmp/base-same/light.ppm"
+printf 'P6\n1 1\n255\n\377\377\377' > "$tmp/base-diff/light.ppm"
+base=$tmp/base-same replay serial-theme-only.log pass 'imgdiff_gate" value="pass"'
+base=$tmp/base-diff replay serial-theme-only.log fail 'imgdiff_gate" value="fail"'
 
 rm -rf "$tmp"
 bash tests/imgdiff_gate_test.sh
