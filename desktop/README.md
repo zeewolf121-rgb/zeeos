@@ -39,7 +39,8 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 - `usr/libexec/zeeos-theme-check` with `zeeos-theme-check-announce.service` (prints `ZEEOS_THEME_CHECK` before
   `ZEEOS_DESKTOP_READY`) and `zeeos-theme-check.service` (after desktop-ready: `ZEEOS_MEM`, light check,
   `ZEEOS_THEME_OK`, wait `zeeos.dark_delay` s (default 150), switch to dark, read back Plasma scheme, GTK theme and
-  portal `color-scheme` (after restarting plasmashell and waiting for it to answer on D-Bus, #170), `ZEEOS_DARK_READY`; else `ZEEOS_THEME_FAIL <reason>`). Format: docs/phases/phase-2.md.
+  portal `color-scheme` (after restarting plasmashell and waiting for it to answer on D-Bus, #170), `ZEEOS_DARK_READY`, then hold dark for `zeeos.dark_delay` s so the harness's dark screenshot doesn't race
+  the layout check's switch back to light (#170); else `ZEEOS_THEME_FAIL <reason>`). Format: docs/phases/phase-2.md.
 - Both units are pulled in by `Wants=` in `zeeos-desktop-ready.service`, so `build/` needs no change.
 - Dark GTK3 is set by the script (`adw-gtk3-dark` in the user's `settings.ini`) until kde-gtk-config lands (#118).
 - `DRY_RUN=1` prints without touching the serial tty. Not run in a guest yet; the boot-test CI run is the evidence.

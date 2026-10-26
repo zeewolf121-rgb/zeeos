@@ -9,5 +9,6 @@ ConditionKernelCommandLine=rd.live.image
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/zeeos-theme-check
-# 5 s settle + GTK sync wait + 150 s dark delay + two portal waits + plasmashell restart, with headroom
-TimeoutStartSec=600
+# 5 s settle + GTK sync wait + 2 x 150 s dark delay (before and after the switch) + two portal waits
+# + plasmashell restart, with headroom
+TimeoutStartSec=900
