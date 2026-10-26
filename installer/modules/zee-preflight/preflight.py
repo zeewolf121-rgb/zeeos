@@ -115,9 +115,10 @@ class Reader:
         finally:
             os.close(fd)
 
-    def tool(self, argv, limit=1 << 20):
-        """Run a read-only ntfsprogs tool: (rc, stdout[:limit], stderr). Stops reading after
-        `limit` bytes and kills the tool (a real hiberfil.sys is gigabytes); that counts as rc 0."""
+    def tool(self, argv, limit=64 << 20, head=False):
+        """Run a read-only ntfsprogs tool: (rc, stdout[:limit], stderr). With `head`, stops
+        after `limit` bytes and kills the tool (a real hiberfil.sys is gigabytes); that counts
+        as rc 0. Without it, output longer than `limit` is incomplete and raises ProbeError."""
         if self.dry_run:
             self.log.append("PLAN read-only " + " ".join(argv))
         try:
@@ -147,6 +148,8 @@ class Reader:
             timer.cancel()
         if expired.is_set():
             raise ProbeError(f"{argv[0]}: no answer after {TOOL_TIMEOUT}s")
+        if full and not head:
+            raise ProbeError(f"{argv[0]}: output longer than {limit} bytes, listing incomplete")
         return (0 if full else rc), out, err
 
 
@@ -251,7 +254,7 @@ def ntfs_hibernated(path, reader):
     names = [n for n in out.decode("utf-8", "replace").splitlines() if n.strip().lower() == HIBERFIL]
     if not names:
         return False
-    rc, out, err = reader.tool(["ntfscat", path, names[0].strip()], limit=4096)
+    rc, out, err = reader.tool(["ntfscat", path, names[0].strip()], limit=4096, head=True)
     if rc != 0:
         raise ProbeError(_tool_error(f"ntfscat {names[0].strip()}", rc, err))
     # libntfs-3g treats a hiberfil.sys under 4096 bytes (even empty) as a hibernated

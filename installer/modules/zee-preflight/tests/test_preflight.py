@@ -85,7 +85,7 @@ class FakeTools(preflight.Reader):
         super().__init__(**kw)
         self.volumes, self.fail, self.calls = volumes, fail, []
 
-    def tool(self, argv, limit=1 << 20):
+    def tool(self, argv, limit=64 << 20, head=False):
         self.calls.append(argv)
         if self.dry_run:
             self.log.append("PLAN read-only " + " ".join(argv))
@@ -190,8 +190,15 @@ class Probe(Base):
 
     def test_tool_output_is_capped(self):
         rc, out, _ = preflight.Reader().tool(
-            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'hibr' * 100000)"], limit=8)
+            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'hibr' * 100000)"],
+            limit=8, head=True)
         self.assertEqual((rc, out), (0, b"hibrhibr"))
+
+    def test_truncated_listing_fails_closed(self):
+        with self.assertRaises(preflight.ProbeError) as cm:
+            preflight.Reader().tool(
+                [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'x' * 100000)"], limit=8)
+        self.assertIn("incomplete", str(cm.exception))
 
     def test_unreadable_device_fails_closed(self):
         missing = str(self.tmp / "missing")
