@@ -16,6 +16,13 @@ path = ["branding/wallpapers/*/metadata.json", "branding/wallpapers/*/contents/*
 SPDX-FileCopyrightText = "2026 ZeeOS contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 
+# Boot-test screenshot baselines (P3-11, #136): screenshots of the ZeeOS desktop, whose wallpaper is
+# the artwork above. The build/** entry below adds its notice too (aggregate).
+[[annotations]]
+path = ["build/arch/*/baselines/*.ppm", "build/arch/*/baselines/masks.txt"]
+SPDX-FileCopyrightText = "2026 ZeeOS contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
 # Code files carry their own SPDX-License-Identifier; this adds the copyright notice
 # (agents keep forgetting SPDX-FileCopyrightText). Artwork in /branding is not covered.
 [[annotations]]
