@@ -3,6 +3,7 @@
 # Secret scan (P5-8, #274): gitleaks over the whole git history (every ref), pinned by version and
 # SHA-256 (a mismatch fails closed). Findings are printed redacted.
 # Usage: scripts/secret-scan.sh [repo-dir]      default: this repository
+# Self-test: scripts/scan-selftest.sh (with cve-scan).
 # GITLEAKS=<path> uses an already-verified binary; GITLEAKS_CACHE sets the download directory.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,6 +35,6 @@ if [[ -z "$bin" ]]; then
   fi
 fi
 
-cfg=()
-[[ -f "$repo/.gitleaks.toml" ]] && cfg=(--config "$repo/.gitleaks.toml")
-exec "$bin" git "$repo" --log-opts=--all --redact --no-banner --exit-code 1 ${cfg[@]+"${cfg[@]}"}
+# Default rules plus the lock-entry allowlist in scripts/gitleaks.toml (GITLEAKS_CONFIG overrides).
+exec "$bin" git "$repo" --config "${GITLEAKS_CONFIG:-$root/scripts/gitleaks.toml}" \
+  --log-opts=--all --redact --no-banner --exit-code 1
