@@ -48,3 +48,21 @@ for m in "$repo"/installer/modules/zee-*/; do
   mods=$((mods + 1))
 done
 ((mods)) || echo "stage-installer: SKIP zee-* modules (no installer/modules/zee-*/)"
+
+# Unattended CI install (P4-9, #181): live unit, udev trigger, runner, its settings.conf and the
+# first-boot marker unit that zee-autopreset copies to the target. Paths match the units and
+# installer/calamares/modules/shellprocess-zeelivecleanup.conf, which removes them from the target.
+ai="$repo/installer/autoinstall"
+if [[ -f "$ai/zeeos-autoinstall" ]]; then
+  install -d -m 0755 "$dest/usr/lib/systemd/system" "$dest/usr/lib/udev/rules.d" "$dest/usr/libexec" \
+    "$dest/usr/share/zeeos/autoinstall/firstboot"
+  install -m 0644 "$ai/zeeos-autoinstall.service" "$dest/usr/lib/systemd/system/"
+  install -m 0644 "$ai/90-zeeos-autoinstall.rules" "$dest/usr/lib/udev/rules.d/"
+  install -m 0755 "$ai/zeeos-autoinstall" "$dest/usr/libexec/zeeos-autoinstall"
+  install -m 0644 "$ai/settings.conf" "$dest/usr/share/zeeos/autoinstall/settings.conf"
+  install -m 0755 "$ai/firstboot/zeeos-install-markers" "$dest/usr/share/zeeos/autoinstall/firstboot/"
+  install -m 0644 "$ai/firstboot/zeeos-install-markers.service" "$dest/usr/share/zeeos/autoinstall/firstboot/"
+  echo "stage-installer: autoinstall unit, udev rule, runner, settings.conf and firstboot markers"
+else
+  echo "stage-installer: SKIP autoinstall (installer/autoinstall/zeeos-autoinstall not present)"
+fi
