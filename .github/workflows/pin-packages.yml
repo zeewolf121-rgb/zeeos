@@ -3,7 +3,8 @@
 # anonymous pull on the refresh PR's head). Manual dispatch can target a branch
 # (e.g. #80's); the daily run refreshes main through a rolling PR. The publish step's
 # anonymous-pull check fails until the owner makes the ghcr.io/<owner>/zeeos-closure-* packages
-# public once. GITHUB_TOKEN pushes trigger no CI, so the commit job dispatches lint and build-iso.
+# public once. GITHUB_TOKEN pushes trigger no CI, so the commit job reopens the PR with the owner
+# token (the PR's required checks then run on the new head, #233), or dispatches them without a PR.
 # Dispatch with publish_tools=true to also publish and pin the build/tools image (#221), and with
 # build_rpms=true to rebuild the ADR-0011 RPMs natively first so the closure carries them.
 name: pin-packages
@@ -203,13 +204,30 @@ jobs:
             gh pr edit "$pr" --add-label boot-chain
           fi
           echo "target=$target" >>"$GITHUB_OUTPUT"
-      # Pushes made with GITHUB_TOKEN start no workflows, so dispatch the required checks on the
-      # new head; their check runs attach to that commit and count for the PR.
+      # Pushes made with GITHUB_TOKEN start no workflows. Dispatched runs don't count as the PR's
+      # required checks either (#233): branch protection only matches pull_request runs. With an open
+      # PR, close and reopen it with the owner token, which does start workflows: `reopened` runs
+      # lint, build-iso and verify-pins (it has a pull_request trigger on the locks) on this head.
+      # Without a PR (a dispatch to a plain branch), or without the token, dispatch them as before.
       - name: Run the required checks on the new head
         if: steps.commit.outputs.target != ''
         env:
           TARGET: ${{ steps.commit.outputs.target }}
+          TRIGGER_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
         run: |
-          gh workflow run lint.yml --ref "$TARGET"
-          gh workflow run build-iso.yml --ref "$TARGET"
-          gh workflow run verify-pins.yml --ref "$TARGET"   # anonymous-pull check on the new head (#88)
+          pr="$(gh pr list --head "$TARGET" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$pr" && -n "$TRIGGER_TOKEN" ]]; then
+            # Reopen only once GitHub has the pushed commit as the PR head, or the runs could check
+            # the previous head's merge ref.
+            head="$(git rev-parse HEAD)"
+            for _ in $(seq 1 30); do
+              [[ "$(gh pr view "$pr" --json headRefOid --jq .headRefOid)" == "$head" ]] && break
+              sleep 5
+            done
+            GH_TOKEN="$TRIGGER_TOKEN" gh pr close "$pr" --repo "$GITHUB_REPOSITORY"
+            GH_TOKEN="$TRIGGER_TOKEN" gh pr reopen "$pr" --repo "$GITHUB_REPOSITORY"
+          else
+            gh workflow run lint.yml --ref "$TARGET"
+            gh workflow run build-iso.yml --ref "$TARGET"
+            gh workflow run verify-pins.yml --ref "$TARGET"   # anonymous-pull check on the new head (#88)
+          fi
