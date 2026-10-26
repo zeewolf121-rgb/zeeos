@@ -16,6 +16,9 @@ printf '#!/bin/sh\nexec python3 -I "%s" "$@"\n' "$PWD/tests/fake-qemu.py" > "$tm
 replay() {
   local fx=$1 want=$2 o rc=0; shift 2
   o=$tmp/out-${fx%.log}
+  # The fake QEMU's screenshots are 1x1: keep the committed baselines out of it (the gate has its own
+  # test, imgdiff_gate_test.sh).
+  BASELINES=$tmp/no-baselines \
   FAKE_SERIAL=tests/fixtures/$fx QEMU_BIN=$tmp/qemu FW_CODE=$fw FW_VARS=$fw ISO=$iso OUT=$o ARCH=x86_64 \
     SECUREBOOT=off SCREENSHOT_DELAY=0 TIMEOUT=20 THEME_TIMEOUT=6 vm/boot-test.sh >"$o.log" 2>&1 || rc=$?
   if { [ "$want" = pass ] && [ "$rc" != 0 ]; } || { [ "$want" = fail ] && [ "$rc" = 0 ]; }; then
