@@ -138,9 +138,41 @@ def seed_windows(vars_fd, seed_json):
     print(f"seeded Boot{free} {WINDOWS}; BootOrder {','.join(after['order'])}")
 
 
-def check(case, before, after):
+def hd_guid(path_hex):
+    """Partition GUID of the first HD() media node in a device path, or None (firmware entries:
+    QEMU HARDDISK/DVD-ROM, PXE, shell, boot manager have none)."""
+    raw = bytes.fromhex(path_hex)
+    i = 0
+    while i + 4 <= len(raw):
+        t, st, ln = raw[i], raw[i + 1], struct.unpack_from("<H", raw, i + 2)[0]
+        if ln < 4:
+            break
+        if t == 4 and st == 1 and ln >= 42:
+            return str(uuid.UUID(bytes_le=raw[i + 24:i + 40]))
+        if t == 0x7F:
+            break
+        i += ln
+    return None
+
+
+def esp_guid(seed):
+    esp = next((p for p in seed.get("gpt", {}).get("partitions", []) if p["name"] == "esp"), None)
+    return esp["guid"].lower() if esp else None
+
+
+def check(case, before, after, esp=None):
+    """With `esp` (the target disk's ESP partition GUID) only entries on that ESP count: OVMF
+    re-enumerates its own entries (QEMU HARDDISK/DVD-ROM, PXE) on every boot, and booting the live
+    ISO through shim's fallback registers a "Fedora" entry on the CD (seen in CI); neither is the
+    installer's doing."""
     bad = []
     be, ae = before["entries"], after["entries"]
+    if esp:
+        on_esp = lambda e: (hd_guid(e["path"]) or "").lower() == esp  # noqa: E731
+        be = {n: e for n, e in be.items() if on_esp(e)}
+        ae = {n: e for n, e in ae.items() if on_esp(e)}
+        before = dict(before, order=[n for n in before["order"] if n in be])
+        after = dict(after, order=[n for n in after["order"] if n in ae])
     if not any(e["title"] == WINDOWS for e in be.values()):
         bad.append(f"the seeded NVRAM has no {WINDOWS} entry, so the check proves nothing")
     for n, e in sorted(be.items()):
@@ -181,12 +213,16 @@ def main():
     elif a[:1] == ["dump"] and len(a) == 2:
         json.dump(dump(a[1]), sys.stdout, indent=1)
         print()
-    elif a[:1] == ["check"] and len(a) == 4:
+    elif a[:1] == ["check"] and len(a) in (4, 5):
         with open(a[2]) as f:
             b = json.load(f)
         with open(a[3]) as f:
             c = json.load(f)
-        bad = check(a[1], b, c)
+        esp = None
+        if len(a) == 5:  # check CASE BEFORE AFTER SEED_JSON: judge only entries on the target ESP
+            with open(a[4]) as f:
+                esp = esp_guid(json.load(f))
+        bad = check(a[1], b, c, esp)
         for line in bad:
             print(line)
         sys.exit(1 if bad else 0)

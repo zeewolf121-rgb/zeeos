@@ -187,7 +187,7 @@ if [ "$nvram" = 1 ]; then
   if [ -n "$nvram_seed_msg" ]; then record nvram "$nvram_seed_msg"
   elif ! out=$(python3 -I "$here/install-nvram.py" dump "$OUT/vars.fd" 2>&1 > "$OUT/nvram-after.json"); then
     record nvram "reading NVRAM: $(echo "$out" | tail -n 3 | tr '\n' ' ')"
-  elif out=$(python3 -I "$here/install-nvram.py" check "$CASE" "$OUT/nvram-before.json" "$OUT/nvram-after.json"); then
+  elif out=$(python3 -I "$here/install-nvram.py" check "$CASE" "$OUT/nvram-before.json" "$OUT/nvram-after.json" "$OUT/seed.json"); then
     record nvram ok
   else record nvram "$(echo "$out" | tr '\n' ' ')"; fi
 fi
