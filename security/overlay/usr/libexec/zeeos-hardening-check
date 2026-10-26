@@ -58,7 +58,7 @@ if ! active firewalld.service; then
 else
     fw() { "$FIREWALL_CMD" "$@" 2>/dev/null; }
     [ "$(fw --get-default-zone)" = public ] || { inbound=bad; fail firewall "default zone is not public"; }
-    [ "$(fw --zone=public --get-target)" = default ] || { inbound=bad; fail firewall "public target is not default"; }
+    [ "$(fw --permanent --zone=public --get-target)" = default ] || { inbound=bad; fail firewall "public target is not default"; }
     for what in ports forward-ports rich-rules; do
         [ -z "$(fw --zone=public --list-"$what")" ] || { inbound=bad; fail firewall "public has $what"; }
     done

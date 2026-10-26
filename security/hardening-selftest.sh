@@ -15,7 +15,8 @@ stub getenforce 'cat "$ROOT/st/selinux"'
 stub systemctl 'case $1 in is-active) grep -qx "$3" "$ROOT/st/active";; is-enabled) grep -qx "$3" "$ROOT/st/enabled";; esac'
 stub firewall-cmd 'case $* in
   *--get-default-zone*) cat "$ROOT/st/fw-zone";;
-  *--get-target*) cat "$ROOT/st/fw-target";;
+  *--permanent*--get-target*) cat "$ROOT/st/fw-target";;
+  *--get-target*) echo "stub: --get-target needs --permanent" >&2; exit 2;;
   *--list-services*) cat "$ROOT/st/fw-services";;
   *--list-ports*) cat "$ROOT/st/fw-ports";;
   *--query-masquerade*) echo no;;
