@@ -12,7 +12,8 @@ Read-only checks that stop an install from touching a Windows volume that isn't 
     with `ntfsls -a` and `ntfscat` (ntfsprogs, read-only). `wake` (resumed) or no hiberfil is fine.
     Reports `ntfs-hibernated`.
   - Otherwise `ntfs`, `exfat` or `other`. A device or volume it can't read is `unreadable`
-    (fail closed), and so is a missing tool.
+    (fail closed), and so is a missing tool or one that prints diagnostics on stderr even when it
+    exits 0 (ntfsls does not propagate a failed index-block read).
   Each blocking kind comes with fix steps (save the recovery key and suspend BitLocker; turn off
   Fast Startup and shut down fully; `chkdsk /f`).
 - `main.py` is the Calamares job. It goes in `exec` before any disk job, and it is first in the
