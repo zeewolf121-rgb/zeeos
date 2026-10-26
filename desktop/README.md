@@ -60,7 +60,8 @@ Root-tree overlay for the live session, to be copied into the image by `build/` 
 
 - `usr/share/plasma/look-and-feel/org.zeeos.{windows,mac,hybrid}`: Look-and-Feel packages. Each has
   `contents/defaults` (same scheme and wallpaper as `org.zeeos.base`, plus `[kwinrc][org.kde.kdecoration2]` button
-  order) and `contents/layouts/org.kde.plasma.desktop-layout.js` (panels, per docs/phases/phase-3.md "Layout spec").
+  order and the zee Aurorae decoration: `ZeeOS-Light` for mac/hybrid, `ZeeOS-Plain-Light` for windows, from
+  `branding/aurorae/`; #137) and `contents/layouts/org.kde.plasma.desktop-layout.js` (panels, per docs/phases/phase-3.md "Layout spec").
 - windows: one bottom panel (Kickoff, centered Icons-only Task Manager, tray, clock); buttons right (min, max, close).
 - mac: top panel (Kickoff, Global Menu, tray, clock) plus a floating bottom dock (Icons-only Task Manager, no
   magnification yet); buttons left (close, min, max).
