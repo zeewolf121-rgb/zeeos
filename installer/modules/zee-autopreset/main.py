@@ -47,20 +47,6 @@ def chroot(root: str, argv: list[str], dry: bool, stdin: str | None = None) -> N
         raise RuntimeError(f"{argv[0]} failed: {(r.stderr or r.stdout).strip()[:200]}")
 
 
-FILE_CONTEXTS = "/etc/selinux/targeted/contexts/files/file_contexts"
-
-
-def relabel(root: str, rel_paths: list[str], dry: bool) -> None:
-    """SELinux-relabel files inside the target with the host's setfiles (same image, same policy)."""
-    paths = [os.path.join(root, p) for p in rel_paths if os.path.lexists(os.path.join(root, p))]
-    libcalamares.utils.debug("zee-autopreset: setfiles " + " ".join(rel_paths) + (" (dry run)" if dry else ""))
-    if dry or not paths:
-        return
-    r = subprocess.run(["setfiles", "-F", "-r", root, FILE_CONTEXTS, *paths], capture_output=True, text=True)
-    if r.returncode:
-        raise RuntimeError(f"setfiles failed: {(r.stderr or r.stdout).strip()[:200]}")
-
-
 def run():
     gs = libcalamares.globalstorage
     dry = bool(gs.value("zeeDryRun")) or os.environ.get("ZEE_DRY_RUN") == "1"
@@ -76,10 +62,6 @@ def run():
         gs.insert("zeeConsole", preset["console"])  # checked by zeeos-autoinstall and zee-bootmenu
     try:
         chroot(root, ["useradd", "-m", "-U", "-G", "wheel", "-s", "/bin/bash", user], dry)
-        # useradd writes these files etc_t, so chpasswd (passwd_t) is denied writing them (seen
-        # live). Relabel them from the host: restorecon inside the chroot is a silent no-op (no
-        # /sys/fs/selinux there, so libselinux thinks SELinux is off).
-        relabel(root, ["etc/passwd", "etc/shadow", "etc/group", "etc/gshadow"], dry)
         chroot(root, ["chpasswd"], dry, stdin=f"{user}:{preset['password']}\n")
         if not dry:
             Path(root, "etc/hostname").write_text("zeeos-autoinstall\n")
