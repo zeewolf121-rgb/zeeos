@@ -49,11 +49,11 @@ cp -r vm tests "$tmp/repo/"
 python3 -I -c 'import sys; open(sys.argv[1], "wb").write(b"P6\n1280 800\n255\n" + bytes([60]) * (1280 * 800 * 3))' \
   "$tmp/repo/build/arch/x86_64/baselines/light.ppm"
 real=$tmp/out-real; rc=0
-(cd "$tmp/repo" && env -u BASELINES FAKE_SERIAL=tests/fixtures/serial-plain.log QEMU_BIN="$tmp/qemu" FW_CODE="$fw" FW_VARS="$fw" \
+(cd "$tmp/repo" && env -u BASELINES FAKE_SERIAL=tests/fixtures/serial-theme-only.log QEMU_BIN="$tmp/qemu" FW_CODE="$fw" FW_VARS="$fw" \
   ISO="$iso" OUT="$real" ARCH=x86_64 SECUREBOOT=off SCREENSHOT_DELAY=0 TIMEOUT=20 THEME_TIMEOUT=6 vm/boot-test.sh) >"$real.log" 2>&1 || rc=$?
 { [ "$rc" != 0 ] && grep -q 'imgdiff-gate' "$real/junit.xml"; } \
   || { echo "FAIL: default baseline gate not applied (exit $rc)" >&2; cat "$real.log" >&2; exit 1; }
-REPLAY_BASELINES=$tmp/repo/build/arch/x86_64/baselines replay serial-plain.log fail 'imgdiff-gate'
+REPLAY_BASELINES=$tmp/repo/build/arch/x86_64/baselines replay serial-theme-only.log fail 'imgdiff-gate'
 replay serial-plain.log pass 'imgdiff_gate" value="pass"'
 
 rm -rf "$tmp"
