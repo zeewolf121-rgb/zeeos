@@ -59,4 +59,5 @@ replay serial-plain.log pass 'imgdiff_gate" value="pass"'
 rm -rf "$tmp"
 bash tests/imgdiff_gate_test.sh
 bash tests/install-selftest.sh
+bash tests/hardening-selftest.sh
 echo "selftest ok"
