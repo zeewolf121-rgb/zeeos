@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # installer-disk. Unattended CI install (P4-9, #181). Not enabled by any target: only
-# 90-zeeos-autoinstall.rules pulls it in, when the ZEEOS-AUTOINSTALL preset disk appears.
+# 90-zeeos-autoinstall.rules starts it, when the ZEEOS-AUTOINSTALL preset disk appears.
 [Unit]
 Description=ZeeOS unattended install (CI preset disk present)
 ConditionKernelCommandLine=rd.live.image
 ConditionPathExists=/dev/disk/by-id/virtio-ZEEOS-AUTOINSTALL
 After=systemd-udevd.service local-fs.target
-# The live desktop's boot-test marker would only compete for CPU during the install.
-Conflicts=zeeos-desktop-ready.service
+# No Conflicts=zeeos-desktop-ready.service: that unit starts later in the boot, and a conflicting
+# start stops this one, killing the install mid-way. The marker unit is harmless alongside it.
 
 [Service]
 Type=oneshot
