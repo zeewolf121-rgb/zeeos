@@ -60,9 +60,18 @@ if installing and os.environ.get("FAKE_NVRAM"):
         var["Boot%04X" % n] = {"name": "Boot%04X" % n, "guid": nv.GLOBAL_GUID, "attr": 7,
                                "data": nv.load_option(title, path).hex()}
         order.insert(0, n) if front else order.append(n)
+    # The real ZeeOS entry (zee-bootmenu: efibootmgr --disk --part <ESP>) is HD(<ESP>)/File(...),
+    # and install-nvram.py only judges entries on the target ESP: take the ESP's HD() node from the
+    # seeded Windows entry, before any drop-windows op removes it.
+    esp_hd = b""
+    for k, v in var.items():
+        if k.startswith("Boot") and k != "BootOrder" and nv.parse_boot(v["data"])[0] == nv.WINDOWS:
+            p = bytes.fromhex(nv.parse_boot(v["data"])[1])
+            if len(p) >= 4 and p[0] == 4 and p[1] == 1:
+                esp_hd = p[:int.from_bytes(p[2:4], "little")]
     for op in os.environ["FAKE_NVRAM"].split(","):
         if op in ("zeeos-first", "zeeos-last"):
-            add("ZeeOS", nv.file_node("\\EFI\\fedora\\shimx64.efi"), op == "zeeos-first")
+            add("ZeeOS", esp_hd + nv.file_node("\\EFI\\fedora\\shimx64.efi"), op == "zeeos-first")
         elif op == "noise":
             add("UEFI PXEv4 (MAC:525400123456)", bytes.fromhex("02010c00d041030a00000000"), False)
         elif op == "drop-windows":

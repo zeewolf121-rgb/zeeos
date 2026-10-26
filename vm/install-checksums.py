@@ -215,7 +215,7 @@ def files(disk, seed):
                 with tempfile.TemporaryDirectory() as td:
                     img = os.path.join(td, "win.img")
                     extract(disk, p[0], p[1], img)
-                    r = subprocess.run(["ntfscat", img, e["path"]], capture_output=True)
+                    r = subprocess.run(["ntfscat", "--force", img, e["path"]], capture_output=True)
             out[f"{kind}:{e['path']}"] = hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else "missing"
     return out
 

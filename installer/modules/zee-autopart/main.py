@@ -19,7 +19,12 @@ from pathlib import Path
 
 import libcalamares  # provided by Calamares at runtime
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Calamares runs job scripts without __file__; it gives the module dir as job.working_path.
+try:
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    _HERE = libcalamares.job.working_path
+sys.path.insert(0, _HERE)
 import autopart
 
 RUN = Path("/run/zeeos-autoinstall")
