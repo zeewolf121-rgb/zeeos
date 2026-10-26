@@ -37,6 +37,13 @@ cat <<EOF
 ## Verify your download
 
 Every release is signed with [minisign](https://jedisct1.github.io/minisign/) (ADR-0007).
+**First, establish trust in the root key.** The \`zeeos-root.pub\` attached to this release is not
+a trust anchor: anyone who can replace release assets can replace it too, and the commands below
+would still succeed. Before running them, compare the complete root public-key value in the table
+below with a copy you already trust (for example from an earlier release or a checkout of the
+repository), or get the owner to confirm it over a separate trusted channel. Do not rely on this
+page alone. See \`security/VERIFY.md\`.
+
 Download the ISO or UTM ZIP together with \`SHA256SUMS\`, \`SHA256SUMS.minisig\`,
 \`zeeos-ci.pub\`, \`zeeos-ci.pub.minisig\` and \`zeeos-root.pub\` into one folder, then run:
 
