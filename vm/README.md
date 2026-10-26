@@ -55,9 +55,10 @@ first. Preset transport (for #181, until the architect adds it to the plan): a r
 disk with serial `ZEEOS-AUTOINSTALL`, `key=value` lines from byte 0, NUL-padded to 1 MiB; keys `case`, `user`, `password`,
 `luks_passphrase`.
 LUKS (case c): the harness boots the installed disk, waits for the passphrase prompt on the serial console
-(`UNLOCK_TIMEOUT`, default `BOOT_TIMEOUT`), types the preset `luks_passphrase` with `vm/qmp.py SOCK type` (one QMP
-`send-key` per key through the usb-kbd, because the serial port is an output-only file and plymouth/systemd-ask-password
-read the keyboard), then runs the same `boot`/`bootmenu`/`rootfs` checks as erase with `ZEEOS_ROOTFS ... luks=2`. junit
+(`UNLOCK_TIMEOUT`, default `BOOT_TIMEOUT`), writes the preset `luks_passphrase` + CR with `vm/qmp.py SOCK serial-type` to the installed boot's serial port. That port is a
+`-chardev socket,id=ser0,path=OUT/serial.sock,server=on,wait=off,logfile=OUT/serial-installed.log` (the log is written exactly as
+for a file serial), because the prompt goes to `/dev/console`, the last `console=` on the kernel command line, i.e. the serial
+port, not the keyboard. The other cases keep the plain `-serial file:` log. then runs the same `boot`/`bootmenu`/`rootfs` checks as erase with `ZEEOS_ROOTFS ... luks=2`. junit
 has an `unlock` check: no prompt, a plaintext root, or a passphrase that doesn't bring the system up fail it.
 The installed kernel must log to the serial console (`console=ttyS0`/`ttyAMA0`) for any installed-boot check.
 NVRAM (alongside, refuse-*): `vm/install-nvram.py` writes a `Windows Boot Manager` Boot#### entry (HD(ESP) +
@@ -68,5 +69,4 @@ Needs python `virt-firmware` **26.9** (`virt-fw-vars`; Fedora `python3-virt-firm
 entry that existed before keep title and device path and relative BootOrder order; alongside also needs a new `ZeeOS` entry
 first; refuse-* must not gain `ZeeOS` or an `\EFI\fedora` entry. Firmware-added entries (PXE, shell, DVD) are tolerated
 (a disk-only boot of real OVMF kept the seeded entry and added its own: DVD, PXE, setup; with the seeded stub failing to load, BDS fell through to the next entry). No check is skipped any more.
-Untested against a real guest: the LUKS prompt is answered through the usb-kbd, which reaches plymouth or a VT agent but not an agent reading only a serial `/dev/console`. If the first real run shows the prompt and then "passphrase typed, but the system did not come up", switch the installed boot to a bidirectional serial chardev (`-chardev socket,...,logfile=`) and type there.
 Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).

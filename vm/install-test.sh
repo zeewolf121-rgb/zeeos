@@ -74,7 +74,7 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   case $CASE in erase|luks) ;; *)
     echo "  would add a Windows Boot Manager Boot#### entry to $OUT/vars.fd (virt-fw-vars --inplace) and dump it to $OUT/nvram-before.json"
     echo "  would dump $OUT/vars.fd to $OUT/nvram-after.json after the install and compare (read only)";; esac
-  [ "$CASE" != luks ] || echo "  would type the preset luks_passphrase at the unlock prompt of the installed boot (QMP send-key)"
+  [ "$CASE" != luks ] || echo "  would write the preset luks_passphrase to the installed boot's serial socket at the unlock prompt"
   echo "  would hash the pre-existing data of $disk (read only)"
   echo "  would run $qemu with $code, $disk and $ISO (serial-install.log), then $disk alone (serial-installed.log)"
   echo "  would write $OUT/{checksums-*.json,junit.xml}"
@@ -125,14 +125,19 @@ base=(-accel "$accel" -cpu "$cpu" -m 4096 -smp "$smp" "${machine[@]}"
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=$code"
   -drive "if=pflash,format=raw,unit=1,file=$OUT/vars.fd"
   -drive "file=$disk,if=virtio,format=raw"
-  -device virtio-gpu-pci -device qemu-xhci -device usb-kbd
+  -device virtio-gpu-pci
   -display none -qmp "unix:$sock,server=on,wait=off" -no-reboot)
 qpid=
 trap '[ -z "$qpid" ] || kill "$qpid" 2>/dev/null || true' EXIT
+# Serial: a write-only file, or (SERIAL_SOCK set, luks installed boot) a bidirectional socket that still
+# logs everything to the same file, so the guest's console prompt can be answered.
+serial_sock=$OUT/serial.sock
 launch() { # serial-log extra-args...
   local log=$1; shift
-  rm -f "$sock"; : > "$log"
-  "$qemu" "${base[@]}" -serial "file:$log" "$@" 2>>"$OUT/qemu.stderr" &
+  rm -f "$sock" "$serial_sock"; : > "$log"
+  local ser=(-serial "file:$log")
+  [ -z "${SERIAL_SOCK:-}" ] || ser=(-chardev "socket,id=ser0,path=$serial_sock,server=on,wait=off,logfile=$log" -serial chardev:ser0)
+  "$qemu" "${base[@]}" "${ser[@]}" "$@" 2>>"$OUT/qemu.stderr" &
   qpid=$!
 }
 stop() { python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true; wait "$qpid" 2>/dev/null || true; qpid=; }
@@ -193,13 +198,13 @@ if [ "$nvram" = 1 ]; then
 fi
 
 # 5. Boot the installed system (cases that install). The luks case first meets the unlock prompt: the
-# passphrase is typed through QMP send-key (vm/qmp.py type), because the guest's prompt is answered from a
-# keyboard (usb-kbd here): plymouth and systemd-ask-password both read the console/VT input, and the serial
-# chardev is a plain output file. No prompt, or a prompt the passphrase doesn't open, fails the cell.
+# passphrase is written to the serial port (vm/qmp.py serial-type): the prompt goes to /dev/console, the last
+# console= on the kernel command line, which is the serial port, so that port is a socket chardev here (it
+# still logs to serial-installed.log). No prompt, or a prompt the passphrase doesn't open, fails the cell.
 installed=0
 if [ "${results[0]}" = ok ] && [[ "$CASE" != refuse-* ]]; then
   installed=1
-  launch "$OUT/serial-installed.log"
+  if [ "$CASE" = luks ]; then SERIAL_SOCK=1 launch "$OUT/serial-installed.log"; else launch "$OUT/serial-installed.log"; fi
   slog=$OUT/serial-installed.log
   rc=0
   if [ "$CASE" = luks ]; then
@@ -210,10 +215,10 @@ if [ "${results[0]}" = ok ] && [[ "$CASE" != refuse-* ]]; then
       typing=$(python3 -I -c 'import json,sys
 for l in open(sys.argv[1]):
     if l.startswith("luks_passphrase="): print(json.dumps({"text": l.split("=", 1)[1].rstrip("\n"), "enter": True}))' "$OUT/preset.conf")
-      if python3 -I "$here/qmp.py" "$sock" type "$typing" >/dev/null; then
+      if python3 -I "$here/qmp.py" "$serial_sock" serial-type "$typing"; then
         rc=0; wait_for "$slog" '^ZEEOS_DESKTOP_READY' '^ZEEOS_[A-Z_]*FAIL' "$BOOT_TIMEOUT" || rc=$?
         if [ "$rc" = 0 ]; then record unlock ok; else record unlock "passphrase typed, but the system did not come up (rc=$rc)"; fi
-      else record unlock "could not type the passphrase through QMP"; rc=9; fi
+      else record unlock "could not write the passphrase to the serial socket"; rc=9; fi
     elif [ "$rc" = 0 ]; then
       record unlock "reached the login screen without a passphrase prompt: root is not encrypted"
     elif [ "$rc" = 1 ]; then record unlock "$(grep -aom1 '^ZEEOS_[A-Z_]*FAIL.*' "$slog") before any passphrase prompt"
