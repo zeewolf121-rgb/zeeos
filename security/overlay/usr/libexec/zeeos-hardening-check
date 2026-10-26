@@ -1,0 +1,97 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Guest hardening check (P5-2, ADR-0012, marker protocol in docs/phases/phase-5.md). Modes:
+#   announce  print ZEEOS_HARDENING_CHECK
+#   check     (default) print ZEEOS_SECUREBOOT, then ZEEOS_HARDENING_OK or one ZEEOS_HARDENING_FAIL per item.
+# ROOT prefixes /sys, /etc and /proc (self-test trees). The tools can be replaced for tests.
+set -u
+ROOT=${ROOT:-}
+DRY_RUN=${DRY_RUN:-0}
+CMDLINE=${CMDLINE:-$ROOT/proc/cmdline}
+GETENFORCE=${GETENFORCE:-getenforce}
+SYSTEMCTL=${SYSTEMCTL:-systemctl}
+FIREWALL_CMD=${FIREWALL_CMD:-firewall-cmd}
+SSHD=${SSHD:-sshd}
+MOKUTIL=${MOKUTIL:-mokutil}
+TIMER=${TIMER:-dnf5-automatic.timer}
+
+ttys=()
+for t in ttyS0 ttyAMA0; do
+    read -r type <"$ROOT/sys/class/tty/$t/type" 2>/dev/null && [ "$type" != 0 ] && [ -w "/dev/$t" ] \
+        && ttys+=("/dev/$t")
+done
+emit() {
+    if [ "$DRY_RUN" = 1 ]; then echo "$*"; return 0; fi
+    echo "$*" | timeout -k 5 30 tee -- "${ttys[@]+"${ttys[@]}"}" /dev/console >/dev/null || true
+}
+
+if [ "${1:-check}" = announce ]; then emit ZEEOS_HARDENING_CHECK; exit 0; fi
+
+cmdline=$(cat "$CMDLINE" 2>/dev/null || true)
+has_arg() { case " $cmdline " in *" $1 "*) return 0 ;; esac; return 1; }
+
+# Secure Boot: the SecureBoot EFI variable (4 attribute bytes, then the value), else mokutil.
+sb=0
+for v in "$ROOT"/sys/firmware/efi/efivars/SecureBoot-*; do
+    [ -f "$v" ] || continue
+    [ "$(od -An -tu1 -j4 -N1 "$v" 2>/dev/null | tr -d ' ')" = 1 ] && sb=1
+done
+if [ "$sb" = 0 ] && out=$("$MOKUTIL" --sb-state 2>/dev/null) && [[ $out == *"SecureBoot enabled"* ]]; then sb=1; fi
+emit "ZEEOS_SECUREBOOT enabled=$sb"
+
+fails=()
+fail() { fails+=("$1: $2"); }
+active() { "$SYSTEMCTL" is-active --quiet "$1" 2>/dev/null; }
+
+# SELinux (ADR-0012 item 5)
+selinux=enforcing
+[ "$("$GETENFORCE" 2>/dev/null)" = Enforcing ] || { selinux=bad; fail selinux "getenforce is not Enforcing"; }
+grep -qE '^SELINUX=enforcing[[:space:]]*$' "$ROOT/etc/selinux/config" 2>/dev/null \
+    || { selinux=bad; fail selinux "/etc/selinux/config lacks SELINUX=enforcing"; }
+if has_arg selinux=0 || has_arg enforcing=0; then selinux=bad; fail selinux "selinux=0 or enforcing=0 on the kernel command line"; fi
+
+# Firewall (items 1 and 2): firewalld running, default zone public, target default, nothing open but two services
+firewall=firewalld
+inbound=deny
+if ! active firewalld.service; then
+    inbound=bad; fail firewall "firewalld.service is not active"
+else
+    fw() { "$FIREWALL_CMD" "$@" 2>/dev/null; }
+    [ "$(fw --get-default-zone)" = public ] || { inbound=bad; fail firewall "default zone is not public"; }
+    [ "$(fw --permanent --zone=public --get-target)" = default ] || { inbound=bad; fail firewall "public target is not default"; }
+    for what in ports forward-ports rich-rules; do
+        [ -z "$(fw --zone=public --list-"$what")" ] || { inbound=bad; fail firewall "public has $what"; }
+    done
+    [ "$(fw --zone=public --query-masquerade)" = no ] || { inbound=bad; fail firewall "public has masquerade"; }
+    for s in $(fw --zone=public --list-services); do
+        case $s in dhcpv6-client|mdns) ;; *) inbound=bad; fail firewall "public allows service $s" ;; esac
+    done
+fi
+
+# sshd (item 3)
+sshd=off
+if active sshd.service; then
+    cfg=$("$SSHD" -T 2>/dev/null)
+    if grep -qx 'passwordauthentication no' <<<"$cfg" && grep -qx 'kbdinteractiveauthentication no' <<<"$cfg"; then
+        sshd=keyonly
+    else
+        sshd=bad; fail sshd "active and not key-only"
+    fi
+fi
+
+# Auto-updates (item 6)
+auto=on
+if has_arg rd.live.image; then
+    auto=live-off
+    ! active "$TIMER" || { auto=bad; fail autoupdate "$TIMER is active in the live session"; }
+else
+    { "$SYSTEMCTL" is-enabled --quiet "$TIMER" 2>/dev/null && active "$TIMER"; } \
+        || { auto=bad; fail autoupdate "$TIMER is not enabled and active"; }
+fi
+
+if [ ${#fails[@]} -eq 0 ]; then
+    emit "ZEEOS_HARDENING_OK selinux=$selinux firewall=$firewall inbound=$inbound sshd=$sshd autoupdate=$auto"
+    exit 0
+fi
+for f in "${fails[@]}"; do emit "ZEEOS_HARDENING_FAIL $f"; done
+exit 1
