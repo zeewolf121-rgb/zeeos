@@ -12,4 +12,4 @@ Owner: `security-hardener` (see docs/agents.md). Other agents: open an issue ins
   condition) and the `zeeos-hardening-check` unit and script (`ZEEOS_SECUREBOOT`, `ZEEOS_HARDENING_*` markers).
   Copied as-is onto the image root by P5-3, which also runs `systemctl enable zeeos-hardening-check.service`.
   The unit runs on live boots only; a test preset enables it on an installed system with a drop-in that sets
-  `ConditionKernelCommandLine=`. Self-test: `tests/hardening-selftest.sh`.
+  `ConditionKernelCommandLine=`. Self-test: `security/hardening-selftest.sh`.

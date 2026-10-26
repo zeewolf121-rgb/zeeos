@@ -62,15 +62,13 @@ run() {
   # shellcheck disable=SC2086
   r=$(mk "$name" ${OVR:-})
   out=$(ROOT=$r DRY_RUN=1 PATH="$tmp:$PATH" GETENFORCE=getenforce SYSTEMCTL=systemctl FIREWALL_CMD=firewall-cmd \
-        SSHD=sshd MOKUTIL=mokutil "$chk" 2>&1) || rc=$?
+        SSHD=sshd MOKUTIL=mokutil bash "$chk" 2>&1) || rc=$?
   { [ "$want" = pass ] && [ "$rc" != 0 ]; } && fail "$name: expected pass, got: $out"
   { [ "$want" = fail ] && [ "$rc" = 0 ]; } && fail "$name: expected fail, got: $out"
   for p in "$@"; do grep -qF -- "$p" <<<"$out" || fail "$name: output lacks '$p': $out"; done
   if [ "$want" = fail ]; then ! grep -q ZEEOS_HARDENING_OK <<<"$out" || fail "$name: OK printed with a failure"; fi
 }
 ok() { echo "ok: $1"; }
-# Run bash explicitly: the exec bit is only set in git's index.
-chk="bash $chk"
 
 OVR='' run installed-ok pass 'ZEEOS_SECUREBOOT enabled=1' \
   'ZEEOS_HARDENING_OK selinux=enforcing firewall=firewalld inbound=deny sshd=off autoupdate=on'; ok installed
@@ -90,10 +88,10 @@ OVR='fw-port' run fw-port fail 'ZEEOS_HARDENING_FAIL firewall: public has ports'
 OVR='timer=off' run au-off fail 'ZEEOS_HARDENING_FAIL autoupdate:'; ok autoupdate-missing-installed
 # live session with the timer running is a failure
 r=$(mk live-active cmdline=rd.live.image); echo dnf5-automatic.timer >> "$r/st/active"
-rc=0; out=$(ROOT=$r DRY_RUN=1 PATH="$tmp:$PATH" $chk 2>&1) || rc=$?
+rc=0; out=$(ROOT=$r DRY_RUN=1 PATH="$tmp:$PATH" bash "$chk" 2>&1) || rc=$?
 { [ "$rc" != 0 ] && grep -q 'FAIL autoupdate: .* active in the live' <<<"$out"; } || fail "live-active: $out"; ok live-timer-running
 
-out=$(DRY_RUN=1 $chk announce); [ "$out" = ZEEOS_HARDENING_CHECK ] || fail "announce: $out"; ok announce
+out=$(DRY_RUN=1 bash "$chk" announce); [ "$out" = ZEEOS_HARDENING_CHECK ] || fail "announce: $out"; ok announce
 
 # overlay drop-ins carry the ADR-0012 values
 grep -qx 'ConditionKernelCommandLine=!rd.live.image' security/overlay/usr/lib/systemd/system/dnf5-automatic.timer.d/50-zeeos-live-off.conf \
