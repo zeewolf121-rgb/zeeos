@@ -68,6 +68,10 @@ ENTRY = re.compile(r"^Boot([0-9A-Fa-f]{4})\*?\s+(.*)$")
 CONSOLE = re.compile(r"^(tty0|ttyS0|ttyAMA0)(,[0-9]+)?( (tty0|ttyS0|ttyAMA0)(,[0-9]+)?)*$")
 QUIET = ("rhgb", "quiet")
 BLS_DIR = "boot/loader/entries"
+LUKS_UUID = r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+MAPPER_SOURCE = re.compile(rf"^/dev/mapper/luks-({LUKS_UUID})(\[[^\]]*\])?$")  # findmnt adds [/subvol] on Btrfs
+CRYPTTAB_LINE = re.compile(rf"^\S+\s+UUID=({LUKS_UUID})(\s|$)")
+LUKS_ARG = "rd.luks.uuid="
 
 
 @dataclass
@@ -148,6 +152,42 @@ def fstab_root(target_root: Path) -> tuple[str, str | None] | None:
     return None
 
 
+def host_root_source(target_root: Path) -> str:
+    """Mount source of the target root as the installer host sees it, e.g. /dev/mapper/luks-<uuid>[/root]
+    (the Btrfs subvolume is appended in brackets). Empty when it can't be told."""
+    try:
+        r = subprocess.run(["findmnt", "-n", "-o", "SOURCE", "--target", str(target_root)],
+                           capture_output=True, text=True)
+    except OSError:
+        return ""
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def luks_uuid(target_root: Path, root_source: Callable[[Path], str] | None) -> str | None:
+    """UUID of the LUKS container holding the target root, or None when root isn't on LUKS. The initramfs
+    only asks for the passphrase when rd.luks.uuid= (or /etc/crypttab in the initramfs) names it; Fedora's
+    root=UUID=<btrfs> alone waits forever. Source 1: the target's /etc/crypttab (UUID=<luks uuid>);
+    source 2: the root mount's /dev/mapper/luks-<uuid> device that zee-autopart opened."""
+    try:
+        for line in (target_root / "etc/crypttab").read_text(encoding="utf-8").splitlines():
+            if m := CRYPTTAB_LINE.match(line.strip()):
+                return m.group(1).lower()
+    except OSError:
+        pass
+    if root_source:
+        if m := MAPPER_SOURCE.match(root_source(target_root).strip()):
+            return m.group(1).lower()
+    return None
+
+
+def with_luks(cmdline: str, uuid: str | None) -> str:
+    """The command line with exactly one rd.luks.uuid= (this container's), unchanged when uuid is None."""
+    if not uuid:
+        return cmdline
+    kept = [t for t in cmdline.split() if t != f"{LUKS_ARG}{uuid}"]
+    return " ".join(kept + [f"{LUKS_ARG}{uuid}"])
+
+
 def bls_normalize(text: str, root: tuple[str, str | None]) -> str:
     """Point a BLS entry copied from the image at the installed system. kiwi writes the entries at
     build time with the build host's paths (linux /home/runner/.../image-root/boot/vmlinuz-...) and
@@ -178,7 +218,7 @@ def bls_normalize(text: str, root: tuple[str, str | None]) -> str:
     return "\n".join(out) + "\n"
 
 
-def bls_edits(target_root: Path, console: list[str] | None) -> dict[Path, str]:
+def bls_edits(target_root: Path, console: list[str] | None, luks: str | None = None) -> dict[Path, str]:
     """New text of each BLS entry that changes: pointed at the installed system (when the target
     has an fstab root), and with the requested console= arguments."""
     out = {}
@@ -186,16 +226,21 @@ def bls_edits(target_root: Path, console: list[str] | None) -> dict[Path, str]:
     for entry in sorted((target_root / BLS_DIR).glob("*.conf")):
         text = entry.read_text(encoding="utf-8")
         new = bls_normalize(text, root) if root else text
-        if console is not None:
-            lines = [f"options {with_console(line[len('options'):], console)}"
-                     if line.split(None, 1)[:1] == ["options"] else line for line in new.splitlines()]
+        if console is not None or luks:
+            def options(line: str) -> str:
+                cmd = line[len("options"):]
+                if console is not None:
+                    cmd = with_console(cmd, console)
+                return f"options {with_luks(cmd, luks).strip()}"
+            lines = [options(line) if line.split(None, 1)[:1] == ["options"] else line
+                     for line in new.splitlines()]
             new = "\n".join(lines) + "\n"
         if new != text:
             out[entry] = new
     return out
 
 
-def grub_values(old: str, theme: bool, console: list[str] | None = None) -> dict[str, str]:
+def grub_values(old: str, theme: bool, console: list[str] | None = None, luks: str | None = None) -> dict[str, str]:
     values = {
         "GRUB_DEFAULT": "0",  # the first entry: the newest ZeeOS kernel (BLS entries come first)
         "GRUB_SAVEDEFAULT": "false",
@@ -217,7 +262,8 @@ def grub_values(old: str, theme: bool, console: list[str] | None = None) -> dict
     cmdline = " ".join(t for t in current.split() if not t.startswith(LIVE_ARGS))
     if console:
         cmdline = with_console(cmdline, console)
-    if console or cmdline != current.strip():
+    cmdline = with_luks(cmdline, luks)
+    if console or luks or cmdline != current.strip():
         if re.search(r"[\"'$`\\]", cmdline):
             raise ValueError(f"GRUB_CMDLINE_LINUX {cmdline!r} has quotes or expansions; not edited")
         values["GRUB_CMDLINE_LINUX"] = cmdline
@@ -243,6 +289,7 @@ def install(
     first: bool = True,
     dry_run: bool = False,
     console: str | None = None,
+    root_source: Callable[[Path], str] | None = None,
     log: Callable[[str], None] = print,
     run: Callable[[list[str]], str],
 ) -> list[str]:
@@ -261,11 +308,14 @@ def install(
     defaults = target_root / GRUB_DEFAULTS
     old = defaults.read_text(encoding="utf-8") if defaults.is_file() else ""
     cons = console_args(console) if console else None
-    values = grub_values(old, theme, cons)
-    bls = bls_edits(target_root, cons)
+    luks = luks_uuid(target_root, root_source)
+    values = grub_values(old, theme, cons, luks)
+    bls = bls_edits(target_root, cons, luks)
     before = parse_efibootmgr(run(["efibootmgr"]))
 
     ops = [f"write {defaults}: " + " ".join(f"{k}={v}" for k, v in values.items())]
+    if luks:
+        log(f"zee-bootmenu: root is on LUKS container {luks}: kernel command line gets {LUKS_ARG}{luks}")
     ops += [(f"write {entry}: options with {' '.join(cons)}, without rhgb quiet; " if cons else f"write {entry}: ")
             + "kernel/initrd paths and root for the installed system" for entry in bls]
     if theme:
@@ -341,7 +391,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     try:
         install(a.esp, a.target_root, esp_uuid=a.esp_uuid, esp_device=a.esp_device,
-                first=not a.not_first, dry_run=a.dry_run, console=a.console, run=_chroot_run(a.target_root))
+                first=not a.not_first, dry_run=a.dry_run, console=a.console, root_source=host_root_source,
+                run=_chroot_run(a.target_root))
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         print(f"zee-bootmenu: {e}", file=sys.stderr)
         return 1

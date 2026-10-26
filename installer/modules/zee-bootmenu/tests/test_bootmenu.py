@@ -301,5 +301,59 @@ class Console(Fixture):
         self.assertIn(f're.compile(r"{bootmenu.CONSOLE.pattern}")', runner.read_text())
 
 
+LUKS = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+
+
+class Luks(Fixture):
+    """Root on LUKS2 (#254): the initramfs only asks for the passphrase if rd.luks.uuid= names the container."""
+
+    def setUp(self):
+        super().setUp()
+        self.bls = self.root / "boot/loader/entries/abc-6.17.0.conf"
+        self.bls.parent.mkdir(parents=True)
+        self.bls.write_text(BLS_ENTRY)
+
+    def test_mapper_source_adds_rd_luks_uuid_to_grub_and_bls(self):
+        seen = []
+        self.install(console="tty0 ttyS0,115200",
+                     root_source=lambda r: seen.append(r) or f"/dev/mapper/luks-{LUKS}[/root]")
+        self.assertEqual(seen, [self.root])
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"],
+                         f'"console=tty0 console=ttyS0,115200 rd.luks.uuid={LUKS}"')
+        self.assertIn(f"options root=UUID=abcd ro console=tty0 console=ttyS0,115200 rd.luks.uuid={LUKS}\n",
+                      self.bls.read_text())
+
+    def test_without_console_still_added(self):
+        self.install(root_source=lambda r: f"/dev/mapper/luks-{LUKS}")
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"], f'"rhgb quiet rd.luks.uuid={LUKS}"')
+        self.assertIn(f"rhgb quiet rd.luks.uuid={LUKS}\n", self.bls.read_text())
+
+    def test_crypttab_wins_and_is_enough(self):
+        (self.root / "etc/crypttab").write_text(f"luks-{LUKS.upper()} UUID={LUKS.upper()} none discard\n")
+        self.install()
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"], f'"rhgb quiet rd.luks.uuid={LUKS}"')
+
+    def test_idempotent(self):
+        src = lambda r: f"/dev/mapper/luks-{LUKS}[/root]"
+        self.install(root_source=src)
+        first = (self.root / "etc/default/grub").read_text(), self.bls.read_text()
+        self.install(root_source=src)
+        self.assertEqual(((self.root / "etc/default/grub").read_text(), self.bls.read_text()), first)
+        self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"].count("rd.luks.uuid="), 1)
+
+    def test_plain_root_has_no_rd_luks_uuid(self):
+        for src in (lambda r: "/dev/vda3[/root]", lambda r: "/dev/mapper/vg-root", lambda r: "", None):
+            with self.subTest(src=src):
+                self.install(root_source=src)
+                self.assertNotIn("rd.luks", (self.root / "etc/default/grub").read_text())
+                self.assertEqual(self.bls.read_text(), BLS_ENTRY)
+
+    def test_dry_run_plans_and_writes_nothing(self):
+        target = tree_digest(self.root)
+        self.install(dry_run=True, root_source=lambda r: f"/dev/mapper/luks-{LUKS}")
+        self.assertEqual(tree_digest(self.root), target)
+        self.assertTrue(any("rd.luks.uuid" in l for l in self.log))
+
+
 if __name__ == "__main__":
     unittest.main()
