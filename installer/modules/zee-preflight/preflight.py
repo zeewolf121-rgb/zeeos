@@ -12,8 +12,9 @@ NTFS (#5), never mounted:
   read straight from the device with the update-sequence fixups applied.
 - hibernated (hibernation or Windows Fast Startup): \\hiberfil.sys starts with "hibr" (any case),
   the test libntfs-3g's ntfs_volume_check_hiberfile makes. Read with ntfsls/ntfscat (ntfsprogs),
-  which open the volume read-only. No hiberfil.sys means not hibernated; any other tool failure
-  makes the volume unreadable, and unreadable fails closed.
+  which open the volume read-only. No hiberfil.sys means not hibernated; any other tool failure,
+  including a zero exit with diagnostics on stderr, makes the volume unreadable, and unreadable
+  fails closed.
 
 This module never writes: every device is opened O_RDONLY and the tools only read.
 """
@@ -115,9 +116,10 @@ class Reader:
         finally:
             os.close(fd)
 
-    def tool(self, argv, limit=1 << 20):
-        """Run a read-only ntfsprogs tool: (rc, stdout[:limit], stderr). Stops reading after
-        `limit` bytes and kills the tool (a real hiberfil.sys is gigabytes); that counts as rc 0."""
+    def tool(self, argv, limit=64 << 20, head=False):
+        """Run a read-only ntfsprogs tool: (rc, stdout[:limit], stderr). With `head`, stops
+        after `limit` bytes and kills the tool (a real hiberfil.sys is gigabytes); that counts
+        as rc 0. Without it, output longer than `limit` is incomplete and raises ProbeError."""
         if self.dry_run:
             self.log.append("PLAN read-only " + " ".join(argv))
         try:
@@ -147,6 +149,8 @@ class Reader:
             timer.cancel()
         if expired.is_set():
             raise ProbeError(f"{argv[0]}: no answer after {TOOL_TIMEOUT}s")
+        if full and not head:
+            raise ProbeError(f"{argv[0]}: output longer than {limit} bytes, listing incomplete")
         return (0 if full else rc), out, err
 
 
@@ -245,14 +249,16 @@ def _tool_error(name, rc, err):
 
 def ntfs_hibernated(path, reader):
     """True if \\hiberfil.sys holds a hibernation image (Windows hibernation or Fast Startup)."""
+    # ntfsls can print "Failed to read index block" and still exit 0 (its readdir error is
+    # not propagated), so any diagnostic means the listing may be incomplete: fail closed.
     rc, out, err = reader.tool(["ntfsls", "-a", path])
-    if rc != 0:
+    if rc != 0 or err.strip():
         raise ProbeError(_tool_error("ntfsls", rc, err))
     names = [n for n in out.decode("utf-8", "replace").splitlines() if n.strip().lower() == HIBERFIL]
     if not names:
         return False
-    rc, out, err = reader.tool(["ntfscat", path, names[0].strip()], limit=4096)
-    if rc != 0:
+    rc, out, err = reader.tool(["ntfscat", path, names[0].strip()], limit=4096, head=True)
+    if rc != 0 or err.strip():  # a header read with diagnostics is not a clean header
         raise ProbeError(_tool_error(f"ntfscat {names[0].strip()}", rc, err))
     # libntfs-3g treats a hiberfil.sys under 4096 bytes (even empty) as a hibernated
     # non-system volume, so a short read is refused before the signature is compared.

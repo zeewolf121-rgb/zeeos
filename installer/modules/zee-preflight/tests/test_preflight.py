@@ -81,17 +81,20 @@ def ntfs_image(path, flags=0):
 class FakeTools(preflight.Reader):
     """Reader whose ntfsls/ntfscat answers come from a table: {volume: {name: content}}."""
 
-    def __init__(self, volumes, fail=(), **kw):
+    def __init__(self, volumes, fail=(), partial=None, **kw):
         super().__init__(**kw)
         self.volumes, self.fail, self.calls = volumes, fail, []
+        self.partial = partial or {}  # {tool: (stdout, stderr)} answered with exit status 0
 
-    def tool(self, argv, limit=1 << 20):
+    def tool(self, argv, limit=64 << 20, head=False):
         self.calls.append(argv)
         if self.dry_run:
             self.log.append("PLAN read-only " + " ".join(argv))
         name, dev = argv[0], argv[-1] if argv[0] == "ntfsls" else argv[1]
         if name in self.fail:
             return 1, b"", "Failed to mount: Input/output error"
+        if name in self.partial:
+            return (0, *self.partial[name])
         files = self.volumes.get(dev, {})
         if name == "ntfsls":
             return 0, "".join(f"{n}\n" for n in [".", "..", *files]).encode(), ""
@@ -168,6 +171,32 @@ class Probe(Base):
         self.assertEqual(found[self.fx["ntfs"]], preflight.UNREADABLE)
         self.assertIn("ntfsls failed", why[self.fx["ntfs"]])
 
+    def test_listing_with_diagnostics_fails_closed_despite_rc0(self):
+        # ntfsls hit a bad index block, printed it, dropped hiberfil.sys and still exited 0.
+        self.volumes[self.fx["ntfs"]] = {"hiberfil.sys": b"HIBR" + bytes(8188)}
+        r = self.reader(partial={"ntfsls": (b".\n..\n$MFT\n",
+                                            "Failed to read index block: Input/output error\n")})
+        found, blocks, why = preflight.scan([self.fx["ntfs"]], r)
+        self.assertEqual(found, {self.fx["ntfs"]: preflight.UNREADABLE})
+        self.assertIn("Failed to read index block", why[self.fx["ntfs"]])
+        self.assertEqual(len(blocks), 1)
+        self.assertIn(preflight.UNREADABLE, preflight.REFUSE)
+        self.assertEqual([c[0] for c in r.calls], ["ntfsls"])
+
+    def test_header_with_diagnostics_fails_closed_despite_rc0(self):
+        r = self.reader(partial={"ntfscat": (b"wake" + bytes(4092), "Error reading attribute\n")})
+        found, _, why = preflight.scan([self.fx["resumed"]], r)
+        self.assertEqual(found[self.fx["resumed"]], preflight.UNREADABLE)
+        self.assertIn("ntfscat hiberfil.sys failed", why[self.fx["resumed"]])
+
+    def test_clean_listing_without_diagnostics_is_unchanged(self):
+        for name, kind in (("ntfs", "ntfs"), ("resumed", "ntfs"),
+                           ("hibernated", preflight.HIBERNATED)):
+            with self.subTest(name):
+                found, blocks, why = preflight.scan([self.fx[name]], self.reader())
+                self.assertEqual((found, why), ({self.fx[name]: kind}, {}))
+                self.assertEqual(len(blocks), int(kind == preflight.HIBERNATED))
+
     def test_missing_tool_fails_closed(self):
         r = preflight.Reader()
         old = os.environ.get("PATH")
@@ -190,8 +219,15 @@ class Probe(Base):
 
     def test_tool_output_is_capped(self):
         rc, out, _ = preflight.Reader().tool(
-            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'hibr' * 100000)"], limit=8)
+            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'hibr' * 100000)"],
+            limit=8, head=True)
         self.assertEqual((rc, out), (0, b"hibrhibr"))
+
+    def test_truncated_listing_fails_closed(self):
+        with self.assertRaises(preflight.ProbeError) as cm:
+            preflight.Reader().tool(
+                [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'x' * 100000)"], limit=8)
+        self.assertIn("incomplete", str(cm.exception))
 
     def test_unreadable_device_fails_closed(self):
         missing = str(self.tmp / "missing")
