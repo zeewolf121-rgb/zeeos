@@ -1,0 +1,10 @@
+# Masked regions for tests/imgdiff_gate.py (STEP|* X Y W H; negative X/Y from the right/bottom edge).
+# Screens are 1280x800. Taken from main boot-test run 40317554090 (#136).
+# Clock and date: top-right panel, except in the windows layout (bottom-right).
+light -100 0 100 40
+dark -100 0 100 40
+mac -100 0 100 40
+hybrid -100 0 100 40
+windows -140 -60 140 60
+# Pointer, left where the session put it (screen centre).
+* 620 390 40 45
