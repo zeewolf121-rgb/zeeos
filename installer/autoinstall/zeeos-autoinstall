@@ -98,14 +98,30 @@ def serial_ttys() -> list[str]:
     return out
 
 
+def write_all(fd: int, data: bytes, timeout: float = 10.0) -> None:
+    """Write every byte to a non-blocking fd, waiting out EAGAIN (a full tty buffer) and short writes,
+    for at most `timeout` seconds so a stuck port can't hang the run."""
+    end = time.monotonic() + timeout
+    while data:
+        try:
+            n = os.write(fd, data)
+            data = data[n:]
+        except BlockingIOError:
+            if time.monotonic() > end:
+                raise
+            time.sleep(0.05)
+
+
 def say(line: str) -> None:
-    """One line to stdout (the journal) and every serial tty, each write on its own."""
+    """One line to stdout (the journal) and every serial tty, each write on its own. The tty write
+    must not be dropped: right after dump_log's 60 lines the buffer is full, and a lost
+    ZEEOS_INSTALL_FAIL line made a correct refusal look like a crash (install-test, refuse-bitlocker)."""
     print(line, flush=True)
     for tty in serial_ttys():
         try:
             fd = os.open(tty, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
             try:
-                os.write(fd, (line + "\r\n").encode())
+                write_all(fd, (line + "\r\n").encode())
             finally:
                 os.close(fd)
         except OSError:
