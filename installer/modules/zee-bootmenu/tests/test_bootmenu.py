@@ -333,6 +333,27 @@ class Luks(Fixture):
         self.install()
         self.assertEqual(self.defaults()["GRUB_CMDLINE_LINUX"], f'"rhgb quiet rd.luks.uuid={LUKS}"')
 
+    def test_root_mount_beats_an_earlier_crypttab_volume(self):
+        other = "0f0f0f0f-1111-2222-3333-444444444444"
+        (self.root / "etc/crypttab").write_text(
+            f"luks-{other} UUID={other} none\nluks-{LUKS} UUID={LUKS} none\n")
+        self.install(root_source=lambda r: f"/dev/mapper/luks-{LUKS}[/root]")
+        self.assertIn(f"rd.luks.uuid={LUKS}", self.defaults()["GRUB_CMDLINE_LINUX"])
+        self.assertNotIn(other, self.defaults()["GRUB_CMDLINE_LINUX"])
+
+    def test_custom_mapper_name_matched_in_crypttab(self):
+        other = "0f0f0f0f-1111-2222-3333-444444444444"
+        (self.root / "etc/crypttab").write_text(f"homecrypt UUID={other} none\nrootcrypt UUID={LUKS} none\n")
+        self.install(root_source=lambda r: "/dev/mapper/rootcrypt[/root]")
+        self.assertIn(f"rd.luks.uuid={LUKS}", self.defaults()["GRUB_CMDLINE_LINUX"])
+        self.assertNotIn(other, self.defaults()["GRUB_CMDLINE_LINUX"])
+
+    def test_ambiguous_crypttab_without_root_info_adds_nothing(self):
+        other = "0f0f0f0f-1111-2222-3333-444444444444"
+        (self.root / "etc/crypttab").write_text(f"luks-{other} UUID={other} none\nluks-{LUKS} UUID={LUKS} none\n")
+        self.install()
+        self.assertNotIn("rd.luks.uuid", self.defaults().get("GRUB_CMDLINE_LINUX", ""))
+
     def test_idempotent(self):
         src = lambda r: f"/dev/mapper/luks-{LUKS}[/root]"
         self.install(root_source=src)

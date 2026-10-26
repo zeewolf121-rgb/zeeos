@@ -166,18 +166,25 @@ def host_root_source(target_root: Path) -> str:
 def luks_uuid(target_root: Path, root_source: Callable[[Path], str] | None) -> str | None:
     """UUID of the LUKS container holding the target root, or None when root isn't on LUKS. The initramfs
     only asks for the passphrase when rd.luks.uuid= (or /etc/crypttab in the initramfs) names it; Fedora's
-    root=UUID=<btrfs> alone waits forever. Source 1: the target's /etc/crypttab (UUID=<luks uuid>);
-    source 2: the root mount's /dev/mapper/luks-<uuid> device that zee-autopart opened."""
+    root=UUID=<btrfs> alone waits forever. The mounted root decides which container it is: crypttab can
+    also list an encrypted /home or data volume, and naming that one would leave root locked.
+    1. root mount source /dev/mapper/luks-<uuid>[/subvol] (zee-autopart and Calamares name it so);
+    2. root on another /dev/mapper/<name>: the crypttab entry with that <name>;
+    3. no root mount information: crypttab only if it lists exactly one volume (else ambiguous: None)."""
+    entries: list[tuple[str, str]] = []  # (name, luks uuid)
     try:
         for line in (target_root / "etc/crypttab").read_text(encoding="utf-8").splitlines():
             if m := CRYPTTAB_LINE.match(line.strip()):
-                return m.group(1).lower()
+                entries.append((line.split()[0], m.group(1).lower()))
     except OSError:
         pass
-    if root_source:
-        if m := MAPPER_SOURCE.match(root_source(target_root).strip()):
-            return m.group(1).lower()
-    return None
+    src = root_source(target_root).strip() if root_source else ""
+    if m := MAPPER_SOURCE.match(src):
+        return m.group(1).lower()
+    if src.startswith("/dev/mapper/"):
+        name = src[len("/dev/mapper/"):].split("[", 1)[0]
+        return next((u for n, u in entries if n == name), None)
+    return entries[0][1] if len(entries) == 1 and not src else None
 
 
 def with_luks(cmdline: str, uuid: str | None) -> str:
