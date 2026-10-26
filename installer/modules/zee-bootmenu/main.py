@@ -53,6 +53,7 @@ def run():
             dry_run=dry,
             console=gs.value("zeeConsole") or None,
             log=libcalamares.utils.debug,
+            root_source=bootmenu.host_root_source,
             run=target_output,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as e:

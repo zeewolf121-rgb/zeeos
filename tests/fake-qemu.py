@@ -8,8 +8,9 @@ disk.img, $FAKE_GPT=<op> rewrites its partition table (tests/gpt-fixture.py muta
 right away, as the guest powers off, and $FAKE_NVRAM=<op>[,<op>...] edits the JSON "VARS file" (see
 tests/fake-virt-fw-vars.py): zeeos-first / zeeos-last add a ZeeOS entry, drop-windows removes the Windows Boot
 Manager entry, noise adds a firmware entry and puts it last.
-A fixture line "@@UNLOCK" holds back the rest of the serial log until the typed keys (QMP send-key, as vm/qmp.py
-type sends them) spell the luks_passphrase in OUT/preset.conf, or $FAKE_EXPECT_PASSPHRASE if set.
+A fixture line "@@UNLOCK" holds back the rest of the serial log until a line written to the serial chardev socket
+(-chardev socket,...,path=,logfile=, as vm/qmp.py serial-type writes it) equals the luks_passphrase in
+OUT/preset.conf, or $FAKE_EXPECT_PASSPHRASE if set. The log goes to the chardev's logfile= like real QEMU.
 """
 import importlib.util
 import json
@@ -18,10 +19,18 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 
 sys.dont_write_bytecode = True  # importing vm/install-nvram.py must not leave a __pycache__ there
 args = sys.argv[1:]
-serial = next(a for i, a in enumerate(args) if args[i - 1] == "-serial")[len("file:"):]
+serial_sock = None
+serial_arg = next(a for i, a in enumerate(args) if args[i - 1] == "-serial")
+if serial_arg.startswith("file:"):
+    serial = serial_arg[len("file:"):]
+else:  # chardev:ser0 -> the -chardev socket,id=ser0,path=...,logfile=... argument
+    opts = dict(kv.split("=", 1) for a in args if a.startswith("socket,") for kv in a.split(",")[1:] if "=" in kv)
+    assert serial_arg == "chardev:" + opts["id"], serial_arg
+    serial, serial_sock = opts["logfile"], opts["path"]
 qmp = next(a for i, a in enumerate(args) if args[i - 1] == "-qmp")[len("unix:"):].split(",")[0]
 installing = any("media=cdrom" in a for a in args)
 fixture = os.environ.get("FAKE_SERIAL")
@@ -87,14 +96,35 @@ if installing and os.environ.get("FAKE_NVRAM"):
     open(vars_fd, "wb").write(out + b" " * (len(raw) - len(out)))
 if installing and os.environ.get("FAKE_POWEROFF"):
     sys.exit(0)
-qcodes = {"minus": "-", "spc": " "}
-typed = ""
-shift = False
 passphrase = os.environ.get("FAKE_EXPECT_PASSPHRASE")
 if passphrase is None:
     preset = os.path.join(os.path.dirname(qmp), "preset.conf")
     passphrase = next((l.split("=", 1)[1].rstrip("\n") for l in open(preset) if l.startswith("luks_passphrase=")), "") \
         if os.path.exists(preset) else ""
+
+
+def serve_serial():
+    """The guest's serial port: input lines are the prompt answers; the right one releases the rest of the log."""
+    global sep
+    ssrv = socket.socket(socket.AF_UNIX)
+    ssrv.bind(serial_sock)
+    ssrv.listen(4)
+    while True:
+        conn, _ = ssrv.accept()
+        buf = b""
+        while chunk := conn.recv(256):
+            buf += chunk
+            while b"\r" in buf or b"\n" in buf:
+                line, buf = buf.replace(b"\r", b"\n").split(b"\n", 1)
+                if sep and line.decode() == passphrase:
+                    with open(serial, "ab") as out:
+                        out.write(tail)
+                    sep = b""
+        conn.close()
+
+
+if serial_sock:
+    threading.Thread(target=serve_serial, daemon=True).start()
 srv = socket.socket(socket.AF_UNIX)
 srv.bind(qmp)
 srv.listen(4)
@@ -108,17 +138,6 @@ while True:
         if req["execute"] == "screendump":
             with open(req["arguments"]["filename"], "w") as img:
                 img.write("P6\n1 1\n255\n\0\0\0")
-        if req["execute"] == "send-key":
-            keys = [k["data"] for k in req["arguments"]["keys"]]
-            if keys == ["ret"]:
-                if sep and typed == passphrase:
-                    with open(serial, "ab") as out:
-                        out.write(tail)
-                sep = b"" if typed == passphrase else sep
-                typed = ""
-            else:
-                ch = qcodes.get(keys[-1], keys[-1])
-                typed += ch.upper() if keys[0] == "shift" and ch.isalpha() else ("_" if keys[0] == "shift" and ch == "-" else ch)
         f.write(json.dumps({"return": {}}) + "\n")
         f.flush()
         if req["execute"] == "quit":
