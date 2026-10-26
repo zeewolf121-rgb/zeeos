@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="36" viewBox="0 0 200 36">
+<g id="active-center" transform="translate(0 0)"><rect width="36" height="36" fill="none"/><g transform="translate(7.5 7.5) scale(1.5)"><path fill="#ECEEF2" d="M6.2 6.2 H3.6 L6.2 3.6 Z M7.8 7.8 H10.4 L7.8 10.4 Z"/></g></g>
+<g id="inactive-center" transform="translate(40 0)"><rect width="36" height="36" fill="none"/><g transform="translate(7.5 7.5) scale(1.5)"><path fill="#8A9099" d="M6.2 6.2 H3.6 L6.2 3.6 Z M7.8 7.8 H10.4 L7.8 10.4 Z"/></g></g>
+<g id="deactivated-center" transform="translate(80 0)"><rect width="36" height="36" fill="none"/><g transform="translate(7.5 7.5) scale(1.5)"><path fill="#383B41" d="M6.2 6.2 H3.6 L6.2 3.6 Z M7.8 7.8 H10.4 L7.8 10.4 Z"/></g></g>
+<g id="hover-center" transform="translate(120 0)"><rect width="36" height="36" fill="none"/><rect width="36" height="36" fill="#FFFFFF16"/><g transform="translate(7.5 7.5) scale(1.5)"><path fill="#ECEEF2" d="M6.2 6.2 H3.6 L6.2 3.6 Z M7.8 7.8 H10.4 L7.8 10.4 Z"/></g></g>
+<g id="pressed-center" transform="translate(160 0)"><rect width="36" height="36" fill="none"/><rect width="36" height="36" fill="#FFFFFF28"/><g transform="translate(7.5 7.5) scale(1.5)"><path fill="#ECEEF2" d="M6.2 6.2 H3.6 L6.2 3.6 Z M7.8 7.8 H10.4 L7.8 10.4 Z"/></g></g>
+</svg>
