@@ -142,3 +142,7 @@ scheme=$(plasma_scheme) portal=$(wait_portal prefer-dark)
     || fail "dark: GTK3 did not follow Plasma (theme '$gtk', prefer-dark $dark); is kde-gtk-config's gtkconfig running?"
 [ "$portal" = prefer-dark ] || fail "dark: portal color-scheme is '$portal', want prefer-dark"
 emit "ZEEOS_DARK_READY scheme=$scheme gtk=$gtk portal=$portal gtk_prefer_dark=$dark"
+
+# Stay dark until the harness has its dark screenshot: zeeos-layout-check starts as soon as this unit
+# exits and switches back to light, which raced the screenshot (#170: half the cells shot light).
+[ "$DRY_RUN" = 1 ] || sleep "$dark_delay"
