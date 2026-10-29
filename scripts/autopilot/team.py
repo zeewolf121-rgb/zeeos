@@ -228,14 +228,21 @@ def model(name, prompt, parent):
                             modelConfigs={"customOverrides": [{"match": {}, "modelConfig": {"generateContentConfig": {"maxOutputTokens": 4096}}}]}, hooksConfig={"enabled": False},
                             admin={"secureModeEnabled": True, "extensions": {"enabled": False},
                                    "mcp": {"enabled": False}, "skills": {"enabled": False}},
-                            security={"auth": {"selectedType": "gemini-api-key"}},
+                            security={"auth": {"selectedType": "gemini-api-key"},
+                                      "folderTrust": {"enabled": True}},
                             telemetry={"enabled": False})
             settings_path = scratch / "settings.json"; settings_path.write_text(json.dumps(settings))
             (config / "settings.json").write_text(json.dumps(settings))
+            # Register only our freshly created private workspace. Do not disable
+            # folder trust, trust a parent, or modify the user's trust database.
+            trusted = config / "trustedFolders.json"
+            trusted.write_text(json.dumps({str(scratch.resolve()): "TRUST_FOLDER"}))
+            trusted.chmod(0o600)
             deny = scratch / "deny.toml"
             deny.write_text('[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\n')
             env.update(GEMINI_CLI_HOME=str(home), GEMINI_CLI_SYSTEM_SETTINGS_PATH=str(settings_path),
-                       GEMINI_CLI_SYSTEM_DEFAULTS_PATH=str(settings_path))
+                       GEMINI_CLI_SYSTEM_DEFAULTS_PATH=str(settings_path),
+                       GEMINI_CLI_TRUSTED_FOLDERS_PATH=str(trusted))
             args = ["gemini", "-p", "Return the requested JSON only.", "--admin-policy", str(deny),
                     "--approval-mode", "default", "--output-format", "json"]
         return parse_answer(run(args, cwd=scratch, data=prompt, env=env, timeout=TIMEOUT))

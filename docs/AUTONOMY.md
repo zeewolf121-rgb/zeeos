@@ -75,7 +75,9 @@ or arbitrary shell interface. The Codex operator can run finite cycles using its
 scheduler; no scheduler or activation variable is installed by this change.
 
 Models have no tools, MCP servers or hooks. Gemini CLI uses API-key authentication, an isolated
-configuration and an administrative wildcard-deny tool policy. It never copies cached personal
+configuration and an administrative wildcard-deny tool policy. Folder trust remains enabled;
+a private, temporary trust file registers only the controller-created workspace, without
+trusting its parent or changing the user's trust database. It never copies cached personal
 OAuth credentials. Claude uses safe mode, disabled slash commands, no tools, empty MCP/settings
 sources and no persisted session. Its macOS keychain lookup also receives the non-secret `USER`
 runtime variable. Only the corresponding provider credentials and basic runtime variables are
