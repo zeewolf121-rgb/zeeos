@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name [origin: zeeos-rebuild | zeeos-rebuild-src]
 # release=44
 # arch=x86_64
-# resolved=2026-10-24T18:26:39Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-x86_64@sha256:489b9c3f20d26ce009210a5e2c7dde32bb37456339a54ae37489360715104411
+# resolved=2026-10-26T15:02:06Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-x86_64@sha256:7316c0836c9ae645fdee1d515b8f998df36e9cd31657e56ee0a17be97127f696
 LibRaw 0:0.22.2-1.fc44.x86_64 a067b7e73bf950679dff4ead6b7fc8a8c1d7ca36a7d6480fc0e3d258b4bbe7a8 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.x86_64 7b0dbb4b78031a2434480c1b391711e578579b616c184095e2dc2d032f22261b ModemManager
 NetworkManager 1:1.56.1-2.fc44.x86_64 8ccdaa8da6ab019fe629bd492ad12c88bb0157608908c3e98f1008f2186a5b62 NetworkManager
@@ -50,9 +50,9 @@ bzip2-libs 0:1.0.8-23.fc44.x86_64 ead652ccea75f1345305c82e97759a360da5e4f46b2f18
 ca-certificates 0:2026.2.92_v9.0.319-2.fc44.noarch ce1202707eb5df4bb506202c94f4fdc948a51ab044e7f7ead3ddd5e54dd8bde5 ca-certificates
 cairo 0:1.18.6-1.fc44.x86_64 769182b915461b81160b9c2f67565b1c85c4fb00bfafa8ca21c0cc710b8717e5 cairo
 cairo-gobject 0:1.18.6-1.fc44.x86_64 070da44fde8d004f2c2a9150f5bec4fa5d46a8c75b887288dd3c83a804a8dd3c cairo
-calamares 0:3.3.14-5.zeeos1.fc44.src d3ae5b33a3276b2413f694fcf6054c805e0c3c19ae1de813a889d6df978c5b27 calamares zeeos-rebuild-src
-calamares 0:3.3.14-5.zeeos1.fc44.x86_64 332ee1bd99d9756e8a112064685bf4446cbb023bc3c8b6722a065ba82c5c3fcb calamares zeeos-rebuild
-calamares-libs 0:3.3.14-5.zeeos1.fc44.x86_64 7b13ac020b0b22c8121095fcd4f4b2e56d462c8f92587264d5f4c32445c34513 calamares zeeos-rebuild
+calamares 0:3.3.14-5.zeeos1.fc44.src 682d8073a1bbce4ba844f555400005fde60cdf0edda660706b77cf52264ff894 calamares zeeos-rebuild-src
+calamares 0:3.3.14-5.zeeos1.fc44.x86_64 e267ede9212b8d1c7842593e252ae6b3b3ef2003090c5b9327e784c33066e86a calamares zeeos-rebuild
+calamares-libs 0:3.3.14-5.zeeos1.fc44.x86_64 2cd9b4d824138af68049f601319402df9f64db0f51bd826117d43d5205e7d3aa calamares zeeos-rebuild
 cdparanoia-libs 0:10.2-50.fc44.x86_64 31932adbec0ff45b5863dcf6b55f410b25e0f22a85eb9e8de3d197cc9aa8e58a cdparanoia
 cjson 0:1.7.19-1.fc44.x86_64 31053341f0327df941e146c96e7002f9b28859833e2ef301038b7ab4d223f094 cjson
 cmake-filesystem 0:4.3.0-1.fc44.x86_64 1f80541ec3a638a822817170e8f1390f596a9f100067f3cb12bd8dce35093622 cmake
@@ -77,8 +77,8 @@ dbus-libs 1:1.16.2-1.fc44.x86_64 7feb93ce981ee35dc4a2d7f960a1077bf7656bc439335ff
 dbus-tools 1:1.16.2-1.fc44.x86_64 be1b64d3f66e22a36da73b0b35f8755cc320e2cbecb8b8c976c36c558431a883 dbus
 ddcutil 0:2.2.1-3.fc44.x86_64 4a46c95dd6745e3cdbd9529bab60c7b99fcb7e066fd4c8e068a0ea90bf718a88 ddcutil
 default-fonts-core-sans 0:4.3-1.fc44.noarch ef62e81c9f1c6169e2fbd49b21858aed159198e26d80ff5e62ec72577c8a58e0 langpacks
-desktop-backgrounds-compat 0:44.0.0-2.fc44.noarch 413dd00d8a8b9ee1cdd03c9d202e260f6c3e9df1145b7f4961719e557ecb82e3 desktop-backgrounds
-desktop-backgrounds-kde 0:44.0.0-2.fc44.noarch 773f796296ce45af364ce6520c91fcb1af07dfcc54ddde001cc4b1eb1fb8fc3e desktop-backgrounds
+desktop-backgrounds-compat 0:44.0.0-3.fc44.noarch 46bd418de6b43e0439d840738c7daf486d8fc5456068c2c2a5a5944e7364d140 desktop-backgrounds
+desktop-backgrounds-kde 0:44.0.0-3.fc44.noarch a3418ade7d0e4b99f3472a928d458e5cdd39e4147c6a5f44589775fe4ab536ac desktop-backgrounds
 desktop-file-utils 0:0.28-5.fc44.x86_64 b6b0cf7cd39100c4adb5cf47c15b585263c10042a88e97bf5a46f90c776bbd8f desktop-file-utils
 device-mapper 0:1.02.212-2.fc44.x86_64 d559d7d859ef61fc8676e8dda182ad8df88aac68fc64dea195076dae93210cc4 lvm2
 device-mapper-event 0:1.02.212-2.fc44.x86_64 f8aaba6fa6cda9b48c2760e4e4d812d4d8ee347c37a4258a3884b4892a249b30 lvm2
@@ -88,6 +88,7 @@ device-mapper-persistent-data 0:1.3.4-1.fc44.x86_64 70cf1947089210912ec388ccddc6
 dialog 0:1.3-57.20250116.fc44.x86_64 8ff0e5a28be3b2e18286dd3ebe77358fab5a0adc09dc1b959ae7d14dcdc5f268 dialog
 diffutils 0:3.12-5.fc44.x86_64 45001ec4ea4d2c56a879ad55dc94c426525100bfa421f2ed41224ed08adb9cc3 diffutils
 dnf5 0:5.4.6.0-1.fc44.x86_64 fb9ac72e1073e13a21687fdbced25bbcee242e2b18090e4c91829dcdd17f4b4c dnf5
+dnf5-plugin-automatic 0:5.4.6.0-1.fc44.x86_64 cddefed5256e780e1bf058e5ff6372b7b49a61be83d992f8cf20f31ea210942d dnf5
 docbook-dtds 0:1.0-91.fc44.noarch d1e30aff11533e3043dbc328fedf21703a7795fb489b195af0405be40183bdf1 docbook-dtds
 docbook-style-xsl 0:1.79.2-27.fc44.noarch c75f2b97155fb2c2ef303af546c0e6396597237dc20b98c6425f99647dc17bea docbook-style-xsl
 dosfstools 0:4.2-18.fc44.x86_64 11a1ddea2c27bcd9c764f086a1b8fed459a39d9a56be5db14a95128a9df074d0 dosfstools
@@ -123,6 +124,8 @@ file 0:5.46-10.fc44.x86_64 d0e2372e97b29daaa98c2acf08e79320bbfc4137bd4f28ce8b2dc
 file-libs 0:5.46-10.fc44.x86_64 d1d56a90585cb31eeb755509c28079882d9f6c22e0c7d4c5121f2a68e300a8dd file
 filesystem 0:3.18-52.fc44.x86_64 7abc643d653bf2773c38e183e0e33489cab4880c8a540b315fcd7fff09c6c52c filesystem
 findutils 1:4.10.0-7.fc44.x86_64 b1f9fe72be7a0cf0fb53ec00ef9e6b8ccc9987cb5f55e9de02bbc67f9cf3b5cf findutils
+firewalld 0:2.4.4-1.fc44.noarch 6e317405736500e1fdebbfa406d5d7f1424ab5f86c716971737787a48ffbc818 firewalld
+firewalld-filesystem 0:2.4.4-1.fc44.noarch b1764f5942cff4dc23f76f1aa98d813fef9b23ba67824684822fc0c42694f25e firewalld
 flac-libs 0:1.5.0-8.fc44.x86_64 2b3b670cadeb5ae63319bd9841f561c48f8d3e6918425ad6c9b9c7ca97020c39 flac
 flite 0:2.2-13.fc44.x86_64 3026c5acc9ecd25eb856705518cf1dd601ed866d14622d3df59faa4e107e60d8 flite
 fmt 0:11.2.0-4.fc44.x86_64 1ba4d955ff7ee1ce4c95bf8a76349b5aa7481ed0370d2503eb7b23130460d13c fmt
@@ -213,6 +216,7 @@ imath 0:3.1.12-6.fc44.x86_64 8ecedac3056155efdc870edabe88b1f78b4bc6f7b560548f60f
 inih 0:62-2.fc44.x86_64 15b71f61b82a37b78b2a328634d5a516b93f84a6c22288b464ece3143a9392ed inih
 inih-cpp 0:62-2.fc44.x86_64 432b6bef07d874c85984f7a76bd85b29a6817fe308832e38f70e96b22c000c82 inih
 iproute 0:6.17.0-2.fc44.x86_64 756b149f3d89a8a1dfb1d91abbb85fc2c9f0775283e4db6848aec356b1c73517 iproute
+iptables-libs 0:1.8.11-13.fc44.x86_64 b0a1fe5daf139d5ebe3e27a4f6423f794bcd72545830fc4d6f17112a45efe79f iptables
 iputils 0:20250605-2.fc44.x86_64 5cc87dde6ca60232c0a121f6e61e455741c0ab9bd37f8c09d68087e919467a3e iputils
 iso-codes 0:4.20.1-3.fc44.noarch 56e4d850711d11c21fb9f3b2005b54b2b69c4e218399ca50259f9678ea06e007 iso-codes
 jansson 0:2.14-4.fc44.x86_64 950a7003c1246568c6d602b222188391b1d4f411638d3470179736195f3b04f9 jansson
@@ -459,6 +463,9 @@ libmount 0:2.41.5-1.fc44.x86_64 75ac4afc36e36e6e5c6e888c10075d049f26205edc900b84
 libmtp 0:1.1.22-3.fc44.x86_64 869d510ad9c69aa69d666edc3aba4fcac58c3ed13bfe9ad31e559c8121564546 libmtp
 libmysofa 0:1.3.3-4.fc44.x86_64 494c720cfd6ad4b006f1404e3b6e710a2144abcb5e9f9b3239376a4c11eeca85 libmysofa
 libndp 0:1.9-5.fc44.x86_64 0ed643a11f18c65ceb742d6a5ee2123a6cc7e179597865caed0bb0e4b51baa33 libndp
+libnetfilter_conntrack 0:1.1.1-1.fc44.x86_64 0e63d7696f846f54e54b6015623ec19de4dc4b8dccb6a5c5d563d5f16b741832 libnetfilter_conntrack
+libnfnetlink 0:1.0.1-32.fc44.x86_64 35a1b8a3c8ec49351d948e8538121b2bed63e74065d0678e6389667753bfcd19 libnfnetlink
+libnftnl 0:1.3.1-2.fc44.x86_64 0e32e03ca1d7d157e3eba5c8e1e2bf7f978ebf38aeda2ad86829337c841b76ed libnftnl
 libnghttp2 0:1.68.0-5.fc44.x86_64 8361227cb08abb0ed63de90960a988d3d513180d83f49a081c830865b12a2f1d nghttp2
 libnghttp3 0:1.18.0-1.fc44.x86_64 e0e422716b5db9f519f02f6a314850bd1eb7753b2cbfd3b49d138fd2685d15d1 nghttp3
 libnice 0:0.1.23-2.fc44.x86_64 f67855f19894a96da7d119fbdd7f608e490f21e62157d7038a34f8209fd71161 libnice
@@ -583,6 +590,8 @@ ncurses 0:6.6-1.fc44.x86_64 6c3047018edce5627c9fbfc8208a4ff048cf8f250097c335eb66
 ncurses-base 0:6.6-1.fc44.noarch 19c6053ad3e76d47f330da92e5c97e2b9a3617b4ddd8fa2139d9066092cfc181 ncurses
 ncurses-libs 0:6.6-1.fc44.x86_64 d9afd13714bac08fdfbe9b9f5bc5d298497fc1c3fee31fb2e1274ed95ab3d96a ncurses
 nettle 0:3.10.1-3.fc44.x86_64 36d7fea745c4d0b17f6dbee48c8f6fe3ca444984aee8ecab863dffa5b5042114 nettle
+nftables 1:1.1.6-2.fc44.x86_64 c90f4fec4e9056df3cb086658bb6a140ba06e5e10eb575b3db3928b8050922a7 nftables
+nftables-services 1:1.1.6-2.fc44.noarch 5e6aa14cc1618da2acdaaa4ff24c6b7acb26ca0be3e0ca0f4290e3d05a3b0f1b nftables
 ngtcp2 0:1.22.1-1.fc44.x86_64 0ca9f4a87d2c3657a7c802e2cc3b9fd09e7668d474dee662b6f221cb92fb7565 ngtcp2
 ngtcp2-crypto-gnutls 0:1.22.1-1.fc44.x86_64 5c6dd2c2d28ce5c1a0f052c899f231e841487a6466cb4e87024fe5ef9168a102 ngtcp2
 ngtcp2-crypto-ossl 0:1.22.1-1.fc44.x86_64 6057b74cea8407eb14e55827d317a0bf3ac4a8dbfd4ee018563a0f285792a5aa ngtcp2
@@ -722,9 +731,12 @@ pv 0:1.10.5-1.fc44.x86_64 912992f5f23ac4b85a64ceb8ec2e7462337f9c0569fb7c9e86fac2
 python-pip-wheel 0:26.0.1-3.fc44.noarch e9a4e974a23e196584716000c0d46a5462c14fd08c4038d2ee46c9b3bc5ac78f python-pip
 python3 0:3.14.8-1.fc44.x86_64 69d73f1529756aff42a9d5f200f3bd6abbefd9006b36f3345aaaff741ce18332 python3.14
 python3-cairo 0:1.28.0-5.fc44.x86_64 3274507dd9e771f593ecbb125e3d3b22a2d8adb6ac9abadf98280ea8579a92dd pycairo
+python3-dbus 0:1.4.0-9.fc44.x86_64 f5ddf23e75d515f31e89d0ad1b0c701dc55b3a9d42ce554dce1b44ef01522a1f dbus-python
+python3-firewall 0:2.4.4-1.fc44.noarch 8ace10d21b644aacf0f988f8e501cd31183c25eb894da42b90817366490c4210 firewalld
 python3-gobject 0:3.56.3-1.fc44.x86_64 99b394faaf81d662000cce38b79b017b220ca9a29658dd464c1cc2251ca35772 pygobject3
 python3-gobject-base 0:3.56.3-1.fc44.x86_64 cce240a3978afc3c8ab6973e04b8f379187f793071860f821a322ccdcd0e25c7 pygobject3
 python3-libs 0:3.14.8-1.fc44.x86_64 a7abe16ab0476c3c1dcf9f85df021a1bd1751129184385d8427c14d425ea05b2 python3.14
+python3-nftables 1:1.1.6-2.fc44.noarch 433bf7aa4fdbfc4cf2415ecbb3d7fa857f13ddace40d581b871a96231a8ae98a nftables
 qaccessibilityclient-qt6 0:0.6.0-5.fc44.x86_64 a6fa0172313407fb251c127d8f535224a7200b94580e229b5aaae5362f793a7b qaccessibilityclient
 qca-qt6 0:2.3.10-4.fc44.x86_64 2e585909b6a10095062bdb7951ea43ced1b1cf1d258faa6c550f8f46a1a0f7de qca
 qca-qt6-ossl 0:2.3.10-4.fc44.x86_64 ec27a4d2eaedb9f3b125f39b601cd409114657049d2e7b03f74e3d23ff9ba242 qca
@@ -766,8 +778,8 @@ samba-common 2:4.24.7-1.fc44.noarch 4aa912394bd2f185648aa9f3e452abf9656b5960895b
 samba-core-libs 2:4.24.7-1.fc44.x86_64 356e9a294933f0eaec39b6a216eddec048eef1d44b39848bcc6f1d7c27086e2c samba
 samba-ndr-libs 2:4.24.7-1.fc44.x86_64 f77c60f61b51f91e33ccdab235e6807907d57a0db52ee2e96d965d46ad1ade72 samba
 sdbus-cpp 0:2.2.1-2.fc44.x86_64 01f5e6a6178dbd94b402799e027c0dcbcd28e0cc2e33b7ea1cb42053b284986b sdbus-cpp
-sddm 0:0.21.0-13.zeeos1.fc44.src 9dc7f69b15f41db5aac7261986afc2715e9ea9cc1bdc82dd68ecb3dc744777e4 sddm zeeos-rebuild-src
-sddm 0:0.21.0-13.zeeos1.fc44.x86_64 ad0e4f13b9162b0855ee8f376cac877f6409e7f6277296a8fb39bc5d09af583d sddm zeeos-rebuild
+sddm 0:0.21.0-13.zeeos1.fc44.src 167f12d0936df7942d5a559227522a4f99e508985e82aa66154d906c4bf7249a sddm zeeos-rebuild-src
+sddm 0:0.21.0-13.zeeos1.fc44.x86_64 e9294100150e47812383070a4c4901a77f9695d24be40615f46cee5de373f6b1 sddm zeeos-rebuild
 sddm-breeze 0:6.7.5-1.fc44.noarch 8ef337e50adf9d58acb59a25970ac30183535379b743af52ed4e463ffd6d70a0 plasma-desktop
 sddm-wayland-plasma 0:6.7.5-1.fc44.noarch 39af43b7857fddc9661f3a04f9167cae7233aba2aea29ea1a7bc7449dddae65e plasma-workspace
 sdl2-compat 0:2.32.74-1.fc44.x86_64 d3fc0a7c5d76c56d6c37e222ad3ce8ca4b3e466a53796ae0360074e4c0e1c622 sdl2-compat
