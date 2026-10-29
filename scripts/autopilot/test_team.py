@@ -72,10 +72,14 @@ class TeamTests(unittest.TestCase):
 
     def test_parse_answer_rejects_error_missing_and_markdown_wrappers(self):
         for raw in ('{"error":"failed","response":"{}"}', '{"result":3}',
+                    '{"status":"WAITING","response":"{}"}',
+                    '{"status":"CANCELED","response":"{}"}',
+                    '{"status":null,"response":"{}"}',
                     '{"response":"```json\\n{}\\n```"}'):
             with self.subTest(raw=raw), self.assertRaises((team.Stop, ValueError)):
                 team.parse_answer(raw)
         self.assertEqual(team.parse_answer('{"result":"{\\"files\\":[]}"}'), {"files": []})
+        self.assertEqual(team.parse_answer('{"status":"SUCCESS","response":"{}"}'), {})
 
     def test_malformed_model_objects_hold_with_a_controlled_error(self):
         for raw in (None, 3, [], "unexpected", {"files": [None]}, {"files": [3]}):
@@ -171,9 +175,11 @@ class TeamTests(unittest.TestCase):
                 self.assertFalse(settings["hooksConfig"]["enabled"])
                 self.assertFalse(settings["admin"]["mcp"]["enabled"])
                 self.assertFalse(settings["admin"]["extensions"]["enabled"])
+                self.assertEqual(settings["security"]["auth"]["selectedType"], "gemini-api-key")
+                self.assertFalse((config.parent / "home/.gemini/oauth_creds.json").exists())
             return json.dumps({"result": '{"verdict":"pass","findings":[]}'})
 
-        fake_env = {"PATH": os.environ["PATH"], "HOME": str(self.state), "GH_TOKEN": "github-secret",
+        fake_env = {"PATH": os.environ["PATH"], "HOME": str(self.state), "USER": "fixture-user", "GH_TOKEN": "github-secret",
                     "GITHUB_TOKEN": "github-secret", "MINISIGN_SECRET_KEY": "signing-secret",
                     "ANTHROPIC_API_KEY": "claude-secret", "GEMINI_API_KEY": "gemini-secret"}
         with patch.dict(os.environ, fake_env, clear=True), patch.object(team, "run", side_effect=capture):
@@ -189,12 +195,27 @@ class TeamTests(unittest.TestCase):
             if args[0] == "claude":
                 self.assertEqual(args[args.index("--tools") + 1], "")
                 self.assertIn("--safe-mode", args)
+                self.assertIn("--disable-slash-commands", args)
                 self.assertIn("--strict-mcp-config", args)
                 self.assertIn("--max-budget-usd", args)
                 self.assertNotIn("--dangerously-skip-permissions", args)
                 self.assertNotIn("GEMINI_API_KEY", kwargs["env"])
+                self.assertEqual(kwargs["env"]["USER"], "fixture-user")
             else:
                 self.assertNotIn("ANTHROPIC_API_KEY", kwargs["env"])
+                self.assertNotIn("USER", kwargs["env"])
+
+    def test_retired_personal_login_holds_without_launch_or_credential_copy(self):
+        for key in (None, "", "   "):
+            env = {"HOME": str(self.state), "PATH": os.environ["PATH"]}
+            if key is not None:
+                env["GEMINI_API_KEY"] = key
+            with self.subTest(key=key), patch.dict(os.environ, env, clear=True), \
+                    patch.object(team, "run") as launch, patch.object(team.tempfile, "TemporaryDirectory") as scratch:
+                with self.assertRaisesRegex(team.Stop, "Antigravity autonomous adapter is not approved"):
+                    team.model("gemini", "Return a verdict.", self.state)
+                launch.assert_not_called()
+                scratch.assert_not_called()
 
     def test_input_budget_and_secret_checks_happen_before_model_execution(self):
         with patch.object(team, "run") as mocked:

@@ -13,7 +13,6 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
-import shutil
 import signal
 import subprocess
 import tempfile
@@ -192,7 +191,8 @@ def parse_answer(text):
     envelope = json.loads(text)
     if not isinstance(envelope, dict):
         raise Stop("invalid model envelope")
-    if envelope.get("is_error") or envelope.get("error"):
+    if (envelope.get("is_error") or envelope.get("error")
+            or "status" in envelope and envelope["status"] != "SUCCESS"):
         raise Stop("model reported failure")
     answer = envelope.get("result", envelope.get("response"))
     if not isinstance(answer, str):
@@ -204,31 +204,31 @@ def parse_answer(text):
 def model(name, prompt, parent):
     if name not in ("claude", "gemini") or len(prompt.encode()) > MAX_INPUT or SECRET.search(prompt):
         raise Stop("model/input policy rejected request")
+    # Personal Gemini CLI sign-in is retired for this account. Antigravity is not
+    # a drop-in replacement: it cannot enforce this adapter's turn/token bounds.
+    # Never copy cached OAuth files or silently fall back to a less bounded CLI.
+    if name == "gemini" and not os.environ.get("GEMINI_API_KEY", "").strip():
+        raise Stop("Gemini worker requires GEMINI_API_KEY; Antigravity autonomous adapter is not approved")
     # Retain only provider authentication and basic runtime variables, never GH/git/signing env.
-    permitted = ("HOME", "PATH", "TMPDIR", "LANG") + (("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN") if name == "claude" else
-                            ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"))
+    # Claude's macOS keychain lookup requires USER even when HOME is present.
+    permitted = ("HOME", "PATH", "TMPDIR", "LANG") + (("USER", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN") if name == "claude" else
+                            ("GEMINI_API_KEY",))
     env = {k: os.environ[k] for k in permitted if k in os.environ}
     with tempfile.TemporaryDirectory(prefix="model-", dir=parent) as temporary:
         scratch = Path(temporary)
         if name == "claude":
-            args = ["claude", "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
+            args = ["claude", "-p", "--safe-mode", "--disable-slash-commands", "--tools", "", "--strict-mcp-config",
                     "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "",
                     "--no-session-persistence", "--permission-mode", "dontAsk",
                     "--max-turns", "1", "--max-budget-usd", "0.50", "--output-format", "json"]
         else:
             # A private CLI home has no user hooks, extensions, context or policies.
             home = scratch / "home"; config = home / ".gemini"; config.mkdir(parents=True)
-            original = Path(os.environ.get("GEMINI_CLI_HOME", str(Path.home()))) / ".gemini"
-            for filename in ("oauth_creds.json", "google_accounts.json"):
-                source = original / filename
-                if source.is_file() and not source.is_symlink():
-                    target = config / filename; shutil.copyfile(source, target); target.chmod(0o600)
-            selected = "oauth-personal" if (config / "oauth_creds.json").exists() else "gemini-api-key"
             settings = dict(model={"maxSessionTurns": 1},
                             modelConfigs={"customOverrides": [{"match": {}, "modelConfig": {"generateContentConfig": {"maxOutputTokens": 4096}}}]}, hooksConfig={"enabled": False},
                             admin={"secureModeEnabled": True, "extensions": {"enabled": False},
                                    "mcp": {"enabled": False}, "skills": {"enabled": False}},
-                            security={"auth": {"selectedType": selected}},
+                            security={"auth": {"selectedType": "gemini-api-key"}},
                             telemetry={"enabled": False})
             settings_path = scratch / "settings.json"; settings_path.write_text(json.dumps(settings))
             (config / "settings.json").write_text(json.dumps(settings))

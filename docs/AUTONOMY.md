@@ -74,9 +74,11 @@ cap covers local Claude calls only. There is no unlimited daemon, automatic agen
 or arbitrary shell interface. The Codex operator can run finite cycles using its own approved
 scheduler; no scheduler or activation variable is installed by this change.
 
-Models have no tools, MCP servers or hooks. Gemini uses an isolated configuration and an
-administrative wildcard-deny tool policy. Claude uses safe mode, no tools, empty MCP/settings
-sources and no persisted session. Only the corresponding provider credential environment is
+Models have no tools, MCP servers or hooks. Gemini CLI uses API-key authentication, an isolated
+configuration and an administrative wildcard-deny tool policy. It never copies cached personal
+OAuth credentials. Claude uses safe mode, disabled slash commands, no tools, empty MCP/settings
+sources and no persisted session. Its macOS keychain lookup also receives the non-secret `USER`
+runtime variable. Only the corresponding provider credentials and basic runtime variables are
 passed to each CLI; GitHub/signing credentials are never passed to model children. These CLI
 controls are application restrictions, not a claim of operating-system sandbox isolation.
 Use a dedicated unprivileged provider account/runtime for rollout. Repository text is scanned
@@ -101,8 +103,9 @@ or recreated automatically. An empty-expected-value branch push lease allows cre
 3. Strengthen current main protection to require up-to-date branches while preserving all
    reviews, checks, admin enforcement and conversation rules. Re-audit live protection;
    do not run a setup script that replaces unrelated existing protection.
-4. Authenticate the installed CLIs using the providers' local login/API-key setup. Never paste
-   keys into issues, PRs, logs or model task text. Run `team.py canary --state <private-dir>`;
+4. Authenticate Claude using its local login and configure `GEMINI_API_KEY` securely for the
+   bounded Gemini CLI worker. Antigravity sign-in does not authenticate this worker. Never paste
+   keys into chat, issues, PRs, logs or model task text. Run `team.py canary --state <private-dir>`;
    both providers must pass. Failed authentication is a hold, not a reason to relax tool policy.
 5. From a clean checkout of reviewed, current `main`, set `AUTOPILOT_CONTROLLER=codex-local`
    and retain `AUTOPILOT=on`. This disables legacy implementation/fix/resume/planning workers;
@@ -128,6 +131,21 @@ ensure sensitive work and release publication remain held. These are simulated s
 not proof that a real provider reviewed or a protected GitHub PR merged.
 
 During implementation both installed provider canaries failed (Gemini exit 55, Claude exit 1).
+After local browser authentication, Claude's login was verified with macOS credential-store
+access. A stripped environment must include `USER` for that saved login to be found; restricted
+sandbox status alone incorrectly appeared logged out. See the implementation report for the
+subsequent actual model-canary result: after correcting the environment, Anthropic returned
+HTTP 429 `usage_limit_reached` (weekly subscription quota). Authentication is working; no model
+canary has passed. Repeated quota retries are not a login remedy.
+
+The user's installed Antigravity CLI 1.4.10 is not an autonomous worker backend. Its documented
+settings/headless interface lacks equivalent hard turn/token/cost caps and a verified all-tools
+removal switch. Legacy Gemini settings are not an Antigravity policy: its hooks, MCP and plugins
+use separate configuration files. No model requests are sent to Antigravity, and no automatic
+fallback weakens the existing bounds. Without `GEMINI_API_KEY`, Gemini holds before launch or
+credential copying. A future Antigravity adapter requires separate security review and isolation
+and budget evidence; a successful interactive login is insufficient.
+
 No live provider-to-GitHub-to-merge end-to-end success is claimed. Live API evidence confirms
 PR #198 merged and PR #283 closed unmerged. The policy PR itself is owner-only and is never
 used as a low-risk merge canary. Activation remains off until the rollout conditions above hold.
