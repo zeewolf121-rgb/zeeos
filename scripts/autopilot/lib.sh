@@ -41,7 +41,7 @@ linked_issue() {
   if [[ "$s" =~ ^agent/[^/]+/([0-9]+)- || "$s" =~ [Cc]loses\ \#([0-9]+) ]]; then echo "${BASH_REMATCH[1]}"; fi
 }
 
-# Which model wrote a PR: claude | codex | human | fork | unknown.
+# Which model wrote a PR: claude | codex | gemini | human | fork | unknown.
 # "fork" = the head branch lives in another repository. The repo is public, so anyone can
 # open one and name the branch agent/orchestrator/* or write "Closes #N"; autopilot never
 # reviews, dispatches for, or merges those. The owner handles them by hand.
@@ -53,6 +53,8 @@ pr_model() {
   case "$ref" in
     agent/orchestrator/*) echo claude; return ;;
     codex/*) echo codex; return ;;
+    agent/docs-writer/*-autonomy-gemini) echo gemini; return ;;
+    agent/docs-writer/*-autonomy-claude) echo claude; return ;;
     human/*) echo human; return ;;
   esac
   num="$(linked_issue "$pr")"
@@ -61,3 +63,21 @@ pr_model() {
 }
 
 pr_head() { gh pr view "$1" --repo "$REPO" --json headRefOid --jq .headRefOid; }
+
+# Workflow variables are authoritative; direct invocations fetch the full variable list.
+# An API failure cannot silently reactivate legacy workers.
+codex_controller() {
+  local mode data
+  if [[ ${AUTOPILOT_CONTROLLER_MODE+x} ]]; then
+    mode="$AUTOPILOT_CONTROLLER_MODE"
+  else
+    data="$(gh api "repos/$REPO/actions/variables?per_page=100")" || exit 1
+    mode="$(jq -er 'if .total_count > 100 then error("variable evidence budget") else
+      [.variables[] | select(.name == "AUTOPILOT_CONTROLLER") | .value][0] // "legacy" end' <<<"$data")" || exit 1
+  fi
+  case "$mode" in
+    codex-local) return 0 ;;
+    ''|legacy) return 1 ;;
+    *) log "unknown controller mode; refusing dispatch"; exit 1 ;;
+  esac
+}

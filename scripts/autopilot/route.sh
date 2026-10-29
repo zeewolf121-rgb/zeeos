@@ -10,6 +10,9 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
 . "$here/lib.sh"
 
+# Review-only jobs have their own route in agent-dispatch; implementations stop here.
+if codex_controller; then echo "model="; echo "agent="; exit 0; fi
+
 n="${1:?usage: route.sh <issue> [--from-label]}"
 model="$(issue_model "$n")"; agent="$(issue_agent "$n")"
 if [[ "${2:-}" == --from-label ]]; then

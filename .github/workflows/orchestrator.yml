@@ -16,13 +16,15 @@ on:
   issues:
     types: [closed]
 permissions:
-  contents: write       # release-candidate tags
+  contents: write       # protected PR merges
   issues: write
   pull-requests: write
   statuses: write
   checks: read          # gates.sh reads check runs (lint, build-iso, boot-test)
-  actions: write        # workflow_dispatch of agent-dispatch / release
+  actions: write        # review and validation dispatch
   id-token: write       # claude-code-action
+env:
+  AUTOPILOT_CONTROLLER_MODE: ${{ vars.AUTOPILOT_CONTROLLER }}
 jobs:
   run:
     if: >-
@@ -52,7 +54,7 @@ jobs:
           if grep -qE 'dispatched|merged|ready$|retry|needs-human|tagged|opened|left (ready|paused)' "$AUTOPILOT_LOG"; then
             echo acted=true; else echo acted=false; fi >>"$GITHUB_OUTPUT"
       - name: Open the next phase / triage (Sonnet, max 40 turns)
-        if: steps.det.outputs.needs_llm == 'true'
+        if: (vars.AUTOPILOT_CONTROLLER == '' || vars.AUTOPILOT_CONTROLLER == 'legacy') && steps.det.outputs.needs_llm == 'true'
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,7 +85,7 @@ jobs:
             --allowedTools "Read,Glob,Grep,Edit(/${{ runner.temp }}/**),Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue create:*),Bash(gh issue edit:*),Bash(gh label create:*),Bash(scripts/autopilot/phase.sh:*)"
       - name: Run summary (Haiku)
         if: >-
-          always() && steps.det.outputs.log_issue != '' &&
+          always() && (vars.AUTOPILOT_CONTROLLER == '' || vars.AUTOPILOT_CONTROLLER == 'legacy') && steps.det.outputs.log_issue != '' &&
           (steps.det.outputs.acted == 'true' || steps.det.outputs.needs_llm == 'true')
         uses: anthropics/claude-code-action@v1
         env:
