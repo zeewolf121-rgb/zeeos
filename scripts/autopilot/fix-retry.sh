@@ -11,6 +11,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
 . "$here/lib.sh"
 
+if codex_controller; then log "Codex controller owns retries; legacy fixer held"; exit 0; fi
+
 give_up() { # pr what
   w gh issue edit "$1" --repo "$REPO" --add-label needs-human >/dev/null
   local num; num="$(linked_issue "$1")"

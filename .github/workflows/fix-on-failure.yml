@@ -13,6 +13,8 @@ permissions:
   statuses: write
   checks: read          # gates.sh reads check runs (lint, build-iso, boot-test)
   actions: write
+env:
+  AUTOPILOT_CONTROLLER_MODE: ${{ vars.AUTOPILOT_CONTROLLER }}
 jobs:
   follow-up:
     if: >-

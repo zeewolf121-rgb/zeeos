@@ -4,10 +4,11 @@
 # and records every write. Run by `make lint`. Needs bash and jq.
 # shellcheck disable=SC2016,SC2034  # ok() evals its checks later, on purpose
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin"
-export FIX="$tmp/fix" CALLS="$tmp/calls" GITHUB_REPOSITORY=o/r AUTOPILOT_STAGGER=0 PATH="$tmp/bin:$PATH"
+export FIX="$tmp/fix" CALLS="$tmp/calls" GITHUB_REPOSITORY=o/r AUTOPILOT_STAGGER=0 AUTOPILOT_CONTROLLER_MODE=legacy PATH="$tmp/bin:$PATH"
 
 cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
@@ -75,18 +76,20 @@ ok "unresolved Codex P1 blocks" '! gates cross-review 5 >/dev/null'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P2 Badge](https://img.shields.io/badge/P2-yellow)"}]}}]}}}}}' | fx graphql
 ok "unresolved Codex P2 does not block" 'gates cross-review 5 >/dev/null'
 ok "plain PR needs no owner approval" 'gates owner-gate 5 >/dev/null'
-ok "merge goes through when all gates pass" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+ok "legacy fixtures cannot authorize merge without complete live policy evidence" '! gates merge 5 >/dev/null && ! grep -q "CALL pr merge 5" "$CALLS"'
 
 # Autopilot merges push with GITHUB_TOKEN, which starts no workflows: gates.sh dispatches
-# main's lint + merge-audit for the merge commit itself.
+# main's lint + merge-audit for the merge commit itself. Test the audit sweep
+# independently of merge authorization; a legacy fixture cannot authorize a merge.
 msha=1111111111111111111111111111111111111111
-ok "an unmerged (queued --auto) PR dispatches nothing yet" '! grep -q "workflow run" "$CALLS"'
-: >"$CALLS"; echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
-ok "merged PR dispatches lint + merge-audit for its merge commit" 'gates merge 5 >/dev/null || true
+ok "a refused merge dispatches no post-merge workflows" '! grep -q "workflow run" "$CALLS"'
+: >"$CALLS"
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list_base_main
+ok "audit sweep dispatches lint + merge-audit for an already merged commit" 'gates push-workflows >/dev/null
   grep -q "CALL workflow run lint.yml --repo o/r --ref main -f sha=$msha" "$CALLS" &&
   grep -q "CALL workflow run merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS"'
 : >"$CALLS"
-ok "a failed dispatch doesn't fail the merge" 'FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null && grep -q "pr merge 5" "$CALLS"'
+ok "failed post-merge audit dispatch is contained and never attempts a merge" 'FAIL_WORKFLOW_RUN=1 gates push-workflows >/dev/null && grep -q "CALL workflow run" "$CALLS" && ! grep -q "pr merge" "$CALLS"'
 reset
 echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list_base_main
 ok "sweep dispatches for an autopilot merge with no audit run, not for owner merges" 'gates push-workflows >/dev/null
@@ -97,17 +100,17 @@ reset; claude_pr; codex_done
 echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
 echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list_base_main
 export AUTOPILOT_LOG="$tmp/autopilot.log"; : >"$AUTOPILOT_LOG"
-gates merge 5 >/dev/null || true; gates push-workflows >/dev/null || true
+gates push-workflows >/dev/null; gates push-workflows >/dev/null
 unset AUTOPILOT_LOG
-ok "merge + sweep in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
+ok "two audit sweeps in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
 ok "installer-disk alone needs no owner approval (#70)" 'gates owner-gate 5 >/dev/null'
 ok "a removed hard-stop label still counts" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates owner-gate 5 >/dev/null'
-ok "hard stop is never merged, owner pinged" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS"'
+ok "hard stop is never merged and creates no automatic owner-ping mutation" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && ! grep -q "autopilot-owner-merge" "$CALLS"'
 : >"$CALLS"
-ok "installer-disk PR merges through the gate once reviewed (#70)" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+ok "installer-disk PR stays outside the low-risk automatic merge lane" '! gates merge 5 >/dev/null && ! grep -q "CALL pr merge 5" "$CALLS"'
 
 reset; claude_pr; codex_done
 echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files
@@ -162,20 +165,21 @@ ok "state for another commit -> waiting" '[[ "$(gates cross-review 5)" == waitin
 cstate "$sha" false | fx issues_5_comments
 ok "clean state on head -> reviewed" 'gates cross-review 5 >/dev/null'
 
-# Outdated blocking threads don't block a re-reviewed head; the gate resolves them on merge.
+# The legacy model verdict may exempt outdated findings; the live merge policy
+# still requires every conversation resolved, without resolving it itself.
 reset; claude_pr; codex_done
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) old"}]}}]}}}}}' | fx graphql
 ok "outdated P1 thread doesn't block" 'gates cross-review 5 >/dev/null'
 gates merge 5 >/dev/null || true
-ok "merge resolves the superseded thread" 'grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T1" "$CALLS"'
+ok "merge never resolves an outdated review thread or merges around it" '! grep -q "resolveReviewThread" "$CALLS" && ! grep -q "CALL pr merge" "$CALLS"'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) live"}]}}]}}}}}' | fx graphql
 ok "a P1 thread that still applies keeps blocking" '! gates cross-review 5 >/dev/null'
 # Non-blocking threads (Codex P2) never held the gate, but GitHub's required conversation
-# resolution would hold the merge (#101, #114): the gate replies and resolves them.
+# resolution still holds the merge (#101, #114); the gate leaves them for reviewers.
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T3","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> live nit"}]}}]}}}}}' | fx graphql
 ok "a live P2 thread doesn't block" 'gates cross-review 5 >/dev/null'
 : >"$CALLS"; gates merge 5 >/dev/null || true
-ok "merge replies on the P2 thread, then resolves it" 'grep -q "addPullRequestReviewThreadReply" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T3" "$CALLS"'
+ok "merge leaves P2 conversations unresolved and makes no reply or merge mutation" '! grep -q "addPullRequestReviewThreadReply" "$CALLS" && ! grep -q "resolveReviewThread" "$CALLS" && ! grep -q "CALL pr merge" "$CALLS"'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T4","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"someone"},"body":"human question"}]}}]}}}}}' | fx graphql
 : >"$CALLS"; gates merge 5 >/dev/null || true
 ok "the gate never resolves a thread the reviewer didn't open" '! grep -q "id=T4" "$CALLS"'
@@ -315,6 +319,25 @@ ok "skipped nightly (kill switch) doesn't count as green" '[[ "$out" == *prev_ex
 echo '{"jobs":[{"name":"health","conclusion":"success"}]}' | fx actions_runs_9_jobs
 out="$("$here/phase.sh" status 2>/dev/null)"
 ok "phase 1 done + nightly green -> phase 2 needs opening" '[[ "$out" == *current=2* && "$out" == *needs_llm=true* ]]'
+
+# Release publication is explicitly outside unattended automation, even for a
+# legacy caller that invokes the old command directly.
+reset
+ok "release-rc refuses publication without creating tags, workflows or issues" '! "$here/report.sh" release-rc >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+
+# Codex-local mode has a single dispatch owner. Legacy workers must perform no
+# writes, even when called manually with a ready task or a failing review.
+reset; claude_pr; codex_done
+ok "codex-local mode suppresses legacy dispatch without mutations" 'AUTOPILOT_CONTROLLER_MODE=codex-local "$here/dispatch.sh" >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+ok "codex-local mode suppresses legacy review fixes without mutations" 'AUTOPILOT_CONTROLLER_MODE=codex-local "$here/fix-retry.sh" --review 5 >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+ok "codex-local mode suppresses legacy CI fixes without mutations" 'AUTOPILOT_CONTROLLER_MODE=codex-local "$here/fix-retry.sh" agent/image-builder/6-kiwi "$sha" 7 >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+ok "codex-local mode never tags or publishes a release candidate" '! AUTOPILOT_CONTROLLER_MODE=codex-local "$here/report.sh" release-rc >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+
+# Exercise the new evidence/merge guard and isolated provider controller in CI.
+# Their GitHub/provider boundaries are mocked; no credentials or network needed.
+ok "live merge policy adversarial tests" 'python3 "$here/test_policy.py"'
+ok "single-request Gemini API adversarial tests" 'python3 "$here/test_gemini_request.py"'
+ok "bounded multi-agent controller adversarial tests" 'python3 "$here/test_team.py"'
 
 echo "selftest: $pass passed, $fail failed"
 (( fail == 0 ))
