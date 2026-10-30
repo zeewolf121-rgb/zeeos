@@ -12,7 +12,7 @@ import sys
 import urllib.error
 import urllib.request
 
-MODEL = "gemini-3.8-flash"
+MODEL = "gemini-3.6-flash"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 MAX_INPUT = 48000
 MAX_RESPONSE = 65536

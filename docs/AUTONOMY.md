@@ -75,7 +75,7 @@ or arbitrary shell interface. The Codex operator can run finite cycles using its
 scheduler; no scheduler or activation variable is installed by this change.
 
 Models have no tools, MCP servers or hooks. Gemini uses a direct HTTPS `generateContent`
-request to Google's fixed endpoint for `gemini-3.8-flash`, authenticated by API-key header.
+request to Google's fixed endpoint for `gemini-3.6-flash`, authenticated by API-key header.
 Its isolated Python child makes one request without tools, SDK/CLI routing, fallback, retries,
 proxy discovery or redirects. It accepts only one completed text-only JSON answer and rejects
 blocked, truncated, non-text or oversized responses. Provider errors become fixed status labels;
@@ -141,8 +141,8 @@ After local browser authentication, Claude's login was verified with macOS crede
 access. A stripped environment must include `USER` for that saved login to be found; restricted
 sandbox status alone incorrectly appeared logged out. See the implementation report for the
 subsequent actual model-canary result: after correcting the environment, Anthropic returned
-HTTP 429 `usage_limit_reached` (weekly subscription quota). Authentication is working; no model
-canary has passed. Repeated quota retries are not a login remedy.
+HTTP 429 `usage_limit_reached` (weekly subscription quota). Claude authentication is working,
+but its model canary remains held. Repeated quota retries are not a login remedy.
 
 The user's installed Antigravity CLI 1.4.10 is not an autonomous worker backend. Its documented
 settings/headless interface lacks equivalent hard turn/token/cost caps and a verified all-tools
@@ -157,7 +157,12 @@ PR #198 merged and PR #283 closed unmerged. The policy PR itself is owner-only a
 used as a low-risk merge canary. Activation remains off until the rollout conditions above hold.
 
 The former Gemini CLI worker first held on workspace trust, then timed out at 180 seconds
-without a response. The direct API adapter replaces that path rather than extending the timeout
-or relaxing restrictions. The last CLI result is not evidence of a successful API canary. See
+without a response. The direct API adapter replaces that path with the same restrictions.
+Its original fixed `gemini-3.8-flash` generation attempts timed out or returned a server error,
+despite successful authenticated model metadata access. One explicit `gemini-3.6-flash`
+diagnostic passed on 2026-10-30 in 2.67 seconds using the same bounded transport and parser.
+The proposed worker now pins that model; there is no automatic fallback. This separate diagnostic
+does not satisfy the production canary or prove paired model operation: the exact production
+worker canary and subsequent independent handoff still need to pass. See
 [Google API reference](https://ai.google.dev/api/generate-content) and the
 [model catalog](https://ai.google.dev/gemini-api/docs/models) for the fixed API contract/model.

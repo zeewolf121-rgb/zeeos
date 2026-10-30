@@ -50,8 +50,8 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(json.loads(answer["response"]), {"verdict": "pass", "findings": []})
         opener.open.assert_called_once()
         request = opener.open.call_args.args[0]
-        self.assertEqual(request.full_url, api.ENDPOINT)
-        self.assertTrue(request.full_url.startswith("https://generativelanguage.googleapis.com/"))
+        self.assertEqual(request.full_url,
+                         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent")
         self.assertNotIn(key, request.full_url)
         self.assertNotIn(key.encode(), request.data)
         self.assertEqual(request.get_header("X-goog-api-key"), key)
