@@ -166,18 +166,11 @@ class TeamTests(unittest.TestCase):
 
         def capture(args, **kwargs):
             calls.append((args, kwargs))
-            if args[0] == "gemini":
-                policy = Path(args[args.index("--admin-policy") + 1]).read_text()
-                self.assertIn('toolName = "*"', policy)
-                self.assertIn('decision = "deny"', policy)
-                config = Path(kwargs["env"]["GEMINI_CLI_SYSTEM_SETTINGS_PATH"])
-                settings = json.loads(config.read_text())
-                self.assertFalse(settings["hooksConfig"]["enabled"])
-                self.assertFalse(settings["admin"]["mcp"]["enabled"])
-                self.assertFalse(settings["admin"]["extensions"]["enabled"])
-                self.assertEqual(settings["security"]["auth"]["selectedType"], "gemini-api-key")
-                self.assertTrue(settings["security"]["folderTrust"]["enabled"])
-                self.assertFalse((config.parent / "home/.gemini/oauth_creds.json").exists())
+            if args[0] != "claude":
+                self.assertEqual(args[:2], [sys.executable, "-I"])
+                self.assertEqual(Path(args[2]).name, "gemini_request.py")
+                self.assertEqual(kwargs["env"], {"GEMINI_API_KEY": "gemini-secret"})
+                self.assertEqual(list(Path(kwargs["cwd"]).iterdir()), [])
             return json.dumps({"result": '{"verdict":"pass","findings":[]}'})
 
         fake_env = {"PATH": os.environ["PATH"], "HOME": str(self.state), "USER": "fixture-user", "GH_TOKEN": "github-secret",
@@ -206,28 +199,24 @@ class TeamTests(unittest.TestCase):
                 self.assertNotIn("ANTHROPIC_API_KEY", kwargs["env"])
                 self.assertNotIn("USER", kwargs["env"])
 
-    def test_gemini_trust_is_private_temporary_and_excludes_parent_and_user_rules(self):
+    def test_gemini_ignores_user_cli_and_python_configuration(self):
         observed = []
 
         def capture(args, **kwargs):
-            env = kwargs["env"]
             workspace = Path(kwargs["cwd"]).resolve()
-            trusted = Path(env["GEMINI_CLI_TRUSTED_FOLDERS_PATH"])
-            self.assertTrue(trusted.is_relative_to(workspace))
-            self.assertEqual(trusted.stat().st_mode & 0o777, 0o600)
             self.assertEqual(workspace.stat().st_mode & 0o777, 0o700)
-            self.assertEqual(json.loads(trusted.read_text()), {str(workspace): "TRUST_FOLDER"})
-            self.assertNotIn("--skip-trust", args)
-            self.assertNotIn("GEMINI_CLI_TRUST_WORKSPACE", env)
-            self.assertNotIn("GEMINI_RESTRICTED_MODE", env)
-            self.assertEqual(env["GEMINI_CLI_HOME"], str(workspace / "home"))
-            observed.append(trusted)
+            self.assertEqual(args[:2], [sys.executable, "-I"])
+            self.assertEqual(kwargs["env"], {"GEMINI_API_KEY": "fixture-key"})
+            self.assertEqual(list(workspace.iterdir()), [])
+            observed.append(workspace)
             return json.dumps({"response": '{"verdict":"pass","findings":[]}'})
 
         user_trust = self.state / "user-trustedFolders.json"
         user_trust.write_text('{"/": "TRUST_FOLDER"}')
         env = {"PATH": os.environ["PATH"], "HOME": str(self.state), "GEMINI_API_KEY": "fixture-key",
-               "GEMINI_CLI_TRUSTED_FOLDERS_PATH": str(user_trust), "GEMINI_CLI_TRUST_WORKSPACE": "true"}
+               "GEMINI_CLI_TRUSTED_FOLDERS_PATH": str(user_trust), "GEMINI_CLI_TRUST_WORKSPACE": "true",
+               "PYTHONPATH": "untrusted", "HTTPS_PROXY": "https://untrusted.example",
+               "GEMINI_MODEL": "unbounded-auto"}
         with patch.dict(os.environ, env, clear=True), patch.object(team, "run", side_effect=capture):
             team.model("gemini", "Return a verdict.", self.state)
         self.assertEqual(user_trust.read_text(), '{"/": "TRUST_FOLDER"}')

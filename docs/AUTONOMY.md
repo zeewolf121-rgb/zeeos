@@ -65,7 +65,7 @@ The separately owner-invoked release workflow is unchanged.
 | Retries | Two durable attempts per issue; failed attempt immediately becomes needs-human |
 | Model call | 180 seconds, 48 KB input, 64 KB captured output; one turn |
 | Claude spend | $0.50/call; at most $2/day from four task attempts, plus explicit canaries |
-| Gemini output | 4,096 tokens/call; no claimed dollar ceiling (provider pricing varies) |
+| Gemini output | One API request, 4,096 tokens, 90-second socket timeout inside 180-second process bound; no dollar ceiling |
 | Evidence | Bounded pagination; overflow/incomplete evidence holds work |
 
 Local advisory reviews use one call to each provider per attempt. Remote existing PR reviews
@@ -74,15 +74,19 @@ cap covers local Claude calls only. There is no unlimited daemon, automatic agen
 or arbitrary shell interface. The Codex operator can run finite cycles using its own approved
 scheduler; no scheduler or activation variable is installed by this change.
 
-Models have no tools, MCP servers or hooks. Gemini CLI uses API-key authentication, an isolated
-configuration and an administrative wildcard-deny tool policy. Folder trust remains enabled;
-a private, temporary trust file registers only the controller-created workspace, without
-trusting its parent or changing the user's trust database. It never copies cached personal
-OAuth credentials. Claude uses safe mode, disabled slash commands, no tools, empty MCP/settings
-sources and no persisted session. Its macOS keychain lookup also receives the non-secret `USER`
-runtime variable. Only the corresponding provider credentials and basic runtime variables are
-passed to each CLI; GitHub/signing credentials are never passed to model children. These CLI
-controls are application restrictions, not a claim of operating-system sandbox isolation.
+Models have no tools, MCP servers or hooks. Gemini uses a direct HTTPS `generateContent`
+request to Google's fixed endpoint for `gemini-3.8-flash`, authenticated by API-key header.
+Its isolated Python child makes one request without tools, SDK/CLI routing, fallback, retries,
+proxy discovery or redirects. It accepts only one completed text-only JSON answer and rejects
+blocked, truncated, non-text or oversized responses. Provider errors become fixed status labels;
+raw error bodies and URLs are never logged. No Gemini CLI settings, trust database or cached
+OAuth credentials are read or changed. The CLI is not used because its automatic model routing
+and retries add hidden requests; user-owned system settings overrides are also skipped by the CLI.
+Claude uses safe mode, disabled slash commands, no tools, empty MCP/settings sources and no
+persisted session. Its macOS keychain lookup also receives the non-secret `USER` runtime variable.
+Only Gemini's API key is passed to its child; Claude receives its corresponding authentication
+and basic runtime variables. Neither receives GitHub/signing credentials. These are application
+restrictions, not a claim of operating-system sandbox isolation.
 Use a dedicated unprivileged provider account/runtime for rollout. Repository text is scanned
 for common credential formats, but that scan is not a guarantee against arbitrary secrets.
 
@@ -106,7 +110,7 @@ or recreated automatically. An empty-expected-value branch push lease allows cre
    reviews, checks, admin enforcement and conversation rules. Re-audit live protection;
    do not run a setup script that replaces unrelated existing protection.
 4. Authenticate Claude using its local login and configure `GEMINI_API_KEY` securely for the
-   bounded Gemini CLI worker. Antigravity sign-in does not authenticate this worker. Never paste
+   bounded Gemini API worker. Antigravity sign-in does not authenticate this worker. Never paste
    keys into chat, issues, PRs, logs or model task text. Run `team.py canary --state <private-dir>`;
    both providers must pass. Failed authentication is a hold, not a reason to relax tool policy.
 5. From a clean checkout of reviewed, current `main`, set `AUTOPILOT_CONTROLLER=codex-local`
@@ -151,3 +155,9 @@ and budget evidence; a successful interactive login is insufficient.
 No live provider-to-GitHub-to-merge end-to-end success is claimed. Live API evidence confirms
 PR #198 merged and PR #283 closed unmerged. The policy PR itself is owner-only and is never
 used as a low-risk merge canary. Activation remains off until the rollout conditions above hold.
+
+The former Gemini CLI worker first held on workspace trust, then timed out at 180 seconds
+without a response. The direct API adapter replaces that path rather than extending the timeout
+or relaxing restrictions. The last CLI result is not evidence of a successful API canary. See
+[Google API reference](https://ai.google.dev/api/generate-content) and the
+[model catalog](https://ai.google.dev/gemini-api/docs/models) for the fixed API contract/model.

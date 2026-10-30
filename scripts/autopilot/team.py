@@ -3,7 +3,7 @@
 """Codex-owned deterministic controller. Models return data; they never run tools.
 
 cycle: one finite, globally leased iteration (requires reviewed main + opt-in).
-canary: exercise both authenticated CLIs without touching GitHub or a checkout.
+canary: exercise both authenticated providers without touching GitHub or a checkout.
 No daemon, release, signing, approval, protection-write or arbitrary-shell interface.
 """
 import argparse
@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import re
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -222,29 +223,11 @@ def model(name, prompt, parent):
                     "--no-session-persistence", "--permission-mode", "dontAsk",
                     "--max-turns", "1", "--max-budget-usd", "0.50", "--output-format", "json"]
         else:
-            # A private CLI home has no user hooks, extensions, context or policies.
-            home = scratch / "home"; config = home / ".gemini"; config.mkdir(parents=True)
-            settings = dict(model={"maxSessionTurns": 1},
-                            modelConfigs={"customOverrides": [{"match": {}, "modelConfig": {"generateContentConfig": {"maxOutputTokens": 4096}}}]}, hooksConfig={"enabled": False},
-                            admin={"secureModeEnabled": True, "extensions": {"enabled": False},
-                                   "mcp": {"enabled": False}, "skills": {"enabled": False}},
-                            security={"auth": {"selectedType": "gemini-api-key"},
-                                      "folderTrust": {"enabled": True}},
-                            telemetry={"enabled": False})
-            settings_path = scratch / "settings.json"; settings_path.write_text(json.dumps(settings))
-            (config / "settings.json").write_text(json.dumps(settings))
-            # Register only our freshly created private workspace. Do not disable
-            # folder trust, trust a parent, or modify the user's trust database.
-            trusted = config / "trustedFolders.json"
-            trusted.write_text(json.dumps({str(scratch.resolve()): "TRUST_FOLDER"}))
-            trusted.chmod(0o600)
-            deny = scratch / "deny.toml"
-            deny.write_text('[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\n')
-            env.update(GEMINI_CLI_HOME=str(home), GEMINI_CLI_SYSTEM_SETTINGS_PATH=str(settings_path),
-                       GEMINI_CLI_SYSTEM_DEFAULTS_PATH=str(settings_path),
-                       GEMINI_CLI_TRUSTED_FOLDERS_PATH=str(trusted))
-            args = ["gemini", "-p", "Return the requested JSON only.", "--admin-policy", str(deny),
-                    "--approval-mode", "default", "--output-format", "json"]
+            # A single fixed API request has no CLI routing, tools, hooks, settings
+            # discovery, OAuth fallback or hidden retries. Python -I ignores user
+            # packages and Python environment overrides. The key is never an argv.
+            env = {"GEMINI_API_KEY": env["GEMINI_API_KEY"]}
+            args = [sys.executable, "-I", str(Path(__file__).with_name("gemini_request.py"))]
         return parse_answer(run(args, cwd=scratch, data=prompt, env=env, timeout=TIMEOUT))
 
 

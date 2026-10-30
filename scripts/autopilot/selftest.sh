@@ -336,6 +336,7 @@ ok "codex-local mode never tags or publishes a release candidate" '! AUTOPILOT_C
 # Exercise the new evidence/merge guard and isolated provider controller in CI.
 # Their GitHub/provider boundaries are mocked; no credentials or network needed.
 ok "live merge policy adversarial tests" 'python3 "$here/test_policy.py"'
+ok "single-request Gemini API adversarial tests" 'python3 "$here/test_gemini_request.py"'
 ok "bounded multi-agent controller adversarial tests" 'python3 "$here/test_team.py"'
 
 echo "selftest: $pass passed, $fail failed"
