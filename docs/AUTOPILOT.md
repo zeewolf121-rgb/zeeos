@@ -44,7 +44,10 @@ is insufficient to merge: the new policy holds every unresolved thread, includin
 and P2 threads. It never replies/resolves on behalf of a reviewer. Failed or incomplete reviews
 are re-requested within the existing bounded request limits; no label or marker bypasses CI.
 
-Only ordinary user-documentation/CHANGELOG PRs can enter unattended merge. Workflow,
+Only ordinary user-documentation/CHANGELOG PRs can enter unattended merge. Existing text
+must remain an exact byte-for-byte prefix; only appends and new files are eligible. The live
+policy verifies immutable Git blobs and PR/head/run-attempt-bound Claude review receipts,
+so a marker copied into a model summary cannot authorize a merge. Workflow,
 autopilot, merge-guard, disk-installer, security, signing, release and decision work stays in
 the stronger owner/specialist lane. Owner approval does not turn sensitive code into low-risk
 work. See `CONVENTIONS.md` for the existing installer safety and owner-approval requirements.

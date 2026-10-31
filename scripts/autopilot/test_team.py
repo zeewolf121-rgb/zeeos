@@ -123,6 +123,109 @@ class TeamTests(unittest.TestCase):
             team.apply(checkout, changes)
         self.assertEqual(original.read_text(), "must remain intact")
 
+    def test_existing_warning_cannot_be_removed_or_reworded(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/guide.md"
+        original = "Warning: back up all files before installing.\nIntroduction.\n"
+        guide.write_text(original)
+        for content in ("Introduction.\n", original.replace("all files", "important files"),
+                        "New introduction.\n" + original, original.rstrip()):
+            changes = {"files": [{"path": "docs/user/guide.md", "content": content}]}
+            with self.subTest(content=content), self.assertRaisesRegex(team.Stop, "append-only"):
+                team.apply(checkout, changes)
+            self.assertEqual(guide.read_text(), original)
+
+    def test_invalid_later_file_rejects_entire_proposal_before_any_mutation(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/guide.md"
+        guide.write_text("Warning: retain recovery media.\n")
+        changelog = checkout / "CHANGELOG.md"
+        changelog.write_text("Existing history.\n")
+        changes = {"files": [
+            {"path": "docs/user/new/guide.md", "content": "New guide.\n"},
+            {"path": "CHANGELOG.md", "content": "Existing history.\nNew entry.\n"},
+            {"path": "docs/user/guide.md", "content": "Warning removed.\n"}]}
+        with patch.object(team, "run") as run, self.assertRaises(team.Stop):
+            team.apply(checkout, changes)
+        run.assert_not_called()
+        self.assertFalse((checkout / "docs/user/new").exists())
+        self.assertEqual(changelog.read_text(), "Existing history.\n")
+        self.assertEqual(guide.read_text(), "Warning: retain recovery media.\n")
+
+    def test_later_symlink_or_non_directory_parent_prevents_earlier_write(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        external = self.state / "external.md"
+        external.write_text("External warning.\n")
+        linked = checkout / "docs/user/linked.md"
+        linked.symlink_to(external)
+        parent_file = checkout / "docs/user/plain.md"
+        parent_file.write_text("Existing file.\n")
+        for path in ("docs/user/linked.md", "docs/user/plain.md/new.md"):
+            changes = {"files": [
+                {"path": "docs/user/new.md", "content": "New guide.\n"},
+                {"path": path, "content": "External warning.\nAppendix.\n"}]}
+            with self.subTest(path=path), self.assertRaises(team.Stop):
+                team.apply(checkout, changes)
+            self.assertFalse((checkout / "docs/user/new.md").exists())
+            self.assertEqual(external.read_text(), "External warning.\n")
+            self.assertEqual(parent_file.read_text(), "Existing file.\n")
+
+    def test_valid_append_and_new_file_preserve_original_bytes(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/guide.md"
+        original = "Warning: retain café backups.\r\n".encode("utf-8")
+        guide.write_bytes(original)
+        changes = {"files": [
+            {"path": "docs/user/guide.md", "content": original.decode("utf-8") + "Appendix.\r\n"},
+            {"path": "docs/user/new.md", "content": "New guide.\n"}]}
+        with patch.object(team, "run") as run:
+            team.apply(checkout, changes)
+        self.assertEqual(guide.read_bytes(), original + b"Appendix.\r\n")
+        self.assertEqual((checkout / "docs/user/new.md").read_bytes(), b"New guide.\n")
+        run.assert_called_once_with(["git", "diff", "--check"], cwd=checkout)
+        changes["files"][0]["content"] = guide.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        with self.assertRaisesRegex(team.Stop, "append-only"):
+            team.validate_changes(checkout, changes)
+
+    def test_apply_revalidates_original_changed_after_proposal_validation(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/guide.md"
+        guide.write_text("Original warning.\n")
+        changes = {"files": [{"path": "docs/user/guide.md", "content": "Original warning.\nAppendix.\n"}]}
+        team.validate_changes(checkout, changes)
+        guide.write_text("Original warning.\nNew independent warning.\n")
+        with self.assertRaisesRegex(team.Stop, "append-only"):
+            team.apply(checkout, changes)
+        self.assertEqual(guide.read_text(), "Original warning.\nNew independent warning.\n")
+
+    def test_warning_removal_is_rejected_before_independent_provider_call(self):
+        commands = []
+
+        def execute(args, **kwargs):
+            commands.append(args)
+            if args[:2] == ["git", "clone"]:
+                checkout = Path(args[-1])
+                (checkout / "docs/user").mkdir(parents=True)
+                (checkout / "docs/user/guide.md").write_text("Warning: preserve existing data.\n")
+            return "base-sha"
+
+        with patch.object(team, "api", side_effect=[[], []]), patch.object(team, "run", side_effect=execute), \
+                patch.object(team, "documents", return_value={"docs/user/guide.md": "Warning: preserve existing data.\n"}), \
+                patch.object(team, "model", return_value={"files": [{"path": "docs/user/guide.md", "content": "No warning.\n"}]}) as model, \
+                patch.object(team, "apply") as apply:
+            with self.assertRaisesRegex(team.Stop, "append-only"):
+                team.attempt(self.state, issue(), {})
+        self.assertEqual(model.call_count, 1)
+        self.assertEqual(model.call_args.args[0], "gemini")
+        self.assertIn("APPEND ONLY", model.call_args.args[1])
+        apply.assert_not_called()
+        self.assertFalse(any(args[:2] == ["git", "push"] for args in commands))
+
     def test_audit_detects_tampering_before_append(self):
         team.audit(self.state, "first", issue=42)
         team.audit(self.state, "second", issue=42)
@@ -351,7 +454,7 @@ class TeamTests(unittest.TestCase):
             model_roles.append(name)
             if len(model_roles) == 1:
                 return {"files": [{"path": "docs/user/guide.md",
-                                   "content": "Keep a backup before installing.\nClearer introduction.\n"}]}
+                                   "content": "Keep a backup before installing.\nOriginal introduction.\nClearer introduction.\n"}]}
             self.assertIn("Keep a backup", prompt)
             return {"verdict": "pass", "findings": []}
 
@@ -559,6 +662,15 @@ class TeamTests(unittest.TestCase):
             with self.assertRaisesRegex(team.Stop, "context budget"):
                 team.documents(checkout)
             read.assert_not_called()
+
+    def test_document_context_preserves_exact_original_line_endings(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        original = b"Warning: retain backups.\r\nIntroduction.\r\n"
+        (checkout / "docs/user/guide.md").write_bytes(original)
+        with patch.object(team, "run", return_value="docs/user/guide.md\n"):
+            context = team.documents(checkout)
+        self.assertEqual(context["docs/user/guide.md"].encode("utf-8"), original)
 
     def test_incomplete_paginated_or_duplicate_switch_evidence_holds(self):
         for evidence in ({"total_count": 101, "variables": enabled_variables()["variables"]},

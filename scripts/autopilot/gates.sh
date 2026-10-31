@@ -84,10 +84,15 @@ codex_reviewed() { # pr sha: Codex finished reviewing this exact commit, finding
   comments_by "$1" "$CODEX_BOT" | grep -F 'Code Review' | grep -F 'Completed' | grep -qF "\`${2:0:7}\`"
 }
 claude_verdict() { # pr sha -> pass | fail | (empty)
-  # The marker is posted by agent-dispatch's claude-review job (github-actions). It only counts
-  # if its run id really is that job on main, so no other workflow or LLM step can forge one.
+  # Legacy cross-review requires an Actions marker naming a main-based review job.
+  # Automatic merge additionally verifies the stronger receipt policy below.
   local m v run
-  m="$(comments_by "$1" 'github-actions' | grep -oE "<!-- claude-review sha=$2 verdict=[a-z]+ run=[0-9]+ -->" | tail -n1)"
+  # First line only: the appended model-written summary is never review authority.
+  # Legacy markers remain readable for sensitive PR rollout; low-risk policy.py
+  # additionally requires the new exact PR/head/run-attempt artifact receipt.
+  m="$(gh api --paginate "repos/$REPO/issues/$1/comments" \
+    --jq '.[] | select(.user.login == "github-actions[bot]" and .user.id == 41898282 and .user.type == "Bot") | .body | split("\n")[0]' \
+    | grep -E "^<!-- claude-review sha=$2 verdict=[a-z]+ run=[0-9]+( attempt=[0-9]+)? -->$" | tail -n1)"
   [[ -n "$m" ]] || return 0
   v="$(sed -E 's/.*verdict=([a-z]+).*/\1/' <<<"$m")"; run="$(sed -E 's/.*run=([0-9]+).*/\1/' <<<"$m")"
   if [[ "$(gh api "repos/$REPO/actions/runs/$run" --jq '"\(.path) \(.head_branch)"' 2>/dev/null)" != ".github/workflows/agent-dispatch.yml main" ]] \

@@ -8,6 +8,10 @@ The JSON decision is evidence, never an authorization token reusable for another
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
+import datetime
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -236,19 +240,48 @@ def verify_files(files: list[dict], count: int, head_tree: dict, base_tree: dict
     for item in files:
         path = item["filename"]
         need(low_risk_path(path), "changed path requires owner/specialist lane")
-        need(item.get("status") in ("added", "modified", "removed", "renamed"), "unsupported file change")
-        if item["status"] == "renamed":
-            need(low_risk_path(item.get("previous_filename", "")), "rename crosses sensitive scope")
+        need(item.get("status") in ("added", "modified"),
+             "documentation removal/rename requires owner lane")
         for entries, p in ((trees[0], path),
                            (trees[1], item.get("previous_filename", path))):
             entry = entries.get(p)
             if entry:
                 need(entry.get("mode") == "100644" and entry.get("type") == "blob",
                      "executable, symlink or submodule requires owner lane")
-        need(path in trees[0] or item["status"] == "removed", "changed file missing from head tree")
+        need(path in trees[0], "changed file missing from head tree")
         need(item.get("patch") is not None, "binary or missing patch requires owner lane")
         paths.append(path)
     return paths
+
+
+def verify_document_contents(gh: GitHub, paths: list[str], head_tree: dict, base_tree: dict) -> None:
+    """Existing text, including every safety warning, must survive byte for byte."""
+    trees = [{item["path"]: item for item in tree["tree"]} for tree in (head_tree, base_tree)]
+
+    def blob(entry: dict) -> bytes:
+        sha = entry.get("sha")
+        need(isinstance(sha, str) and SHA.fullmatch(sha), "document blob SHA is missing")
+        value = gh.api(f"{gh.root}/git/blobs/{sha}")
+        need(value.get("encoding") == "base64" and type(value.get("size")) is int
+             and 0 <= value["size"] <= 16000, "document exceeds text/size budget")
+        encoded = value.get("content")
+        need(isinstance(encoded, str) and len(encoded) <= 24000, "invalid document encoding")
+        try:
+            data = base64.b64decode(encoded.replace("\n", ""), validate=True)
+            data.decode("utf-8")
+        except (ValueError, UnicodeError, binascii.Error) as exc:
+            raise Blocked("document is not ordinary UTF-8 text") from exc
+        need(len(data) == value["size"] and b"\0" not in data, "invalid document content")
+        actual = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+        need(actual == sha, "document content does not match immutable blob")
+        return data
+
+    for path in paths:
+        content = blob(trees[0][path])
+        need(content, "empty document requires owner lane")
+        if path in trees[1]:
+            need(content.startswith(blob(trees[1][path])),
+                 "existing documentation must be preserved byte for byte; append-only lane")
 
 
 def linked_issue_number(pr: dict) -> int:
@@ -307,22 +340,50 @@ def independent_review(gh: GitHub, pr: dict, comments: list[dict], reviews: list
     for comment in comments:
         if not trusted_actions(comment.get("user", {})):
             continue
-        for verdict, run in re.findall(rf"<!-- claude-review sha={head} verdict=([a-z]+) run=(\d+) -->",
-                                       comment.get("body", "")):
-            markers.append((comment["id"], verdict, int(run)))
+        body = comment.get("body", "")
+        first = body.split("\n", 1)[0]
+        marker = re.fullmatch(r"<!-- claude-review sha=([0-9a-f]{40}) verdict=(pass|fail|error) run=(\d+) attempt=(\d+) -->", first)
+        if marker and marker[1] == head:
+            need(body.count("<!-- claude-review ") == 1,
+                 "ambiguous Claude review markers in model summary")
+            markers.append((comment["id"], marker[2], int(marker[3]), int(marker[4])))
     need(markers, "independent exact-head Claude review is missing")
-    _, verdict, run_id = max(markers)
+    _, verdict, run_id, marker_attempt = max(markers)
     need(verdict == "pass", "latest independent Claude review did not pass")
     run = gh.api(f"{gh.root}/actions/runs/{run_id}")
     need(run.get("path") == ".github/workflows/agent-dispatch.yml"
          and run.get("head_branch") == "main" and run.get("head_sha") == base
          and run.get("event") == "workflow_dispatch" and run.get("status") == "completed"
          and run.get("conclusion") == "success", "Claude review workflow provenance is unverified")
-    jobs = gh.pages(f"{gh.root}/actions/runs/{run_id}/jobs?filter=latest", "jobs")
+    attempt = run.get("run_attempt")
+    need(type(attempt) is int and attempt > 0 and attempt == marker_attempt,
+         "Claude review marker does not match current run attempt")
+    jobs = gh.pages(f"{gh.root}/actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
     review_jobs = [job for job in jobs if job.get("name") == "claude-review"]
     need(len(review_jobs) == 1 and review_jobs[0].get("status") == "completed"
          and review_jobs[0].get("conclusion") == "success", "Claude review job did not complete successfully")
-    return {"author_model": model, "reviewer_model": "claude", "head": head, "run": run_id}
+    name = f"claude-review-v1-pr-{pr['number']}-sha-{head}-run-{run_id}-attempt-{attempt}-pass"
+    artifacts = gh.pages(f"{gh.root}/actions/runs/{run_id}/artifacts", "artifacts")
+    receipts = [artifact for artifact in artifacts if artifact.get("name") == name]
+    need(len(receipts) == 1, "trusted PR/head/attempt-bound Claude review receipt is missing or ambiguous")
+    receipt = receipts[0]
+    expiry = receipt.get("expires_at")
+    need(isinstance(expiry, str), "Claude review receipt expiration is missing")
+    try:
+        expires = datetime.datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise Blocked("Claude review receipt expiration is invalid") from exc
+    need(expires.tzinfo is not None and expires > datetime.datetime.now(datetime.timezone.utc),
+         "Claude review receipt is expired")
+    need(receipt.get("expired") is False and type(receipt.get("id")) is int
+         and isinstance(receipt.get("digest"), str)
+         and re.fullmatch(r"sha256:[0-9a-f]{64}", receipt["digest"])
+         and receipt.get("workflow_run", {}).get("id") == run_id
+         and receipt["workflow_run"].get("head_sha") == base
+         and receipt["workflow_run"].get("head_branch") == "main",
+         "Claude review receipt provenance is unverified")
+    return {"author_model": model, "reviewer_model": "claude", "head": head, "run": run_id,
+            "attempt": attempt, "receipt": receipt["id"], "receipt_digest": receipt["digest"]}
 
 
 def evaluate(gh: GitHub, number: int) -> dict:
@@ -350,9 +411,11 @@ def evaluate(gh: GitHub, number: int) -> dict:
         labels |= {event["label"]["name"] for event in events if event.get("event") == "labeled"}
     need(not labels & BLOCK_LABELS, "current/historical label requires owner lane")
     files = gh.pages(f"{gh.root}/pulls/{number}/files")
-    paths = verify_files(files, pr["changed_files"],
-                         gh.api(f"{gh.root}/git/trees/{head}?recursive=1"),
-                         gh.api(f"{gh.root}/git/trees/{base}?recursive=1"))
+    head_tree = gh.api(f"{gh.root}/git/trees/{head}?recursive=1")
+    base_tree = gh.api(f"{gh.root}/git/trees/{base}?recursive=1")
+    paths = verify_files(files, pr["changed_files"], head_tree, base_tree)
+    need(len(paths) <= 3, "documentation file count exceeds worker budget")
+    verify_document_contents(gh, paths, head_tree, base_tree)
     need(all(thread.get("isResolved") is True for thread in gh.threads(number)),
          "unresolved review threads remain")
     reviews = gh.pages(f"{gh.root}/pulls/{number}/reviews")

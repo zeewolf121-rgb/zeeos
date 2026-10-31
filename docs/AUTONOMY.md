@@ -1,6 +1,6 @@
 # Codex-led autonomous development
 
-This policy implements issue #292. Codex owns orchestration and deterministic permissions;
+This policy implements issue #292 and proposed ADR-0013. Codex owns orchestration and deterministic permissions;
 Gemini and Claude are bounded implementation/review agents. An agent's text is untrusted
 input, never permission to execute a command, approve a PR, or change policy.
 
@@ -11,7 +11,11 @@ The initial unattended implementation lane accepts only open issues labelled `re
 Blocked, paused, in-progress, decision, installer-disk, security, release and needs-human
 issues are excluded. Only `docs/user/**/*.md` and `CHANGELOG.md` may change: at most three
 UTF-8 files, 16 KB each. Models return complete-file JSON; the controller validates paths,
-symlinks, size and credential patterns before applying it in a fresh clone.
+symlinks, size and credential patterns before applying it in a fresh clone. Existing files
+are append-only: the original UTF-8 bytes, including warnings and line endings, must remain
+an unchanged prefix. Removal, renaming and rewriting require the owner lane. This rule is
+enforced before local review/application and again against immutable Git blobs before merge;
+preserving warnings alone does not establish that newly appended instructions are safe.
 
 Gemini proposals receive independent Claude review; Claude proposals receive Gemini review.
 That local review is advisory evidence only. After publication, Gemini PRs require the
@@ -19,6 +23,13 @@ existing trusted Claude Actions review of the exact full head SHA. Claude PRs re
 trusted Codex review. No agent submits an approval of its own code. If GitHub requires
 formal approvals, independent head approvals must also satisfy the current count. Unsupported
 code-owner/last-push rules stop automatic merging rather than being guessed or bypassed.
+
+Claude Actions review evidence must have one exact first-line marker plus a trusted uploaded
+receipt named for the PR number, full head SHA, run ID and run attempt. The current main-based
+review workflow and attempt must have succeeded; the receipt must be unexpired and have verified
+artifact provenance. Failed uploads, older attempts, missing receipts and markers embedded in
+model summaries cannot authorize a merge. Legacy markers remain readable by the existing
+sensitive-PR rollout gate, but cannot satisfy this unattended merge policy.
 
 ## Merge authorization
 

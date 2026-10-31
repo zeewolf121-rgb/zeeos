@@ -200,12 +200,15 @@ ok "human PR: outdated Codex P1 is exempt once Codex re-reviewed" 'gates cross-r
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
-echo "[{\"user\":{\"login\":\"github-actions[bot]\"},\"body\":\"<!-- claude-review sha=$sha verdict=pass run=77 -->\"}]" | fx issues_5_comments
+echo "[{\"user\":{\"login\":\"github-actions[bot]\",\"id\":41898282,\"type\":\"Bot\"},\"body\":\"<!-- claude-review sha=$sha verdict=pass run=77 -->\"}]" | fx issues_5_comments
 echo '{"path":".github/workflows/orchestrator.yml","head_branch":"main"}' | fx actions_runs_77
 ok "forged Claude verdict (wrong workflow) rejected" '! gates cross-review 5 >/dev/null'
 echo '{"path":".github/workflows/agent-dispatch.yml","head_branch":"main"}' | fx actions_runs_77
 echo '{"jobs":[{"name":"claude-review"}]}' | fx actions_runs_77_jobs
 ok "verified Claude verdict passes" 'gates cross-review 5 >/dev/null'
+jq '.[0].body = "Summary only\n" + .[0].body' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+ok "model summary marker cannot authorize legacy cross-review" '! gates cross-review 5 >/dev/null'
+jq '.[0].body |= sub("Summary only\n"; "")' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
 sed -i.bak 's/verdict=pass/verdict=fail/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
 : >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
 ok "Claude fail verdict on a Codex PR -> review fix sent to Codex, marker in the same comment" 'grep -q "autopilot-review-fix sha=$sha n=1 -->@codex address" "$CALLS"'
@@ -336,6 +339,7 @@ ok "codex-local mode never tags or publishes a release candidate" '! AUTOPILOT_C
 # Exercise the new evidence/merge guard and isolated provider controller in CI.
 # Their GitHub/provider boundaries are mocked; no credentials or network needed.
 ok "live merge policy adversarial tests" 'python3 "$here/test_policy.py"'
+ok "trusted review receipt workflow tests" 'python3 "$here/test_review_receipt.py"'
 ok "single-request Gemini API adversarial tests" 'python3 "$here/test_gemini_request.py"'
 ok "bounded multi-agent controller adversarial tests" 'python3 "$here/test_team.py"'
 
