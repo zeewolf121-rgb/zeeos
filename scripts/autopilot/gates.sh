@@ -194,7 +194,12 @@ status() {
 }
 
 request_review() {
-  local pr="$1" sha model since
+  local pr="$1" sha model since labels
+  labels="$(labels_of "$pr")" || { log "#$pr: cannot read decision labels; no review dispatch"; return 1; }
+  if grep -qxF needs-decision <<<"$labels"; then
+    log "#$pr: models disagree; no more review rounds until owner decision"
+    return 0
+  fi
   sha="$(pr_head "$pr")"; model="$(pr_model "$pr")"; since="$(pushed_at "$sha")"
   case "$model" in
     claude|human)
@@ -260,7 +265,7 @@ push_workflows_recent() {
 }
 
 merge() {
-  local pr="$1" sha info out reasons msha
+  local pr="$1" sha info out reasons msha notices
   info="$(gh pr view "$pr" --repo "$REPO" --json isDraft,mergeable,state --jq '"\(.state) \(.isDraft) \(.mergeable)"')"
   [[ "$info" == "OPEN false MERGEABLE" ]] || { echo "#$pr not mergeable ($info)"; return 1; }
   sha="$(pr_head "$pr")"
@@ -275,6 +280,12 @@ merge() {
   fi
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
+    # Keep the existing owner handoff without granting approval or merging. Read
+    # the whole response before matching, so pipefail/SIGPIPE cannot cause repeats.
+    notices="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body')"
+    if ! grep -qF "<!-- autopilot-owner-merge sha=$sha -->" <<<"$notices"; then
+      w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-owner-merge sha=$sha -->@$OWNER lint/build/boot summary and cross-review gates pass at ${sha:0:7}. Hard stop ($reasons): owner approval and owner merge remain required; inspect all live checks before acting." >/dev/null
+    fi
     echo "#$pr hard stop, left for the owner ($reasons)"; return 1
   fi
   out="$(owner_gate "$pr")" || { echo "#$pr owner-gate: $out"; return 1; }

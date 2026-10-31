@@ -14,6 +14,7 @@ cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 # Fake gh: reads answer from $FIX/<key>.json (filtered by --jq); writes are logged to $CALLS.
 jqx=""; key=""; write=""; args=("$@"); i=0
+if [[ "$1 $2" == "issue view" && -n "${FAIL_LABEL_READ:-}" ]]; then exit 1; fi
 while (( i < ${#args[@]} )); do
   a="${args[i]}"
   case "$a" in
@@ -108,9 +109,17 @@ reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
 ok "installer-disk alone needs no owner approval (#70)" 'gates owner-gate 5 >/dev/null'
 ok "a removed hard-stop label still counts" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates owner-gate 5 >/dev/null'
-ok "hard stop is never merged and creates no automatic owner-ping mutation" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && ! grep -q "autopilot-owner-merge" "$CALLS"'
+ok "hard stop never merges and hands the head to its owner" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge sha=$sha" "$CALLS"'
+jq --arg m "<!-- autopilot-owner-merge sha=$sha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"
+ok "owner handoff is deduplicated for the same head" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "autopilot-owner-merge" "$CALLS" && ! grep -q "pr merge" "$CALLS"'
 : >"$CALLS"
 ok "installer-disk PR stays outside the low-risk automatic merge lane" '! gates merge 5 >/dev/null && ! grep -q "CALL pr merge 5" "$CALLS"'
+
+reset; claude_pr
+echo '{"labels":[{"name":"needs-decision"}]}' | fx issue_view_5
+ok "model disagreement stops further review dispatch and merge mutations" 'gates request-review 5 >/dev/null && ! gates merge 5 >/dev/null && [[ ! -s "$CALLS" ]]'
+ok "failed decision-label read cannot dispatch a review" '! FAIL_LABEL_READ=1 gates request-review 5 >/dev/null && [[ ! -s "$CALLS" ]]'
 
 reset; claude_pr; codex_done
 echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files

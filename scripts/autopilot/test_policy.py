@@ -363,6 +363,52 @@ class PolicyTests(unittest.TestCase):
         comment["body"] = f"codex-review-receipt:v1 Reviewed commit:** `{HEAD}`"
         self.assertTrue(policy.evaluate(gh, 7)["allowed"])
 
+    def codex_state(self, findings=False, status="completed", comment_id=3):
+        self.gh.pr["head"]["ref"] = "agent/docs-writer/9-autonomy-claude"
+        self.gh.data[f"{self.gh.root}/issues/9"]["labels"] = [{"name": "model:claude"}]
+        state = {"code_review": {"commit_sha": HEAD, "status": status,
+                                 "has_any_findings": findings}}
+        return {"id": comment_id, "user": {"login": policy.CODEX, "type": "Bot"},
+                "body": f"<!-- codex-review-state:v1 {json.dumps(state)} -->"}
+
+    def test_codex_findings_block_even_with_formal_review(self):
+        for formal_state in (None, "COMMENTED", "APPROVED"):
+            self.gh = FakeGitHub()
+            self.gh.lists[f"{self.gh.root}/issues/7/comments"] = [self.codex_state(True)]
+            if formal_state:
+                self.gh.lists[f"{self.gh.root}/pulls/7/reviews"] = [
+                    review(formal_state, user=policy.CODEX)]
+            with self.subTest(formal_state=formal_state), self.assertRaisesRegex(
+                    policy.Blocked, "latest independent Codex review"):
+                policy.evaluate(self.gh, 7)
+
+    def test_codex_state_requires_completed_and_exact_false(self):
+        self.gh.lists[f"{self.gh.root}/issues/7/comments"] = [self.codex_state()]
+        self.assertTrue(policy.evaluate(self.gh, 7)["allowed"])
+        for findings, status in ((False, "in_progress"), (None, "completed"),
+                                 (0, "completed"), ("false", "completed")):
+            self.gh.lists[f"{self.gh.root}/issues/7/comments"] = [
+                self.codex_state(findings, status)]
+            with self.subTest(findings=findings, status=status), self.assertRaisesRegex(
+                    policy.Blocked, "latest independent Codex review"):
+                policy.evaluate(self.gh, 7)
+
+    def test_latest_codex_findings_override_old_clean_and_require_new_clean_state(self):
+        clean = self.codex_state(comment_id=3)
+        findings = self.codex_state(True, comment_id=4)
+        comments = self.gh.lists[f"{self.gh.root}/issues/7/comments"] = [findings, clean]
+        with self.assertRaisesRegex(policy.Blocked, "latest independent Codex review"):
+            policy.evaluate(self.gh, 7)
+        comments.append(self.codex_state(comment_id=5))
+        self.assertTrue(policy.evaluate(self.gh, 7)["allowed"])
+
+    def test_codex_receipt_in_same_comment_cannot_override_findings(self):
+        comment = self.codex_state(True)
+        comment["body"] += f"\ncodex-review-receipt:v1 Reviewed commit:** `{HEAD}`"
+        self.gh.lists[f"{self.gh.root}/issues/7/comments"] = [comment]
+        with self.assertRaisesRegex(policy.Blocked, "latest independent Codex review"):
+            policy.evaluate(self.gh, 7)
+
     def test_linked_issue_historical_sensitive_label_and_mismatch_block(self):
         self.gh.lists[f"{self.gh.root}/issues/9/events"] = [
             {"event": "labeled", "label": {"name": "installer-disk"}}]

@@ -325,11 +325,9 @@ def independent_review(gh: GitHub, pr: dict, comments: list[dict], reviews: list
                     continue
                 if state.get("commit_sha") == head:
                     clean = (state.get("status") == "completed"
-                             and type(state.get("has_any_findings")) is bool)
-                    if state.get("has_any_findings") is True:
-                        clean = clean and any(r.get("user", {}).get("login") == CODEX
-                                              and r.get("commit_id") == head
-                                              and r.get("state") in ("APPROVED", "COMMENTED") for r in reviews)
+                             and state.get("has_any_findings") is False)
+                    # A formal COMMENTED or APPROVED review does not prove that
+                    # findings were fixed. Require a new clean exact-head state.
                     decisions.append((comment["id"], clean))
         need(decisions, "independent full-head Codex review is missing/incomplete")
         latest_id = max(item[0] for item in decisions)

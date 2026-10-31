@@ -35,6 +35,9 @@ This records the rule-9/shared-context clarification and generated AGENTS.md/CLA
 it does not grant broader unattended scopes. Accepted ADR-0008 package refresh/boot-chain rules,
 ADR-0007 signing requirements, and installer safety requirements remain in force. Automation,
 workflow and merge-guard changes retain owner approval and owner merge under CONVENTIONS.
+That requirement comes from the sensitive implementation files in this PR, not from ADR
+acceptance itself: ADRs follow the cross-review/merge rule in `README.md` without a separate
+owner approval requirement. This proposal does not authorize its own rollout before merge.
 
 ## Consequences
 
