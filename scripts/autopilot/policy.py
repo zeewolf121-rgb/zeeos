@@ -20,6 +20,8 @@ import subprocess
 import sys
 from typing import Any
 
+from disk_topics import disk_topic
+
 BASELINE = {name: 15368 for name in
             ("lint", "build-iso", "boot-test", "cross-review", "owner-gate")}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -240,6 +242,7 @@ def verify_files(files: list[dict], count: int, head_tree: dict, base_tree: dict
     for item in files:
         path = item["filename"]
         need(low_risk_path(path), "changed path requires owner/specialist lane")
+        need(not disk_topic(path), "disk-topic document path requires owner/specialist lane")
         need(item.get("status") in ("added", "modified"),
              "documentation removal/rename requires owner lane")
         for entries, p in ((trees[0], path),
@@ -279,9 +282,13 @@ def verify_document_contents(gh: GitHub, paths: list[str], head_tree: dict, base
     for path in paths:
         content = blob(trees[0][path])
         need(content, "empty document requires owner lane")
+        original = b""
         if path in trees[1]:
-            need(content.startswith(blob(trees[1][path])),
+            original = blob(trees[1][path])
+            need(content.startswith(original),
                  "existing documentation must be preserved byte for byte; append-only lane")
+        need(not disk_topic(path) and not disk_topic(content.decode("utf-8"), len(original.decode("utf-8"))),
+             "disk-topic document additions require owner/specialist lane")
 
 
 def linked_issue_number(pr: dict) -> int:

@@ -1,6 +1,11 @@
 # Codex-led autonomous development
 
-This policy implements issue #292 and proposed ADR-0013. Codex owns orchestration and deterministic permissions;
+This document describes the proposed codex-local implementation for issue #292.
+The rule 9, agent-ownership and governance changes are in a separate decision PR;
+they are not accepted policy on main. **Do not enable codex-local until that decision PR
+is accepted.** The existing governance rules remain in force.
+
+In the proposed mode, Codex owns orchestration and deterministic permissions;
 Gemini and Claude are bounded implementation/review agents. An agent's text is untrusted
 input, never permission to execute a command, approve a PR, or change policy.
 
@@ -17,6 +22,18 @@ an unchanged prefix. Removal, renaming and rewriting require the owner lane. Thi
 enforced before local review/application and again against immutable Git blobs before merge;
 preserving warnings alone does not establish that newly appended instructions are safe.
 
+Both the proposal validator (before review/application) and the live merge policy refuse
+changed documents whose paths or added text mention these disk-affecting topics:
+partition, dual-boot/dual boot, bootloader, GRUB, shim, ESP, EFI, NVRAM, Secure Boot,
+LUKS, BitLocker, encryption, format, wipe, Windows Boot Manager, installer. Matching is
+case-insensitive and uses whole words: Unicode letters/digits form words, while punctuation,
+slashes and underscores separate them. Multiword topics accept whitespace, hyphens or
+underscores, including in filenames. Thus `format` is refused even when it describes text
+formatting; `information`, `reformat`, `espresso` and `shimmering` do not match substrings.
+These are exact words, not stemming rules. Existing unchanged topic mentions may remain;
+new topics formed across the append boundary are also refused. Unreadable, missing or
+invalid UTF-8 content holds the lane. Disk-topic documentation needs the owner/specialist lane.
+
 Gemini proposals receive independent Claude review; Claude proposals receive Gemini review.
 That local review is advisory evidence only. After publication, Gemini PRs require the
 existing trusted Claude Actions review of the exact full head SHA. Claude PRs retain the
@@ -32,6 +49,20 @@ model summaries cannot authorize a merge. Legacy markers remain readable by the 
 sensitive-PR rollout gate, but cannot satisfy this unattended merge policy.
 
 ## Merge authorization
+
+`gates.sh merge` preserves main's legacy path when `AUTOPILOT_CONTROLLER_MODE` is
+unset, empty or `legacy`: after the existing checks, cross-review, hard stops and owner gate,
+it uses `resolve_settled` for the head reviewers' outdated/non-blocking threads, then
+`gh pr merge --auto --squash --delete-branch` if main is protected. If main is unprotected,
+it uses `--squash --delete-branch --match-head-commit <head>` instead. Unknown modes refuse
+before merge or thread mutations. Workflow variable `AUTOPILOT_CONTROLLER` supplies this
+mode to Actions; the local controller explicitly selects `codex-local` after checking the
+live activation switches.
+
+Only `codex-local` routes `gates.sh merge` through `policy.py merge`. A policy refusal leaves
+one deduplicated PR comment per head explaining the reason. Hard stops and owner-gate
+behavior remain unchanged in both modes. The stricter requirements below apply only to
+codex-local; they do not gate legacy merges.
 
 `scripts/autopilot/policy.py check N` is read-only. The merge command collects live evidence
 twice, rechecks the kill switch and existing cross-review gate, then requests a squash merge
@@ -54,8 +85,8 @@ All of the following must hold:
   files only, and no current or historical owner-lane label on either PR or issue.
 
 Live `main` audited 2026-10-29 has `strict=false` despite older documentation claiming it was
-up to date. This implementation deliberately holds merges until the owner strengthens that
-setting. It does not change branch protection. GitHub remains the final authorization layer;
+up to date. The codex-local policy deliberately holds its merges until the owner strengthens that
+setting. Legacy merges retain their existing protection behavior. It does not change branch protection. GitHub remains the final authorization layer;
 protection must remain in force throughout the merge operation.
 
 ## Sensitive work
@@ -112,8 +143,9 @@ or recreated automatically. An empty-expected-value branch push lease allows cre
 
 ## Owner rollout and recovery
 
-1. Review this automation PR through the existing independent review/CI process; the owner
-   approves and merges it. Do not self-approve the owner-authored PR.
+1. Have the separate governance decision PR accepted before enabling codex-local. Review
+   this automation PR through the existing independent review/CI process; the owner approves
+   and merges it. Codex must not approve its own PR.
 2. Inspect current legacy cloud tasks and running Actions jobs. Finish or explicitly reconcile
    them without discarding work. The controller holds while legacy in-progress agent/model
    issues or dispatch jobs remain. `needs-human` is not evidence that a cloud task stopped.

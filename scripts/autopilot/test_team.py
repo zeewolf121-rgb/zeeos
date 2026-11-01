@@ -70,6 +70,61 @@ class TeamTests(unittest.TestCase):
                 with self.assertRaises(team.Stop):
                     team.proposal({"files": [{"path": path, "content": "new text"}]})
 
+    def test_disk_topic_proposals_are_rejected_before_review_or_writes(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/guide.md"
+        topics = ("partition", "dual-boot", "dual boot", "bootloader", "grub", "shim",
+                  "ESP", "EFI", "NVRAM", "Secure Boot", "LUKS", "BitLocker",
+                  "encryption", "format", "wipe", "Windows Boot Manager", "installer")
+        for topic in topics:
+            for original in (None, b"Existing introduction.\n"):
+                guide.unlink(missing_ok=True)
+                if original is not None:
+                    guide.write_bytes(original)
+                changes = {"files": [
+                    {"path": "docs/user/new/first.md", "content": "New ordinary note.\n"},
+                    {"path": "docs/user/guide.md", "content": (original or b"").decode() + f"Discuss ({topic.swapcase()}).\n"}]}
+                with self.subTest(topic=topic, original=original), patch.object(team, "run") as run:
+                    with self.assertRaisesRegex(team.Stop, "disk-topic"):
+                        team.validate_changes(checkout, changes)
+                    with self.assertRaisesRegex(team.Stop, "disk-topic"):
+                        team.apply(checkout, changes)
+                    run.assert_not_called()
+                self.assertFalse((checkout / "docs/user/new").exists())
+                self.assertEqual(guide.read_bytes() if guide.exists() else None, original)
+            path = "docs/user/" + topic.swapcase().replace(" ", "_") + "_guide.md"
+            with self.subTest(path=path), self.assertRaisesRegex(team.Stop, "disk-topic"):
+                team.proposal({"files": [{"path": path, "content": "Ordinary note."}]})
+
+    def test_disk_guard_ignores_unchanged_warnings_and_ordinary_substrings(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/information_reformat.md"
+        original = "Warning: preserve ESP, partition and BitLocker.\n"
+        guide.write_text(original)
+        changes = {"files": [{"path": "docs/user/information_reformat.md",
+                              "content": original + "Information: reformat this paragraph; espresso, shimmering.\n"}]}
+        team.validate_changes(checkout, changes)
+        guide.write_text("Résumé: for")
+        changes["files"][0]["content"] = "Résumé: format"
+        with self.assertRaisesRegex(team.Stop, "disk-topic"):
+            team.validate_changes(checkout, changes)
+
+    def test_unreadable_original_document_fails_closed_without_writes(self):
+        checkout = self.state / "checkout"
+        (checkout / "docs/user").mkdir(parents=True)
+        guide = checkout / "docs/user/guide.md"
+        changes = {"files": [{"path": "docs/user/guide.md", "content": "Ordinary note."}]}
+        guide.write_bytes(b"\xff")
+        with self.assertRaisesRegex(team.Stop, "cannot read"):
+            team.apply(checkout, changes)
+        self.assertEqual(guide.read_bytes(), b"\xff")
+        with patch.object(Path, "read_bytes", side_effect=OSError("unreadable")), patch.object(team, "run") as run:
+            with self.assertRaisesRegex(team.Stop, "cannot read"):
+                team.apply(checkout, changes)
+            run.assert_not_called()
+
     def test_parse_answer_rejects_error_missing_and_markdown_wrappers(self):
         for raw in ('{"error":"failed","response":"{}"}', '{"result":3}',
                     '{"status":"WAITING","response":"{}"}',
@@ -541,6 +596,23 @@ class TeamTests(unittest.TestCase):
             team.cycle(self.state)
         self.assertEqual([call.args[1]["number"] for call in attempt.call_args_list], [42, 43])
         sleep.assert_called_once_with(300)
+
+    def test_cycle_explicitly_selects_codex_local_merge_path(self):
+        execute, endpoint, _ = self.cycle_fixture()
+        def with_pr(path, *args):
+            if "pulls?state=open" in path:
+                return [{"number": 7, "draft": False}]
+            return endpoint(path, *args)
+        def with_merge(args, **kwargs):
+            if args == ["bash", str(team.ROOT / "scripts/autopilot/gates.sh"), "merge", "7"]:
+                return "merged"
+            return execute(args, **kwargs)
+        with patch.object(team, "run", side_effect=with_merge) as run, \
+                patch.object(team, "api", side_effect=with_pr), patch.object(team, "gh"):
+            team.cycle(self.state)
+        merges = [call for call in run.call_args_list if "merge" in call.args[0]]
+        self.assertEqual(len(merges), 1)
+        self.assertEqual(merges[0].kwargs["env"]["AUTOPILOT_CONTROLLER_MODE"], "codex-local")
 
     def test_controller_entrypoint_rejects_state_file_symlink(self):
         outside = self.state / "do-not-truncate"

@@ -219,6 +219,51 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(policy.Blocked):
             policy.verify_files(files, 2, tree, tree)
 
+    def test_disk_topics_in_added_text_and_paths_require_specialist(self):
+        topics = ("partition", "dual-boot", "dual boot", "bootloader", "grub", "shim",
+                  "ESP", "EFI", "NVRAM", "Secure Boot", "LUKS", "BitLocker",
+                  "encryption", "format", "wipe", "Windows Boot Manager", "installer")
+        for topic in topics:
+            for original in (None, b"Existing introduction.\n"):
+                gh = FakeGitHub()
+                root = gh.root
+                if original is None:
+                    gh.data[f"{root}/git/trees/{BASE}?recursive=1"]["tree"] = []
+                    gh.lists[f"{root}/pulls/7/files"][0]["status"] = "added"
+                else:
+                    document(gh, BASE, original)
+                document(gh, HEAD, (original or b"") + f"Discuss ({topic.swapcase()}).\n".encode())
+                with self.subTest(topic=topic, original=original), self.assertRaisesRegex(policy.Blocked, "disk-topic"):
+                    policy.evaluate(gh, 7)
+                self.assertFalse(gh.commands)
+            gh = FakeGitHub()
+            path = "docs/user/" + topic.swapcase().replace(" ", "_") + "_guide.md"
+            gh.lists[f"{gh.root}/pulls/7/files"][0]["filename"] = path
+            with self.subTest(path=path), self.assertRaisesRegex(policy.Blocked, "disk-topic"):
+                policy.evaluate(gh, 7)
+
+    def test_disk_words_in_unchanged_text_and_substrings_are_deliberate(self):
+        original = "Warning: preserve ESP, partition and BitLocker.\n".encode()
+        document(self.gh, BASE, original)
+        document(self.gh, HEAD, original + b"Information: reformat this paragraph; espresso, shimmering.\n")
+        self.assertTrue(policy.evaluate(self.gh, 7)["allowed"])
+        self.assertFalse(policy.disk_topic("docs/user/information_reformat.md"))
+
+    def test_disk_topic_formed_across_append_boundary_is_blocked(self):
+        document(self.gh, BASE, "Résumé: for".encode())
+        document(self.gh, HEAD, "Résumé: format".encode())
+        with self.assertRaisesRegex(policy.Blocked, "disk-topic"):
+            policy.evaluate(self.gh, 7)
+
+    def test_unreadable_document_blob_fails_closed(self):
+        for commit in (HEAD, BASE):
+            gh = FakeGitHub()
+            sha = gh.data[f"{gh.root}/git/trees/{commit}?recursive=1"]["tree"][0]["sha"]
+            del gh.data[f"{gh.root}/git/blobs/{sha}"]
+            with self.subTest(commit=commit), self.assertRaises(policy.Blocked):
+                policy.evaluate(gh, 7)
+            self.assertFalse(gh.commands)
+
     def test_unresolved_outdated_or_new_threads_block(self):
         self.gh.review_threads = [{"id": "thread", "isResolved": False, "isOutdated": True}]
         with self.assertRaisesRegex(policy.Blocked, "unresolved"):

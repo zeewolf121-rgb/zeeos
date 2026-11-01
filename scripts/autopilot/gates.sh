@@ -45,6 +45,31 @@ head_reviewers() { # pr sha model: login prefixes of the models that reviewed th
   esac
   return 0
 }
+blocking_re() { # reviewer-login-prefix -> regex for a first comment that blocks the merge (§2)
+  if [[ "$1" == "$CODEX_BOT" ]]; then echo 'badge/P[01]-'; else echo '^[* ]*\[blocking\]'; fi
+}
+resolve_settled() { # pr reviewer-login-prefix: resolve that reviewer's threads that no longer block
+  # Only the gate does this, only after the reviewer's review of the head commit came back
+  # clean; the fixer never resolves its reviewer's threads (no self-approval). Outdated threads
+  # are superseded by that review. Non-blocking ones (Codex P2/P3, Claude without [blocking])
+  # never held the gate, but GitHub's required conversation resolution would still hold the
+  # merge (#101, #114), so they get a one-line reply saying why before they are resolved.
+  local id outdated
+  while read -r id outdated; do
+    if [[ "$outdated" == false ]]; then
+      # shellcheck disable=SC2016  # GraphQL variables, not shell
+      w gh api graphql -F id="$id" -f body="Non-blocking finding (docs/AUTOPILOT.md §2) and the reviewer's review of the head commit is clean, so the merge gate resolves this thread. Reopen it if it should block, or track it in an issue." \
+        -f query='mutation($id:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id,body:$body}){comment{id}}}' >/dev/null
+    fi
+    # shellcheck disable=SC2016  # GraphQL variables, not shell
+    w gh api graphql -F id="$id" -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id}}}' >/dev/null
+    if [[ "$outdated" == true ]]; then log "#$1: resolved superseded review thread $id"
+    else log "#$1: resolved non-blocking review thread $id"; fi
+  done < <(threads_json "$1" | jq -r --arg who "$2" --arg re "$(blocking_re "$2")" '.[]
+      | select((.isResolved | not) and (.comments.nodes[0].author.login | startswith($who)))
+      | select(.isOutdated or (.comments.nodes[0].body | test($re) | not))
+      | "\(.id) \(.isOutdated)"')
+}
 reviews_by() { # login-prefix -> commit ids of their reviews
   gh api --paginate "repos/$REPO/pulls/$1/reviews" \
     --jq ".[] | select(.user.login | startswith(\"$2\")) | .commit_id"
@@ -234,6 +259,8 @@ request_review() {
   esac
 }
 
+protected() { gh api "repos/$REPO/branches/main/protection" >/dev/null 2>&1; }
+
 # A merge made with GITHUB_TOKEN starts no push workflows, so main's lint and merge-audit
 # never run on it (#48 -> a3c177a). Dispatch them by hand, once per merge commit. A
 # dispatched run's head is main's tip at dispatch time, so dedupe on merge-audit's run-name
@@ -255,7 +282,7 @@ push_workflows() { # merge-sha
     else log "couldn't dispatch $wf for ${sha:0:7}"; fi
   done
 }
-# Recover missing evidence for earlier autopilot merges; owner merges start push runs themselves.
+# Sweep: --auto merges land later, in no run of ours. Owner merges start push runs themselves.
 push_workflows_recent() {
   local sha
   for sha in $(gh pr list --repo "$REPO" --state merged --base main --limit 20 --json mergedBy,mergeCommit \
@@ -265,7 +292,12 @@ push_workflows_recent() {
 }
 
 merge() {
-  local pr="$1" sha info out reasons msha notices
+  local pr="$1" sha info out reasons msha notices who reason
+  local mode="${AUTOPILOT_CONTROLLER_MODE:-legacy}"
+  case "$mode" in
+    legacy|codex-local) ;;
+    *) echo "#$pr unknown controller mode: $mode; refusing merge"; return 1 ;;
+  esac
   info="$(gh pr view "$pr" --repo "$REPO" --json isDraft,mergeable,state --jq '"\(.state) \(.isDraft) \(.mergeable)"')"
   [[ "$info" == "OPEN false MERGEABLE" ]] || { echo "#$pr not mergeable ($info)"; return 1; }
   sha="$(pr_head "$pr")"
@@ -289,17 +321,32 @@ merge() {
     echo "#$pr hard stop, left for the owner ($reasons)"; return 1
   fi
   out="$(owner_gate "$pr")" || { echo "#$pr owner-gate: $out"; return 1; }
-  # The live guard only admits small documentation changes, independently verifies
-  # exact-head model provenance, all required checks/apps and every open thread.
-  # Never resolve review conversations or enqueue an unpinned future head.
-  if [[ -n "${DRY_RUN:-}" ]]; then
-    python3 "$here/policy.py" check "$pr" --repo "$REPO"
-    return
-  fi
-  python3 "$here/policy.py" merge "$pr" --repo "$REPO" || return
+  case "$mode" in
+    legacy)
+      # Preserve main's legacy settlement and protected/unprotected merge paths.
+      for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_settled "$pr" "$who"; done
+      if protected; then w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
+      else w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi ;;
+    codex-local)
+      # The low-risk guard never resolves threads or enqueues a future head.
+      if [[ -n "${DRY_RUN:-}" ]]; then
+        python3 "$here/policy.py" check "$pr" --repo "$REPO"
+        return
+      fi
+      if ! out="$(python3 "$here/policy.py" merge "$pr" --repo "$REPO")"; then
+        reason="$(jq -er '.reason | select(type == "string" and length > 0)' <<<"$out" 2>/dev/null)" \
+          || reason="policy command failed without a readable refusal reason"
+        echo "#$pr policy refused merge: $reason"
+        notices="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body')" || return 1
+        if ! grep -qF "<!-- autopilot-policy-refused sha=$sha -->" <<<"$notices"; then
+          w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-policy-refused sha=$sha -->Automatic codex-local merge refused at $sha: $reason" >/dev/null
+        fi
+        return 1
+      fi ;;
+  esac
 
   log "#$pr merged at ${sha:0:7}"
-  # Only a completed merge dispatches post-merge audits.
+  # --auto may merge now or later; the push-workflows sweep catches later merges.
   # An open PR has a merge_commit_sha too (the test merge), so check .merged first.
   msha="$(gh api "repos/$REPO/pulls/$pr" --jq 'select(.merged == true) | .merge_commit_sha // empty' 2>/dev/null || true)"
   if [[ -n "$msha" ]]; then push_workflows "$msha" || true; fi
