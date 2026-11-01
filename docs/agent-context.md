@@ -20,7 +20,7 @@ ZeeOS is a Fedora 44-based (ADR-0001) Linux distro with an original hybrid deskt
 6. **No secrets in the repo.** Signing keys live in GitHub encrypted secrets or offline.
 7. **Disk writes are dangerous.** Code that can write to disks, partition tables, an ESP or NVRAM must be labeled `installer-disk`, have a dry-run mode, never format an existing ESP, and never remove or overwrite Windows Boot Manager.
 8. **Never fake results.** Don't mark work done without a linked CI run. Report skipped tests as skipped.
-9. **No self-approval.** Claude and Codex review each other's PRs.
+9. **No self-approval.** Codex orchestrates bounded Gemini/Claude tasks. An independent model reviews the exact head; existing required GitHub approvals/checks still apply. See `docs/AUTONOMY.md`. No agent approves its own code.
 10. **Disagreements:** five bullets or fewer per model, then the owner decides.
 
 ## Commands
