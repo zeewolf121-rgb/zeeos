@@ -39,6 +39,14 @@ That requirement comes from the sensitive implementation files in this PR, not f
 acceptance itself: ADRs follow the cross-review/merge rule in `README.md` without a separate
 owner approval requirement. This proposal does not authorize its own rollout before merge.
 
+## Owner decision on governance scope
+
+On 2026-11-01, the [owner decision on PR #293](https://github.com/zeewolf121-rgb/zeeos/pull/293#issuecomment-6562664361)
+accepted the hard rule 9 and agent-ownership changes and ADR-0013 as written and in scope
+for this PR, settling the governance scope dispute. This decision is not owner-gate approval
+of any commit. This ADR remains **Proposed** and becomes **Accepted** on merge after
+cross-review with all review threads resolved, as specified in `README.md`.
+
 ## Consequences
 
 Useful low-risk work can proceed without routine human confirmations after reviewed rollout.
