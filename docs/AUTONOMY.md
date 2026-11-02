@@ -25,14 +25,31 @@ preserving warnings alone does not establish that newly appended instructions ar
 Both the proposal validator (before review/application) and the live merge policy refuse
 changed documents whose paths or added text mention these disk-affecting topics:
 partition, dual-boot/dual boot, bootloader, GRUB, shim, ESP, EFI, NVRAM, Secure Boot,
-LUKS, BitLocker, encryption, format, wipe, Windows Boot Manager, installer. Matching is
-case-insensitive and uses whole words: Unicode letters/digits form words, while punctuation,
-slashes and underscores separate them. Multiword topics accept whitespace, hyphens or
-underscores, including in filenames. Thus `format` is refused even when it describes text
-formatting; `information`, `reformat`, `espresso` and `shimmering` do not match substrings.
-These are exact words, not stemming rules. Existing unchanged topic mentions may remain;
-new topics formed across the append boundary are also refused. Unreadable, missing or
-invalid UTF-8 content holds the lane. Disk-topic documentation needs the owner/specialist lane.
+LUKS, BitLocker, encryption, format, wipe, Windows Boot Manager, installer, dd, mkfs,
+fdisk, gdisk, parted, sfdisk, diskpart, efibootmgr, bcdedit, wipefs, cryptsetup, /dev/,
+disk, drive, volume, UEFI, BIOS, firmware, boot, install, reinstall, erase, overwrite,
+sudo and rm -rf.
+
+The simple fail-closed Unicode rule is: added text and changed paths must normalize to
+ASCII under Unicode NFKC; any remaining non-ASCII character holds the document for the
+owner/specialist lane. This deliberately includes accented letters, combining marks and
+non-ASCII punctuation, preventing confusables from disguising terms. Fullwidth ASCII
+letters normalize to ASCII and are checked against the same topic list. Unicode categories
+Cf (format) and Cc (control), except newline and tab, are refused before normalization.
+The controller also refuses these hidden/control characters anywhere in proposal paths or
+complete proposed content, even in an unchanged prefix.
+Consequently a controller proposal for an existing CRLF document also holds for owner
+action; the automatic lane does not rewrite its line endings to make it eligible.
+
+Matching uses NFKC followed by casefolding. Topics use whole words, with ASCII letters and
+digits forming words and punctuation, slashes and underscores separating them. Multiword
+topics accept whitespace, hyphens or underscores, including in filenames; `/dev/` and
+`rm -rf` are literal substrings after normalization/casefolding. Thus `format` is refused
+even for text formatting; `information`, `reformat`, `espresso` and `shimmering` do not
+match. These are exact words, not stemming rules. Existing unchanged topic mentions and
+non-ASCII text may remain (subject to the proposal hidden-character check); normalized
+prefix lengths ensure new topics spanning the append boundary are also refused.
+Unreadable, missing or invalid UTF-8 content holds the lane.
 
 Gemini proposals receive independent Claude review; Claude proposals receive Gemini review.
 That local review is advisory evidence only. After publication, Gemini PRs require the
@@ -51,8 +68,10 @@ sensitive-PR rollout gate, but cannot satisfy this unattended merge policy.
 ## Merge authorization
 
 `gates.sh merge` preserves main's legacy path when `AUTOPILOT_CONTROLLER_MODE` is
-unset, empty or `legacy`: after the existing checks, cross-review, hard stops and owner gate,
-it uses `resolve_settled` for the head reviewers' outdated/non-blocking threads, then
+unset, empty or `legacy`: after the existing checks and cross-review, it uses
+`resolve_settled` for the head reviewers' outdated/non-blocking threads **before** hard-stop
+and owner-gate checks. Owner-merge PRs therefore receive the same settlement as main.
+Once those gates pass on an ordinary PR, it uses
 `gh pr merge --auto --squash --delete-branch` if main is protected. If main is unprotected,
 it uses `--squash --delete-branch --match-head-commit <head>` instead. Unknown modes refuse
 before merge or thread mutations. Workflow variable `AUTOPILOT_CONTROLLER` supplies this

@@ -158,6 +158,18 @@ ok "owner-approved before the head commit doesn't count" '! gates owner-gate 5 >
 echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
 ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev/null'
 
+# Owner-merge PRs still need legacy settlement before the hard-stop handoff,
+# even without owner approval. Codex-local must never settle the same thread.
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"OWNER_P2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P2 Badge](https://img.shields.io/badge/P2-yellow) nit"}]}}]}}}}}' | fx graphql
+for approval in pending approved; do
+  if [[ "$approval" == pending ]]; then echo '{"labels":[]}' | fx issue_view_5
+  else echo '{"labels":[{"name":"owner-approved"}]}' | fx issue_view_5; fi
+  : >"$CALLS"
+  ok "legacy settles owner-merge threads before handoff ($approval)" '! gates merge 5 >/dev/null && grep -q "addPullRequestReviewThreadReply" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS" && ! grep -q "CALL pr merge" "$CALLS" && [[ $(grep -n "resolveReviewThread" "$CALLS" | cut -d: -f1) -lt $(grep -n "autopilot-owner-merge" "$CALLS" | cut -d: -f1) ]]'
+  : >"$CALLS"
+  ok "codex-local leaves owner-merge threads untouched ($approval)" '! AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null && ! grep -q "addPullRequestReviewThreadReply\|resolveReviewThread\|CALL pr merge" "$CALLS"'
+done
+
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
 ok "a hard-stop label once on the linked issue still counts" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates owner-gate 5 >/dev/null'
@@ -382,6 +394,7 @@ ok "codex-local mode never tags or publishes a release candidate" '! AUTOPILOT_C
 # Exercise the new evidence/merge guard and isolated provider controller in CI.
 # Their GitHub/provider boundaries are mocked; no credentials or network needed.
 ok "live merge policy adversarial tests" 'python3 "$here/test_policy.py"'
+ok "Unicode and disk-topic guard adversarial tests" 'python3 "$here/test_disk_topics.py"'
 ok "trusted review receipt workflow tests" 'python3 "$here/test_review_receipt.py"'
 ok "single-request Gemini API adversarial tests" 'python3 "$here/test_gemini_request.py"'
 ok "bounded multi-agent controller adversarial tests" 'python3 "$here/test_team.py"'

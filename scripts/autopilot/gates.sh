@@ -310,6 +310,11 @@ merge() {
     fi
     echo "#$pr cross-review: $out"; return 1
   fi
+  if [[ "$mode" == legacy ]]; then
+    # Match main: settle clean reviewers' threads even on owner-merge PRs.
+    # Codex-local must leave every conversation for the reviewer/owner.
+    for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_settled "$pr" "$who"; done
+  fi
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
     # Keep the existing owner handoff without granting approval or merging. Read
@@ -324,7 +329,6 @@ merge() {
   case "$mode" in
     legacy)
       # Preserve main's legacy settlement and protected/unprotected merge paths.
-      for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_settled "$pr" "$who"; done
       if protected; then w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
       else w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi ;;
     codex-local)

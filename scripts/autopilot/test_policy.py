@@ -242,6 +242,18 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaisesRegex(policy.Blocked, "disk-topic"):
                 policy.evaluate(gh, 7)
 
+    def test_new_topics_and_unicode_evasions_in_immutable_blobs(self):
+        from test_disk_topics import TOPICS
+
+        for topic in (*TOPICS, "d\u200bisk", "ｉｎｓｔａｌｌ", "dіsk", "d\u0338isk", "note\x01"):
+            for original in (b"", "ﬃ: introductory note.\n".encode()):
+                gh = FakeGitHub()
+                document(gh, BASE, original)
+                document(gh, HEAD, original + topic.encode())
+                with self.subTest(topic=topic, original=original), self.assertRaises(policy.Blocked):
+                    policy.evaluate(gh, 7)
+                self.assertFalse(gh.commands)
+
     def test_disk_words_in_unchanged_text_and_substrings_are_deliberate(self):
         original = "Warning: preserve ESP, partition and BitLocker.\n".encode()
         document(self.gh, BASE, original)

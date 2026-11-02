@@ -20,7 +20,7 @@ import tempfile
 import time
 import uuid
 
-from disk_topics import disk_topic
+from disk_topics import disk_topic, hidden_characters
 
 ROOT = Path(__file__).resolve().parents[2]
 REPO = "zeewolf121-rgb/zeeos"
@@ -184,6 +184,8 @@ def proposal(raw):
             raise Stop("duplicate or out-of-scope proposal")
         if not isinstance(item["content"], str) or not item["content"].strip() or "\0" in item["content"]:
             raise Stop("invalid text proposal")
+        if hidden_characters(item["path"]) or hidden_characters(item["content"]):
+            raise Stop("hidden/control characters in proposal require owner/specialist lane")
         if len(item["content"].encode()) > 16000 or SECRET.search(item["content"]):
             raise Stop("content size/secret policy rejected proposal")
         if disk_topic(item["path"]):

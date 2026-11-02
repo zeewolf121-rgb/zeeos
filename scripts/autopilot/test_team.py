@@ -12,6 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from test_disk_topics import TOPICS
+
 SPEC = importlib.util.spec_from_file_location("autopilot_team", Path(__file__).with_name("team.py"))
 team = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(team)
@@ -110,6 +112,31 @@ class TeamTests(unittest.TestCase):
         changes["files"][0]["content"] = "Résumé: format"
         with self.assertRaisesRegex(team.Stop, "disk-topic"):
             team.validate_changes(checkout, changes)
+
+    def test_new_topics_and_unicode_evasions_cannot_be_applied(self):
+        checkout = self.state / "checkout"
+        checkout.mkdir()
+        spellings = list(TOPICS) + ["d\u200bisk", "ｉｎｓｔａｌｌ", "dіsk", "d\u0338isk"]
+        for original in ("", "ﬃ: introductory note.\n"):
+            for text in spellings:
+                guide = checkout / "CHANGELOG.md"
+                guide.write_text(original)
+                changes = {"files": [{"path": "CHANGELOG.md", "content": original + text}]}
+                with self.subTest(text=text, original=original), self.assertRaises(team.Stop):
+                    team.apply(checkout, changes)
+                self.assertEqual(guide.read_text(), original)
+
+    def test_proposals_refuse_hidden_characters_even_in_existing_text(self):
+        for char in ("\u200b", "\u202e", "\u00ad", "\x01", "\x7f", "\r"):
+            for field in ("path", "content"):
+                item = {"path": "docs/user/guide.md", "content": "Ordinary note."}
+                item[field] += char
+                with self.subTest(char=repr(char), field=field), self.assertRaises(team.Stop):
+                    team.proposal({"files": [item]})
+
+    def test_fullwidth_disk_path_is_rejected(self):
+        with self.assertRaisesRegex(team.Stop, "disk-topic"):
+            team.proposal({"files": [{"path": "docs/user/ｄｉｓｋ.md", "content": "Ordinary note."}]})
 
     def test_unreadable_original_document_fails_closed_without_writes(self):
         checkout = self.state / "checkout"
@@ -232,19 +259,30 @@ class TeamTests(unittest.TestCase):
         checkout = self.state / "checkout"
         (checkout / "docs/user").mkdir(parents=True)
         guide = checkout / "docs/user/guide.md"
-        original = "Warning: retain café backups.\r\n".encode("utf-8")
+        original = "Warning: retain café backups.\n".encode("utf-8")
         guide.write_bytes(original)
         changes = {"files": [
-            {"path": "docs/user/guide.md", "content": original.decode("utf-8") + "Appendix.\r\n"},
+            {"path": "docs/user/guide.md", "content": original.decode("utf-8") + "Appendix.\n"},
             {"path": "docs/user/new.md", "content": "New guide.\n"}]}
         with patch.object(team, "run") as run:
             team.apply(checkout, changes)
-        self.assertEqual(guide.read_bytes(), original + b"Appendix.\r\n")
+        self.assertEqual(guide.read_bytes(), original + b"Appendix.\n")
         self.assertEqual((checkout / "docs/user/new.md").read_bytes(), b"New guide.\n")
         run.assert_called_once_with(["git", "diff", "--check"], cwd=checkout)
-        changes["files"][0]["content"] = guide.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        changes["files"][0]["content"] = guide.read_bytes().decode("utf-8").replace("café", "cafe")
         with self.assertRaisesRegex(team.Stop, "append-only"):
             team.validate_changes(checkout, changes)
+
+    def test_crlf_original_is_held_by_proposal_control_character_rule(self):
+        checkout = self.state / "checkout"
+        checkout.mkdir()
+        guide = checkout / "CHANGELOG.md"
+        original = b"Existing note.\r\n"
+        guide.write_bytes(original)
+        changes = {"files": [{"path": "CHANGELOG.md", "content": original.decode() + "Appendix.\n"}]}
+        with self.assertRaisesRegex(team.Stop, "hidden/control"):
+            team.apply(checkout, changes)
+        self.assertEqual(guide.read_bytes(), original)
 
     def test_apply_revalidates_original_changed_after_proposal_validation(self):
         checkout = self.state / "checkout"
