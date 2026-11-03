@@ -11,6 +11,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 out="${2:-$PIN_ROOT/out/$arch}"
 lock="$(pin_lock "$arch")"
 
+# Hold mode (ZEEOS_PIN_HOLD=1, `make pin-packages HOLD=1`, #310): build/pin/hold.sh staged the current lock's
+# closure in $out/held. Its repo outranks Fedora's during the kiwi resolve, so locked packages keep their
+# versions and Fedora only supplies new names; the locked RPMs are copied from the held closure (superseded
+# builds are gone from the mirrors), and ZeeOS rebuilds come from it too (no `make rpms`). Fail closed below
+# if any locked identity changes or disappears.
+hold=0; held="$out/held"; hl="$out/held.lock"
+if [[ "${ZEEOS_PIN_HOLD:-0}" == 1 ]]; then
+  hold=1
+  [[ -f "$hl" && -f "$held/repodata/repomd.xml" ]] || { echo "hold mode needs build/pin/hold.sh first (make pin-packages HOLD=1 runs it)" >&2; exit 1; }
+  [[ ! -f "$out/zeeos.lock" ]] || { echo "hold mode: remove $out/zeeos.lock (a 'make rpms' result); ZeeOS rebuilds come from the held closure" >&2; exit 1; }
+  if pin_lock_has_zeeos "$hl"; then
+    { echo "# tools-image=pinned"; pin_lock_lines "$hl" zeeos-rebuild; pin_lock_lines "$hl" zeeos-rebuild-src; } >"$out/zeeos.lock"
+    rm -rf "$out/zeeos"; cp -a "$held/zeeos" "$out/zeeos"
+    pin_verify_zeeos "$hl" "$out/zeeos" || { echo "held closure's zeeos/ does not match the held lock" >&2; exit 1; }
+  fi
+  export ZEEOS_HOLD_DIR="$held"
+fi
+
 # ZeeOS rebuilds (ADR-0011): `make rpms` leaves $out/zeeos and $out/zeeos.lock; kiwi sees them as a second repo.
 zl="$out/zeeos.lock"
 if [[ -f "$zl" ]]; then
@@ -66,12 +84,36 @@ else
   cp "$out/resolved.ids" "$out/fedora.ids"
 fi
 
+if (( hold )); then
+  # Additions only: every held identity still resolves to the same version, and no name.arch has two versions.
+  pin_lock_identities "$hl" >"$out/held-all.ids"
+  if [[ -n "$(LC_ALL=C comm -23 "$out/held-all.ids" "$out/resolved.ids")" ]]; then
+    echo "hold mode: held packages missing from the new resolve (versions moved or dropped):" >&2
+    LC_ALL=C comm -23 "$out/held-all.ids" "$out/resolved.ids" >&2; exit 1
+  fi
+  dups="$(awk '{ a = $2; sub(/^.*\./, "", a); c[$1 "." a]++ } END { for (k in c) if (c[k] > 1) print k }' "$out/resolved.ids")"
+  [[ -z "$dups" ]] || { echo "hold mode: packages resolved at two versions:" >&2; echo "$dups" >&2; exit 1; }
+fi
+
 # 2. Download every resolved RPM (dnf checks repo signatures), then hash and verify them.
 rpms="$out/rpms"
 rm -rf "$rpms"; mkdir -p "$rpms"
 specs=()
 while read -r n evra; do specs+=("$n-$evra"); done <"$out/fedora.ids"   # dnf spec: name-epoch:version-release.arch
-dnf5 -y download --destdir "$rpms" "${specs[@]}"
+if (( hold )); then
+  # Locked identities are copied from the held closure and checked against the lock's sha256; only new ones are downloaded.
+  pin_lock_lines "$hl" fedora | awk '{ print $1, $2 }' | LC_ALL=C sort -u >"$out/held-fedora.ids"
+  LC_ALL=C comm -12 "$out/fedora.ids" "$out/held-fedora.ids" >"$out/kept.ids"
+  LC_ALL=C comm -23 "$out/fedora.ids" "$out/held-fedora.ids" >"$out/new.ids"
+  while read -r n evra; do
+    f="$(pin_rpm_file "$n" "$evra")"; want="$(pin_lock_lines "$hl" fedora | awk -v n="$n" -v e="$evra" '$1 == n && $2 == e { print $3 }')"
+    [[ -f "$held/$f" && "$(sha256sum "$held/$f" | cut -d' ' -f1)" == "$want" ]] || { echo "held closure lacks $f or its sha256 differs from the held lock" >&2; exit 1; }
+    cp "$held/$f" "$rpms/"
+  done <"$out/kept.ids"
+  specs=(); while read -r n evra; do specs+=("$n-$evra"); done <"$out/new.ids"
+  echo "hold mode: $(wc -l <"$out/kept.ids") packages kept from the held closure, ${#specs[@]} new"
+fi
+(( ${#specs[@]} == 0 )) || dnf5 -y download --destdir "$rpms" "${specs[@]}"
 pin_check_signatures "$rpms"/*.rpm
 
 # 3. Build the new lock body.

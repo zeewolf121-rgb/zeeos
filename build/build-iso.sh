@@ -56,6 +56,11 @@ if [[ "${ZEEOS_UNPINNED:-0}" == 1 ]]; then
   # A local `make rpms` result (unsigned, development only) joins the live mirrors.
   zdir=""; [[ ! -f "$out/zeeos/repodata/repomd.xml" ]] || zdir="$(xml_esc "$out/zeeos")"
   pin_inject_zeeos_repo "$desc/repos.xml" "$zdir"
+  # Hold mode (build/pin/resolve.sh, #310): the current lock's closure outranks Fedora's repos.
+  if [[ -n "${ZEEOS_HOLD_DIR:-}" ]]; then
+    hold_block="$(printf '  <repository type="rpm-md" alias="zeeos-hold" priority="2" package_gpgcheck="false" repository_gpgcheck="false">\n    <source path="dir://%s"/>\n  </repository>' "$(xml_esc "$ZEEOS_HOLD_DIR")")"
+    HB="$hold_block" awk '/<\/image>/ { print ENVIRON["HB"] } { print }' "$desc/repos.xml" >"$desc/repos.xml.new" && mv "$desc/repos.xml.new" "$desc/repos.xml"
+  fi
   echo "WARNING: ZEEOS_UNPINNED=1: building from live Fedora mirrors; the output is NOT reproducible" >&2
 else
   closure="${ZEEOS_CLOSURE_DIR:-$out/closure}"

@@ -17,8 +17,10 @@ pin-container:
 	build/container/pin.sh
 # Refresh build/arch/$(ARCH)/packages.lock (resolve in the build container, publish the closure repo).
 # Needs network and `podman login ghcr.io` with packages: write. PUBLISH=0 resolves only.
+# HOLD=1 keeps every version in the current lock and only adds new packages (build/pin/hold.sh, resolve.sh).
 pin-packages:
-	ZEEOS_UNPINNED=1 ZEEOS_ENTRY=build/pin/resolve.sh build/container/run.sh $(ARCH)
+	$(if $(HOLD),build/pin/hold.sh $(ARCH))
+	ZEEOS_PIN_HOLD=$(if $(HOLD),1,0) ZEEOS_UNPINNED=1 ZEEOS_ENTRY=build/pin/resolve.sh build/container/run.sh $(ARCH)
 	$(if $(filter 0,$(PUBLISH)),,build/pin/publish.sh $(ARCH))
 # ZeeOS rebuilds of Fedora SRPMs (ADR-0011): native per arch, in the digest-pinned tools image.
 # Writes out/$(ARCH)/zeeos/ and build/arch/$(ARCH)/rpms-buildroot/. RPM=<name> builds one package.

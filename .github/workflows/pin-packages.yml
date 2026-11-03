@@ -25,6 +25,11 @@ on:
         type: boolean
         required: false
         default: false
+      hold:
+        description: keep every version in the branch's current locks and only add new packages (make pin-packages HOLD=1, #310)
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: '41 3 * * *'
 permissions:
@@ -94,7 +99,7 @@ jobs:
       - name: Resolve, fetch and publish
         env:
           ZEEOS_REGISTRY_OWNER: ${{ github.repository_owner }}
-        run: make pin-packages ARCH=${{ matrix.arch }}
+        run: make pin-packages ARCH=${{ matrix.arch }}${{ inputs.hold == true && ' HOLD=1' || '' }}
       - uses: actions/upload-artifact@v6
         with:
           name: lock-${{ matrix.arch }}
