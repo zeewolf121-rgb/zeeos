@@ -9,6 +9,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/autopilot/lib.sh
 . "$here/lib.sh"
 
+if codex_controller; then log "dispatch delegated to Codex controller"; exit 0; fi
+
 sources="paused ready"; [[ "${1:-}" == --resume ]] && sources=paused
 stagger="${AUTOPILOT_STAGGER:-300}"
 

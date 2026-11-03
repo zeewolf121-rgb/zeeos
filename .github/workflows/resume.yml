@@ -8,9 +8,11 @@ permissions:
   contents: read
   issues: write
   actions: write
+env:
+  AUTOPILOT_CONTROLLER_MODE: ${{ vars.AUTOPILOT_CONTROLLER }}
 jobs:
   resume:
-    if: vars.AUTOPILOT == 'on'
+    if: vars.AUTOPILOT == 'on' && (vars.AUTOPILOT_CONTROLLER == '' || vars.AUTOPILOT_CONTROLLER == 'legacy')
     concurrency:
       group: autopilot
       cancel-in-progress: false
