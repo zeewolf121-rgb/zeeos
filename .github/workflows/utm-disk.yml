@@ -2,9 +2,9 @@
 # Linux arm64 runner. The owner's Mac cannot build it: kiwi's rsync fails to remove
 # security.selinux xattrs inside the Podman machine VM (owner decision 2026-11-03: build on
 # ubuntu-24.04-arm). Not a required check yet.
-# UNPINNED for now: plasma-setup and dracut-kiwi-oem-repart are not in packages.lock and the
-# Containerfile change is not in a published tools image, so this proves the disk builds; it is
-# not a reproducible artifact. Pinning and a boot test are follow-ups on #277.
+# PINNED (ADR-0008): the digest-pinned tools image and the closure repo from packages.lock (the
+# union of the live and oem sets; oem-only packages are recorded in the lock header). The boot
+# test is a follow-up on #277.
 name: utm-disk
 on:
   pull_request:
@@ -21,11 +21,9 @@ jobs:
     timeout-minutes: 90
     env:
       ARCH: aarch64
-      ZEEOS_UNPINNED: '1'
-      ZEEOS_LOCAL_TOOLS: '1'
     steps:
       - uses: actions/checkout@v5
-      - name: Build the oem disk (unpinned)
+      - name: Build the oem disk (pinned)
         run: |
           mkdir -p out
           set -o pipefail
@@ -33,7 +31,7 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          { echo "### utm-disk $ARCH (UNPINNED: proves the build, not a release artifact)"
+          { echo "### utm-disk $ARCH (pinned)"
             echo '```'; grep -E '^(DISK:|packages on the image|oem disk)' "out/utm-disk-$ARCH.log" || true
             cat "out/$ARCH-oem/partition-table.txt" 2>/dev/null || true; echo '```'
             if [[ "${{ job.status }}" != success ]]; then
@@ -46,7 +44,7 @@ jobs:
       - name: Upload disk
         uses: actions/upload-artifact@v6
         with:
-          name: utm-disk-${{ env.ARCH }}-unpinned
+          name: utm-disk-${{ env.ARCH }}
           path: out/${{ env.ARCH }}-oem/image/*.raw.zst
           if-no-files-found: error
           retention-days: 3

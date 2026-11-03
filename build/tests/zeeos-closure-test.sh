@@ -165,5 +165,21 @@ expect pass "sddm source.lock builds --without x11 and names a real NEVRA" bash 
   grep -q '^SRPM=sddm-0.21.0-13.fc44.src.rpm\$' '$root/build/rpms/sddm/source.lock' &&
   grep -q '^RPMBUILD_OPTS=--without x11\$' '$root/build/rpms/sddm/source.lock'"
 
+# --- oem-only identities in the lock (#277): the live ISO check tolerates exactly those -------------
+printf '# oem-only=plasma-setup 0:6.6.4-1.fc44.aarch64\n# oem-only=dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch\nfoo 0:1-1.fc44.aarch64 aa foo\n' >"$tmp/oem.lock"
+printf -- '-dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch\n-plasma-setup 0:6.6.4-1.fc44.aarch64\n' >"$tmp/d-ok"
+printf -- '-plasma-setup 0:6.6.4-1.fc44.aarch64\n' >"$tmp/d-missing-oem"
+printf -- '-dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch\n-plasma-setup 0:6.6.4-1.fc44.aarch64\n-foo 0:1-1.fc44.aarch64\n' >"$tmp/d-extra-lock"
+printf -- '-dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch\n-plasma-setup 0:6.6.4-1.fc44.aarch64\n+bar 0:1-1.fc44.aarch64\n' >"$tmp/d-unlocked"
+: >"$tmp/d-empty"
+expect pass "live check: only the locked oem-only packages absent" pin_live_diff_ok "$tmp/oem.lock" "$tmp/d-ok"
+expect fail "live check: an oem-only package present on the ISO is drift" pin_live_diff_ok "$tmp/oem.lock" "$tmp/d-missing-oem"
+expect fail "live check: another locked package missing from the ISO fails" pin_live_diff_ok "$tmp/oem.lock" "$tmp/d-extra-lock"
+expect fail "live check: a package on the ISO that is not locked fails" pin_live_diff_ok "$tmp/oem.lock" "$tmp/d-unlocked"
+expect fail "live check: a lock with oem-only entries but an exact match fails" pin_live_diff_ok "$tmp/oem.lock" "$tmp/d-empty"
+printf 'foo 0:1-1.fc44.x86_64 aa foo\n' >"$tmp/plain.lock"
+expect pass "live check: a lock without oem-only entries needs an exact match (x86_64)" pin_live_diff_ok "$tmp/plain.lock" "$tmp/d-empty"
+expect fail "live check: ... and any drift fails" pin_live_diff_ok "$tmp/plain.lock" "$tmp/d-unlocked"
+
 echo "$pass passed, $fail failed"
 [[ "$fail" == 0 ]]

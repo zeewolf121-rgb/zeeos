@@ -99,7 +99,9 @@ if [[ "${ZEEOS_RESOLVE_ONLY:-0}" == 1 ]]; then
   # make pin-packages: install into a root only, then list it (same fields as kiwi's .packages).
   [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]] || { echo "ZEEOS_RESOLVE_ONLY runs inside the build container" >&2; exit 2; }
   rm -rf "$out/resolve-root"
-  kiwi-ng system prepare --description "$desc" --root "$out/resolve-root"
+  # live (the default profile) is resolved exactly as before; oem needs its profile and disk type.
+  if [[ "$profile" == oem ]]; then rprof=(--profile oem --type oem); else rprof=(); fi
+  kiwi-ng "${rprof[@]}" system prepare --description "$desc" --root "$out/resolve-root"
   rpm --root "$out/resolve-root" -qa --qf '%{NAME}|%{EPOCHNUM}|%{VERSION}|%{RELEASE}|%{ARCH}\n' >"$out/resolved.list"
   rm -rf "$out/resolve-root"
   exit 0
@@ -147,12 +149,16 @@ if (( ! unpinned )); then
       exit 1
     fi
     echo "oem disk packages are all in packages.lock ($(grep -c '^-' "$out/lock-vs-packages.diff") locked packages are not on the disk)"
-  elif [[ -s "$out/lock-vs-packages.diff" ]]; then
-    echo "packages.list does not match $lock (see $out/lock-vs-packages.diff):" >&2
-    cat "$out/lock-vs-packages.diff" >&2
-    exit 1
+  else
+    # The lock is the union of the live and oem sets (build/pin/resolve.sh). The identities that only
+    # the oem disk installs are recorded in the lock header; the ISO may lack exactly those and nothing else.
+    pin_live_diff_ok "$lock" "$out/lock-vs-packages.diff" || {
+      echo "packages.list does not match $lock apart from its oem-only packages (see $out/lock-vs-packages.diff):" >&2
+      cat "$out/lock-vs-packages.diff" >&2
+      exit 1
+    }
   fi
-  [[ "$profile" == oem ]] || echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages)"
+  [[ "$profile" == oem ]] || echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages, $(pin_lock_oem_only "$lock" | wc -l) oem-only)"
 fi
 echo "packages on the image: $(wc -l <"$out/packages.list")"
 if [[ "$profile" == oem ]]; then

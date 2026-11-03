@@ -21,9 +21,21 @@ if [[ -f "$zl" ]]; then
 fi
 
 # 1. Let kiwi itself resolve (prepare only) so the lock matches what a real build installs.
-ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
+ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 ZEEOS_PROFILE=live "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
 pin_identities <"$out/resolved.list" >"$out/resolved.ids"
 [[ -s "$out/resolved.ids" ]] || { echo "kiwi resolved no packages" >&2; exit 1; }
+# An arch whose description has an oem profile (aarch64, #277) is resolved twice and locked as the
+# union. The identities only the oem disk installs are recorded as "# oem-only=" header lines so the
+# live ISO check can tolerate exactly those; the oem check needs every disk package locked.
+: >"$out/oem-only.ids"
+if grep -q '<profile name="oem"' "$PIN_ROOT/build/arch/$arch/config.xml"; then
+  cp "$out/resolved.ids" "$out/resolved.live.ids"
+  ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 ZEEOS_PROFILE=oem "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
+  pin_identities <"$out/resolved.list" >"$out/resolved.oem.ids"
+  [[ -s "$out/resolved.oem.ids" ]] || { echo "kiwi resolved no packages for the oem profile" >&2; exit 1; }
+  LC_ALL=C comm -13 "$out/resolved.live.ids" "$out/resolved.oem.ids" >"$out/oem-only.ids"
+  LC_ALL=C sort -u "$out/resolved.live.ids" "$out/resolved.oem.ids" >"$out/resolved.ids"
+fi
 # Fail closed: a package ZeeOS rebuilds (a locked build/rpms/<name>/source.lock) must never be
 # pinned as Fedora's stock build, e.g. calamares with setxkbmap (ADR-0011). Without zeeos.lock
 # kiwi only saw Fedora, so stop instead of silently locking the stock RPM.
@@ -80,7 +92,8 @@ fi
 # An unchanged body only counts if the lock also records its closure digest: a refresh whose
 # publish was skipped (PUBLISH=0) or failed must publish on the next run, not stop here.
 if [[ -f "$lock" && -n "$(pin_lock_header "$lock" closure)" \
-      && "$(pin_lock_body "$lock")" == "$(LC_ALL=C sort "$new")" ]]; then
+      && "$(pin_lock_body "$lock")" == "$(LC_ALL=C sort "$new")" \
+      && "$(pin_lock_oem_only "$lock")" == "$(cat "$out/oem-only.ids")" ]]; then
   echo "packages.lock for $arch unchanged"; echo unchanged >"$out/pin.status"; exit 0
 fi
 {
@@ -91,6 +104,7 @@ fi
   echo "# arch=$arch"
   echo "# resolved=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "# closure="   # filled in by publish.sh
+  while read -r n evra; do echo "# oem-only=$n $evra"; done <"$out/oem-only.ids"
   cat "$new"
 } >"$lock"
 echo changed >"$out/pin.status"
