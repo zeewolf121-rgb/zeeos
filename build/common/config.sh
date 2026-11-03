@@ -28,6 +28,7 @@ if (( oem )); then
   # Live-only files from the shared overlays: the liveuser SDDM autologin and the passwordless
   # root serial console.
   rm -f /etc/sddm.conf.d/10-zeeos-live-autologin.conf
+  rm -f /usr/share/applications/zeeos-install.desktop
   rm -f /etc/systemd/system/serial-getty@*.service.d/autologin.conf
   rmdir --ignore-fail-on-non-empty /etc/systemd/system/serial-getty@*.service.d 2>/dev/null || true
   if getent passwd liveuser >/dev/null; then echo "liveuser must not exist in the oem image" >&2; exit 1; fi

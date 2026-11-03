@@ -37,7 +37,8 @@ for pkg in "$root"/branding/wallpapers/*/metadata.json; do
   cp -a "$(dirname "$pkg")" "$desc/root/usr/share/wallpapers/"
 done
 # Calamares installer config and zee-* modules (owned by installer-engineer); skipped while absent.
-"$root/build/stage-installer.sh" "$root" "$desc/root"
+# The oem disk has no installer.
+if [[ "$profile" == live ]]; then "$root/build/stage-installer.sh" "$root" "$desc/root"; fi
 # Escape a value for use inside an XML attribute and as a sed replacement (| delimiter).
 xml_esc() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; printf '%s' "${v//</&lt;}"; }
 xml_sed() { xml_esc "$1" | sed 's/[\\&|]/\\&/g'; }
