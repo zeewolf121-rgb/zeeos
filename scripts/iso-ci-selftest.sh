@@ -17,7 +17,8 @@ for f in build/arch/x86_64/config.xml build/stage-installer.sh desktop/live/over
          Makefile .github/workflows/build-iso.yml .github/workflows/boot-test.yml \
          installer/calamares/settings.conf installer/modules/zee-plan/main.py \
          security/overlay/etc/sysctl.d/99.conf security/verify-secureboot-chain.sh \
-         branding/wallpapers/zeeos/metadata.json tests/selftest.sh tests/fixtures/serial.log scripts/fetch-artifact.sh; do
+         branding/wallpapers/zeeos/metadata.json tests/selftest.sh tests/fixtures/serial.log scripts/fetch-artifact.sh \
+         scripts/iso-inputs.sh scripts/iso-summary-gate.sh scripts/iso-ci-selftest.sh; do
   paths "$f rebuilds" true "$f"
 done
 for f in docs/ARCHITECTURE.md README.md installer/README.md security/SECURE-BOOT.md tests/README.md build/README.md \

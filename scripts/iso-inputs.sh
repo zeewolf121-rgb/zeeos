@@ -7,8 +7,9 @@
 set -uo pipefail
 # build/ (image description, package locks, stage-installer), desktop/ (live overlay), security/
 # (overlay, verify-secureboot-chain.sh), installer/ (Calamares config and zee-* modules), branding/
-# (wallpapers), tests/ and vm/ (boot harness), the Makefile, the fetch helper the boot job runs, and
-# the build/boot workflows themselves.
-pattern='^(build/|desktop/|installer/|security/|branding/|tests/|vm/|Makefile$|scripts/fetch-artifact\.sh$|\.github/workflows/(build-iso|boot-test)\.yml$)'
+# (wallpapers), tests/ and vm/ (boot harness), the Makefile, the fetch helper the boot job runs, the
+# CI helpers extracted from build-iso.yml (changing them must run the real pipeline), and the
+# build/boot workflows themselves.
+pattern='^(build/|desktop/|installer/|security/|branding/|tests/|vm/|Makefile$|scripts/(fetch-artifact|iso-inputs|iso-summary-gate|iso-ci-selftest)\.sh$|\.github/workflows/(build-iso|boot-test)\.yml$)'
 hits="$(grep -E "$pattern" | grep -v '\.md$' || true)"
 if [[ -n "$hits" ]]; then echo "$hits" >&2; echo true; else echo false; fi
