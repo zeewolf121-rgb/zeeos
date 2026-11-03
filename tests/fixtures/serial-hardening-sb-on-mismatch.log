@@ -1,0 +1,5 @@
+secureboot: Secure boot enabled
+ZEEOS_SECUREBOOT enabled=0
+ZEEOS_HARDENING_CHECK
+ZEEOS_DESKTOP_READY
+ZEEOS_HARDENING_OK selinux=enforcing firewall=firewalld inbound=deny sshd=off autoupdate=live-off

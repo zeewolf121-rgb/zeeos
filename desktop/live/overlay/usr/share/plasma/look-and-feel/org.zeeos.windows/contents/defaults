@@ -7,6 +7,8 @@ ColorScheme=ZeeOSLight
 widgetStyle=Breeze
 
 [kwinrc][org.kde.kdecoration2]
+library=org.kde.kwin.aurorae
+theme=__aurorae__svg__ZeeOS-Plain-Light
 ButtonsOnLeft=
 ButtonsOnRight=IAX
 
