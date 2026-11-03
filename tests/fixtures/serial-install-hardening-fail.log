@@ -1,0 +1,6 @@
+[    0.000000] secureboot: Secure boot enabled
+ZEEOS_SECUREBOOT enabled=1
+ZEEOS_HARDENING_CHECK
+ZEEOS_HARDENING_FAIL firewall: no zone is active
+ZEEOS_INSTALL_START case=erase
+ZEEOS_INSTALL_DONE case=erase

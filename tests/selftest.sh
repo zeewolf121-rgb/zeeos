@@ -20,7 +20,7 @@ replay() {
   local fx=$1 want=$2 o rc=0; shift 2
   o=$tmp/out-${fx%.log}
   BASELINES=${REPLAY_BASELINES:-$tmp/no-baselines} FAKE_SERIAL=tests/fixtures/$fx QEMU_BIN=$tmp/qemu FW_CODE=$fw FW_VARS=$fw ISO=$iso OUT=$o ARCH=x86_64 \
-    SECUREBOOT=off SCREENSHOT_DELAY=0 TIMEOUT=20 THEME_TIMEOUT=6 vm/boot-test.sh >"$o.log" 2>&1 || rc=$?
+    SECUREBOOT=${REPLAY_SB:-off} SCREENSHOT_DELAY=0 TIMEOUT=20 THEME_TIMEOUT=6 vm/boot-test.sh >"$o.log" 2>&1 || rc=$?
   if { [ "$want" = pass ] && [ "$rc" != 0 ]; } || { [ "$want" = fail ] && [ "$rc" = 0 ]; }; then
     echo "FAIL: $fx expected $want, exit $rc" >&2; cat "$o.log" >&2; exit 1
   fi
@@ -41,6 +41,18 @@ replay serial-layout-fail.log fail 'layout-fail-mac' '<skipped/>'
 # PID 1 froze in early boot: the harness boots once more; a second freeze ends in a timeout.
 replay serial-freeze.log fail 'boot_retry" value="1"' 'marker ZEEOS_DESKTOP_READY: timeout'
 [ -s "$tmp/out-serial-freeze/serial-attempt1.log" ] || { echo "FAIL: no serial-attempt1.log" >&2; exit 1; }
+
+# Phase-5 marker protocol: ZEEOS_SECUREBOOT and ZEEOS_HARDENING_*. No announce = nothing new is checked.
+replay serial-hardening-ok.log pass 'hardening" value="ok"' 'secureboot_guest" value="off"' 'tests="2"' 'failures="0"' \
+  'name="boot.x86_64.sb-off.hardening"'
+replay serial-hardening-no-announce.log pass 'hardening" value="none"' 'secureboot_guest" value="off"' 'tests="1"'
+if grep -q '\.hardening"' "$tmp/out-serial-hardening-no-announce/junit.xml"; then
+  echo "FAIL: no-announce run has a hardening testcase" >&2; exit 1; fi
+replay serial-plain.log pass 'hardening" value="none"' 'secureboot_guest" value="unreported"'
+replay serial-hardening-fail.log fail 'hardening" value="fail"' 'hardening-fail' 'firewall: inbound ssh is open'
+replay serial-hardening-missing.log fail 'hardening" value="timeout"' 'hardening-timeout' 'no ZEEOS_HARDENING_OK'
+replay serial-hardening-sb-mismatch.log fail 'secureboot-marker-on' 'secureboot_guest" value="on"'
+REPLAY_SB=on replay serial-hardening-sb-on-mismatch.log fail 'secureboot-marker-off' 'secureboot_guest" value="off"'
 
 # Real baselines present: a copy of the harness with a full-size baseline at the default location.
 # An unisolated fixture run (1x1 shots) must hit the gate; the isolated runs above must not.

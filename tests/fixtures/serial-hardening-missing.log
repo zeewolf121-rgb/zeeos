@@ -1,0 +1,4 @@
+secureboot: Secure boot disabled
+ZEEOS_SECUREBOOT enabled=0
+ZEEOS_HARDENING_CHECK
+ZEEOS_DESKTOP_READY
