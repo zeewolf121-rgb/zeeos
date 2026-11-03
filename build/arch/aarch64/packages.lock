@@ -3,8 +3,10 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name [origin: zeeos-rebuild | zeeos-rebuild-src]
 # release=44
 # arch=aarch64
-# resolved=2026-10-26T14:55:03Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:8b8676cde8cce1f10cf2b33604b95d9cfab83e3ffcf699bf622478d0e68c808b
+# resolved=2026-11-03T16:22:17Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:6d2f824a2b4624e9308065b41c5be85877c70206f82b81d9a700bcf36f5347d2
+# oem-only=dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch
+# oem-only=plasma-setup 0:6.8.2-1.fc44.aarch64
 LibRaw 0:0.22.2-1.fc44.aarch64 e92b9744b717843d7028ea5e9dfc9fbf1641c7dbf9d43e63345087ad41a08793 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.aarch64 bfac5045a95b38089bf606e56fed9b3f030011eb1837004ec6b5aa83f871d322 ModemManager
 NetworkManager 1:1.56.1-2.fc44.aarch64 2417739e89469a05c597ce6d087090c1960d10c46cfca97f786fc670db4c31df NetworkManager
@@ -97,6 +99,7 @@ dracut 0:108-8.fc44.aarch64 d503e00739a79e6b326804183da66a7e62ae3cd5663b93777e2b
 dracut-config-generic 0:108-8.fc44.aarch64 ad53dbc9da8961362a73bd7a776d3d3728c2bb9860a895246cd089171a783ef1 dracut
 dracut-kiwi-lib 0:11.1.1-2.fc44.noarch 662864cb2822e21f7e3c4821083944af4a7154c09f8c1ef1da135e53af5d35c2 kiwi
 dracut-kiwi-live 0:11.1.1-2.fc44.noarch cd5f5cd1a72ce31d216772ecd423c5bb622379a412c946ff705c2e5997608b7b kiwi
+dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch e69ca26bff988ee5b63737b306bc890bc9c11d40c76eb22e920fc0e07da00ef8 kiwi
 dracut-live 0:108-8.fc44.aarch64 1e647c8df7b27b484b6ad6514281d393056ae85d4630bed61db1b8c93437b5d7 dracut
 dracut-network 0:108-8.fc44.aarch64 984f2f15806eb21865c870cb6625705fa911daf93019ec9837862ed7ea598d5f dracut
 duktape 0:2.7.0-11.fc44.aarch64 be54c171523f2e159e93eb3e20b327491c4a13ca2d2ff6232fb75eacb5bffbb6 duktape
@@ -704,6 +707,7 @@ plasma-desktop 0:6.7.5-1.fc44.aarch64 b3ef11bced21900539b147fe8536d885cafecb283f
 plasma-integration 0:6.7.5-1.fc44.aarch64 bbe1eaf40c4babb213d925629dd08be1e53f7b2c0bb15d77d3aced8c02ca685f plasma-integration
 plasma-keyboard 1:6.7.5-1.fc44.aarch64 162efc40a075a4c13cf59adbd0e41dc7314bd6f0d1377b55a04f3bf22f478c71 plasma-keyboard
 plasma-lookandfeel-fedora 0:6.7.5-1.fc44.noarch d61e045c9bb43c88031613bdff4827beae2278da6638315bf53a1390ff223aff plasma-workspace
+plasma-setup 0:6.8.2-1.fc44.aarch64 7df945736e088994eb9c04f30b4a2722ba32a9a11c349926bc3339dd64540cd3 plasma-setup
 plasma-systemsettings 0:6.7.5-1.fc44.aarch64 5424f1e187ad93b5b3458903a3ff2a7f9785e7620033df1b7bc22abdaf3c69f0 plasma-systemsettings
 plasma-workspace 0:6.7.5-1.fc44.aarch64 28672083537cafc0448fa6ba2ac2948a2b2d123889db278d07fa42811c9a272c plasma-workspace
 plasma-workspace-common 0:6.7.5-1.fc44.aarch64 d0b1b390b0f23525bd5b6b0ac9817c094de26b723b1ab761033da3e87dc7b736 plasma-workspace
