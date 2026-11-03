@@ -25,11 +25,12 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Path selection and its tests live in scripts/ so they can be tested (#289).
+          scripts/iso-ci-selftest.sh
           iso=true
           if [[ "$EVENT" == pull_request ]]; then
-            files="$(git diff --name-only "$BASE"...HEAD)"
-            hits="$(grep -E '^(build/|desktop/live/|vm/|Makefile$|\.github/workflows/(build-iso|boot-test)\.yml$)' <<<"$files" | grep -v '\.md$' || true)"
-            [[ -n "$hits" ]] || iso=false
+            files="$(git diff --name-only "$BASE"...HEAD)"   # a failing diff fails the job, never "no change"
+            iso="$(scripts/iso-inputs.sh <<<"$files")"
           fi
           echo "iso=$iso" >>"$GITHUB_OUTPUT"
   build:
@@ -89,7 +90,7 @@ jobs:
     needs: build
     uses: ./.github/workflows/boot-test.yml
   # Secure Boot chain in the built ISO (ADR-0004, #9): Microsoft UEFI CA -> shim -> shim's vendor
-  # cert -> GRUB, kernel; plus a tampered-GRUB negative test. Reported, not (yet) a required check.
+  # cert -> GRUB, kernel; plus a tampered-GRUB negative test. Gates the required build-iso summary (#289).
   secureboot-chain:
     needs: build
     strategy:
@@ -113,19 +114,30 @@ jobs:
           [[ -n "$iso" ]] || { echo "::error::no ISO in iso-${{ matrix.arch }}"; exit 1; }
           set -o pipefail
           security/verify-secureboot-chain.sh "$iso" --tamper-test | tee -a "$GITHUB_STEP_SUMMARY"
+  # The required summaries (scripts/iso-summary-gate.sh). They fail when the path selection failed
+  # and, while ISO inputs changed, unless every needed job succeeded: build-iso also needs both
+  # architectures' secureboot-chain verification (a matrix job fails if either leg fails), and
+  # "skipped" is never a pass.
   build-iso:
-    needs: [changes, build]
+    needs: [changes, build, secureboot-chain]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - run: |
-          if [[ "${{ needs.changes.outputs.iso }}" != true ]]; then echo "no ISO inputs changed"; exit 0; fi
-          [[ "${{ needs.build.result }}" == success ]]
+      - uses: actions/checkout@v5
+      - env:
+          ISO_CHANGED: ${{ needs.changes.outputs.iso }}
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+          CHAIN: ${{ needs.secureboot-chain.result }}
+        run: scripts/iso-summary-gate.sh "$ISO_CHANGED" "$CHANGES" build="$BUILD" secureboot-chain="$CHAIN"
   boot-test:
     needs: [changes, boot]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - run: |
-          if [[ "${{ needs.changes.outputs.iso }}" != true ]]; then echo "no ISO inputs changed"; exit 0; fi
-          [[ "${{ needs.boot.result }}" == success ]]
+      - uses: actions/checkout@v5
+      - env:
+          ISO_CHANGED: ${{ needs.changes.outputs.iso }}
+          CHANGES: ${{ needs.changes.result }}
+          BOOT: ${{ needs.boot.result }}
+        run: scripts/iso-summary-gate.sh "$ISO_CHANGED" "$CHANGES" boot="$BOOT"
