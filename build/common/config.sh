@@ -18,6 +18,10 @@ systemctl enable NetworkManager.service sddm.service zeeos-desktop-ready.service
 # session by security/overlay's ConditionKernelCommandLine=!rd.live.image drop-in (not masked,
 # so the system Calamares copies to disk runs it with no installer step).
 systemctl enable firewalld.service dnf5-automatic.timer
+# Hardening marker check (security/overlay unit, P5-3): enabled in the image so live boots run it. The
+# unit's ConditionKernelCommandLine=rd.live.image keeps it off the installed system (a test preset's
+# drop-in clears the condition there).
+systemctl enable zeeos-hardening-check.service
 
 if (( oem )); then
   # Installed-system disk (UTM): no live user, no autologin, no default password. The first user is

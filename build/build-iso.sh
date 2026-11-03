@@ -36,6 +36,12 @@ mkdir -p "$desc/root/usr/share/wallpapers"
 for pkg in "$root"/branding/wallpapers/*/metadata.json; do
   cp -a "$(dirname "$pkg")" "$desc/root/usr/share/wallpapers/"
 done
+# ZeeOS Aurorae window-decoration themes (owned by theme-designer): every theme directory in
+# branding/aurorae/ (one with a metadata.json; src/ holds the generator and is not shipped).
+mkdir -p "$desc/root/usr/share/aurorae/themes"
+for theme in "$root"/branding/aurorae/*/metadata.json; do
+  cp -a "$(dirname "$theme")" "$desc/root/usr/share/aurorae/themes/"
+done
 # Calamares installer config and zee-* modules (owned by installer-engineer); skipped while absent.
 # The oem disk has no installer.
 if [[ "$profile" == live ]]; then "$root/build/stage-installer.sh" "$root" "$desc/root"; fi

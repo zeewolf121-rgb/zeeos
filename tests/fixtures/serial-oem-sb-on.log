@@ -1,0 +1,10 @@
+[    0.000000] Linux version 7.2.15-200.fc44.aarch64 (mockbuild@0e5a58f1bb2343078f4838fc647fc53a) (gcc (GCC) 16.2.1 20261029 (Red Hat 16.2.1-3), GNU ld version 2.46.1-1.fc44) #1 SMP PREEMPT_DYNAMIC Sun Nov  1 16:10:44 UTC 2026
+[    0.000000] secureboot: Secure boot enabled
+[0;1;39mWelcome to [0m[0;38;2;60;110;180mFedora Linux 44 (Forty Four)[0m[0;1;39m![0m
+         Starting [0;1;39mplasma-setup.service[0m - Pl…-of-Box / First-Run setup wizard...
+[[0;32m  OK  [0m] Finished [0;1;39mplasma-setup.service[0m - Pl…ut-of-Box / First-Run setup wizard.
+[[0;32m  OK  [0m] Reached target [0;1;39mmulti-user.target[0m - Multi-User System.
+[[0;32m  OK  [0m] Started [0;1;39msddm.service[0m - Simple Desktop Display Manager.
+[[0;32m  OK  [0m] Reached target [0;1;39mgraphical.target[0m - Graphical Interface.
+[[0;32m  OK  [0m] Started [0;1;39msession-1.scope[0m - Session 1 of User plasma-setup.
+ZeeOS login: [   15.199659] kauditd_printk_skb: 468 callbacks suppressed
