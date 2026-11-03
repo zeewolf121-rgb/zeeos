@@ -4,6 +4,7 @@ ARG BASE_IMAGE=registry.fedoraproject.org/fedora:44
 FROM ${BASE_IMAGE}
 RUN dnf -y install --setopt=install_weak_deps=False \
       kiwi-cli kiwi-systemdeps-iso-media kiwi-systemdeps-bootloaders \
+      kiwi-systemdeps-disk-images \
       xorriso squashfs-tools dosfstools mtools git sudo \
       createrepo_c curl fedora-gpg-keys rpm-sign dnf5-plugins rpm-build \
     && dnf clean all

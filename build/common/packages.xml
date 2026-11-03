@@ -6,10 +6,6 @@
   <!-- Phase 4 installer (P4-1, #175). calamares is the ZeeOS rebuild without setxkbmap (ADR-0011):
        lock it with `pin-packages -f build_rpms=true`; a plain refresh fails closed. Names checked
        with Fedora 44 dnf5 repoquery. Disk/ESP tools stay explicit, not desktop side effects. -->
-  <package name="calamares"/>
-  <package name="os-prober"/>
-  <package name="ntfs-3g"/>
-  <package name="ntfsprogs"/>
   <package name="cryptsetup"/>
   <package name="parted"/>
   <package name="dosfstools"/>
@@ -18,8 +14,6 @@
   <package name="bash"/>
   <package name="coreutils"/>
   <package name="dnf5"/>
-  <package name="dracut-kiwi-live"/>
-  <package name="dracut-live"/>
   <package name="dracut-config-generic"/>
   <package name="fedora-release-identity-basic"/>
   <package name="glibc-langpack-en"/>
@@ -30,7 +24,6 @@
   <package name="NetworkManager"/>
   <package name="passwd"/>
   <package name="selinux-policy-targeted"/>
-  <package name="squashfs-tools"/>
   <package name="sudo"/>
   <package name="systemd"/>
   <package name="util-linux"/>
@@ -68,5 +61,16 @@
        39059081199). It's only a dependency; P2-2 makes ZeeOS the default via /etc/xdg. -->
   <ignore name="fedora-logos"/>
   <ignore name="fedora-logos-classic"/>
+</packages>
+<!-- Live-only parts (ISO, profile "live"): the installer and the live-boot dracut modules. The oem disk
+     (profile "oem", P5-5) leaves them out. Each arch config defines the profile; "live" is the default. -->
+<packages type="image" profiles="live">
+  <package name="calamares"/>
+  <package name="os-prober"/>
+  <package name="ntfs-3g"/>
+  <package name="ntfsprogs"/>
+  <package name="dracut-kiwi-live"/>
+  <package name="dracut-live"/>
+  <package name="squashfs-tools"/>
 </packages>
 </image>

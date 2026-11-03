@@ -105,4 +105,5 @@ fi
   -e SOURCE_DATE_EPOCH="$epoch" -e DRY_RUN="${DRY_RUN:-0}" -e ZEEOS_IN_CONTAINER=1 \
   -e ZEEOS_UNPINNED="${ZEEOS_UNPINNED:-0}" -e ZEEOS_CLOSURE_REBUILD="${ZEEOS_CLOSURE_REBUILD:-0}" \
   -e ZEEOS_TOOLS_PINNED="$tools_pinned" -e ZEEOS_RPMS_ONLY="${ZEEOS_RPMS_ONLY:-}" \
+  -e ZEEOS_PROFILE="${ZEEOS_PROFILE:-live}" \
   "$tag" bash -c 'git config --global --add safe.directory /work && exec bash "$@"' _ "$entry" ${args[@]+"${args[@]}"}

@@ -3,9 +3,14 @@ ARCH ?= x86_64
 SECUREBOOT ?= on
 # The ISO that `make iso ARCH=…` writes; override with ISO=<path>.
 ISO ?= $(firstword $(wildcard out/$(ARCH)/image/*.iso))
-.PHONY: iso iso-host pin-container pin-packages rpms rpms-source-lock test-build reproducible boot-test lint
+.PHONY: iso iso-host utm-disk pin-container pin-packages rpms rpms-source-lock test-build reproducible boot-test lint
 iso:
 	build/container/run.sh $(ARCH)
+# The raw oem disk for the UTM bundle (P5-5, ADR-0002: kiwi-ng, one description). aarch64 only.
+# Writes out/$(ARCH)-oem/image/*.raw. Same pinning rules as `make iso`.
+utm-disk:
+	@[ "$(ARCH)" = aarch64 ] || { echo "make utm-disk is aarch64 only (ARCH=$(ARCH))" >&2; exit 2; }
+	ZEEOS_PROFILE=oem build/container/run.sh $(ARCH)
 iso-host:
 	build/build-iso.sh $(ARCH)
 pin-container:

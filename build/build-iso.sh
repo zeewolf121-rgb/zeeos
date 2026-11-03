@@ -2,11 +2,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Build the ZeeOS live ISO with kiwi-ng. Needs root (loop devices); CI runs it on a full VM.
 # Usage: build/build-iso.sh <arch> [out-dir]   (DRY_RUN=1 stages the description only)
+# ZEEOS_PROFILE=oem builds the raw disk image for the UTM bundle (P5-5, `make utm-disk`) from the same
+# description instead of the ISO: kiwi profile oem, default out dir out/<arch>-oem, no ISO checks.
 set -euo pipefail
 
 arch="${1:?usage: build-iso.sh <arch> [out-dir]}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-out="${2:-$root/out/$arch}"
+profile="${ZEEOS_PROFILE:-live}"
+case "$profile" in
+  live) out="${2:-$root/out/$arch}" ;;
+  oem) out="${2:-$root/out/$arch-oem}" ;;
+  *) echo "ZEEOS_PROFILE must be live or oem, not $profile" >&2; exit 2 ;;
+esac
 src="$root/build/arch/$arch"
 [[ -f "$src/config.xml" ]] || { echo "no image description for ARCH=$arch" >&2; exit 2; }
 
@@ -98,7 +105,8 @@ if [[ "${ZEEOS_RESOLVE_ONLY:-0}" == 1 ]]; then
 fi
 
 if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
-"${run[@]}" "$(command -v kiwi-ng)" --type iso system build \
+if [[ "$profile" == oem ]]; then ktype=oem; else ktype=iso; fi
+"${run[@]}" "$(command -v kiwi-ng)" --profile "$profile" --type "$ktype" system build \
   --description "$desc" --target-dir "$out/image"
 pk="$(find "$out/image" -name '*.packages' | head -1)"
 [[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
@@ -116,12 +124,33 @@ if (( ! unpinned )); then
   # Lines: "-<identity>" only in the lock, "+<identity>" only in the image.
   LC_ALL=C comm -3 <(pin_lock_identities "$lock") <(pin_identities <"$out/packages.list") \
     | sed -e 's/^\t/+/' -e '/^+/!s/^/-/' >"$out/lock-vs-packages.diff"
-  if [[ -s "$out/lock-vs-packages.diff" ]]; then
+  if [[ "$profile" == oem ]]; then
+    # The oem disk is a subset of the ISO set (no live parts) plus its own packages. Every package
+    # on the disk must be locked ("+" lines are unlocked and fatal); locked packages the disk leaves
+    # out ("-" lines) are expected and only reported.
+    if grep -q '^+' "$out/lock-vs-packages.diff"; then
+      echo "oem disk has packages that are not in $lock:" >&2
+      grep '^+' "$out/lock-vs-packages.diff" >&2
+      exit 1
+    fi
+    echo "oem disk packages are all in packages.lock ($(grep -c '^-' "$out/lock-vs-packages.diff") locked packages are not on the disk)"
+  elif [[ -s "$out/lock-vs-packages.diff" ]]; then
     echo "packages.list does not match $lock (see $out/lock-vs-packages.diff):" >&2
     cat "$out/lock-vs-packages.diff" >&2
     exit 1
   fi
-  echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages)"
+  [[ "$profile" == oem ]] || echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages)"
+fi
+echo "packages on the image: $(wc -l <"$out/packages.list")"
+if [[ "$profile" == oem ]]; then
+  raw="$(find "$out/image" -name '*.raw' | head -1)"
+  [[ -n "$raw" ]] || { echo "kiwi produced no raw disk" >&2; exit 1; }
+  echo "DISK: $raw ($(stat -c %s "$raw") bytes apparent, $(du -k "$raw" | cut -f1) KiB allocated)"
+  # GPT with an ESP and a root partition; Fedora's signed boot chain on the ESP.
+  sfdisk -d "$raw" | tee "$out/partition-table.txt"
+  grep -q 'label: gpt' "$out/partition-table.txt" || { echo "disk is not GPT" >&2; exit 1; }
+  grep -qi 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B' "$out/partition-table.txt" || { echo "no ESP partition" >&2; exit 1; }
+  exit 0
 fi
 iso="$(find "$out/image" -name '*.iso' | head -1)"
 [[ -n "$iso" ]] || { echo "kiwi produced no ISO" >&2; exit 1; }

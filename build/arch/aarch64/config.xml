@@ -9,6 +9,13 @@
     <contact>https://github.com/zeewolf121-rgb/zeeos</contact>
     <specification>ZeeOS minimal live ISO, aarch64 (Phase 1 skeleton)</specification>
   </description>
+  <!-- Profiles: "live" is the ISO and is selected when no profile is given on the command line, so
+       `make iso` is unchanged. "oem" is the raw disk image for the UTM bundle (P5-5): kiwi-ng needs
+       its profile option set to oem (build-iso.sh does that for ZEEOS_PROFILE=oem). -->
+  <profiles>
+    <profile name="live" description="Live ISO with the installer" import="true"/>
+    <profile name="oem" description="Raw disk image: first-boot user creation, no live parts, no installer"/>
+  </profiles>
   <preferences>
     <version>0.1.0</version>
     <packagemanager>dnf5</packagemanager>
@@ -16,10 +23,28 @@
     <keytable>us</keytable>
     <timezone>UTC</timezone>
     <rpm-excludedocs>true</rpm-excludedocs>
+  </preferences>
+  <preferences profiles="live">
     <type image="iso" flags="overlay" squashfscompression="zstd" firmware="uefi" mediacheck="true"
           volid="ZEEOS_0_1" publisher="ZeeOS" application_id="ZeeOS"
           kernelcmdline="rd.live.image console=tty0 console=ttyAMA0,115200">
       <bootloader name="grub2"/>
+    </type>
+  </preferences>
+  <!-- P5-5 / ADR-0002: the raw disk for the UTM bundle, from the same description. GPT + ESP (Fedora's
+       shim and signed GRUB, kiwi copies them to EFI/BOOT and EFI/fedora) + root. btrfs is Fedora's
+       default root filesystem. No rd.live.image, no overlay, no squashfs. The root partition grows on
+       first boot (dracut-kiwi-oem-repart). The size is the minimum virtual disk; UTM can enlarge it. -->
+  <preferences profiles="oem">
+    <type image="oem" filesystem="btrfs" firmware="uefi" format="raw" efipartsize="512"
+          bootpartition="false" devicepersistency="by-uuid"
+          kernelcmdline="console=tty0 console=ttyAMA0,115200">
+      <bootloader name="grub2" timeout="3"/>
+      <size unit="G">12</size>
+      <oemconfig>
+        <oem-resize>true</oem-resize>
+        <oem-skip-verify>true</oem-skip-verify>
+      </oemconfig>
     </type>
   </preferences>
   <!-- Repos (ADR-0008): build-iso.sh stages repos-pinned.xml (the closure repo) as repos.xml;
@@ -30,12 +55,23 @@
   <packages type="image">
     <package name="shim-aa64"/>
     <package name="grub2-efi-aa64"/>
-    <package name="grub2-efi-aa64-cdboot"/>
     <package name="grub2-tools"/>
     <package name="efibootmgr"/>
     <!-- VM guest tools (QEMU/UTM) -->
     <package name="qemu-guest-agent"/>
     <package name="spice-vdagent"/>
+  </packages>
+  <packages type="image" profiles="live">
+    <package name="grub2-efi-aa64-cdboot"/>
+  </packages>
+  <!-- oem disk only. plasma-setup is Fedora KDE's first-boot wizard (plasma-setup.service runs
+       before SDDM until /etc/plasma-setup-done exists, skipped on rd.live.image); initial-setup is
+       the Anaconda-era alternative and Fedora KDE no longer defaults to it. repoquery on fedora:44
+       (2026-11-03): plasma-setup 6.6.4 (fedora) and 6.8.2 (updates); both aarch64. -->
+  <packages type="image" profiles="oem">
+    <package name="plasma-setup"/>
+    <package name="dracut-kiwi-oem-repart"/>
+    <package name="btrfs-progs"/>
   </packages>
   <packages type="bootstrap">
     <package name="filesystem"/>

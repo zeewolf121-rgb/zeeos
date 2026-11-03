@@ -8,6 +8,11 @@
     <contact>https://github.com/zeewolf121-rgb/zeeos</contact>
     <specification>ZeeOS minimal live ISO (Phase 1 skeleton)</specification>
   </description>
+  <!-- Profiles: common/packages.xml marks the live-only parts as profile "live". It is the ISO and is
+       selected when no profile is given on the command line, so `make iso` is unchanged. -->
+  <profiles>
+    <profile name="live" description="Live ISO with the installer" import="true"/>
+  </profiles>
   <preferences>
     <version>0.1.0</version>
     <packagemanager>dnf5</packagemanager>
@@ -29,9 +34,11 @@
   <packages type="image">
     <package name="shim-x64"/>
     <package name="grub2-efi-x64"/>
-    <package name="grub2-efi-x64-cdboot"/>
     <package name="grub2-tools"/>
     <package name="efibootmgr"/>
+  </packages>
+  <packages type="image" profiles="live">
+    <package name="grub2-efi-x64-cdboot"/>
   </packages>
   <packages type="bootstrap">
     <package name="filesystem"/>
