@@ -1,0 +1,5 @@
+secureboot: Secure boot disabled
+ZEEOS_SECUREBOOT enabled=0
+ZEEOS_HARDENING_CHECK
+ZEEOS_DESKTOP_READY
+ZEEOS_HARDENING_FAIL firewall: inbound ssh is open

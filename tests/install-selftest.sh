@@ -88,6 +88,22 @@ FAKE_FLIP=512 run refuse-gpt-changed refuse-bitlocker "$tmp/win" serial-install-
   serial-installed-ok.log fail 'gpt-primary'
 run installed-without-secureboot erase "$tmp/blank" serial-install-done.log serial-installed-nosb.log fail \
   'Secure Boot unreported, want enabled'
+# Phase-5 marker protocol on both boots. No announce / no ZEEOS_SECUREBOOT line = nothing new is checked.
+run hardening-ok erase "$tmp/blank" serial-install-done.log serial-installed-hardening-ok.log pass \
+  'failures="0"' 'hardening" value="ok"' 'secureboot_guest_installed" value="on"' 'name="install.x86_64.erase.hardening-installed"' \
+  'name="install.x86_64.erase.secureboot-marker-installed"'
+run hardening-none erase "$tmp/blank" serial-install-done.log serial-installed-no-announce.log pass \
+  'failures="0"' 'hardening" value="none"'
+grep -q 'hardening-' "$tmp/out-hardening-none/junit.xml" && fail "no announce still produced a hardening testcase"
+grep -q 'hardening-' "$tmp/out-erase-ok/junit.xml" && fail "plain erase-ok has a hardening testcase"
+run hardening-fail erase "$tmp/blank" serial-install-done.log serial-installed-hardening-fail.log fail \
+  'hardening" value="fail"' 'selinux: permissive'
+run hardening-missing erase "$tmp/blank" serial-install-done.log serial-installed-hardening-missing.log fail \
+  'hardening" value="timeout"' 'no ZEEOS_HARDENING_OK'
+run hardening-install-boot-fail erase "$tmp/blank" serial-install-hardening-fail.log serial-installed-ok.log fail \
+  'name="install.x86_64.erase.hardening-install"' 'firewall: no zone is active'
+run installed-sb-marker-mismatch erase "$tmp/blank" serial-install-done.log serial-installed-sb-mismatch.log fail \
+  'guest reports ZEEOS_SECUREBOOT off, want on' 'secureboot_guest_installed" value="off"'
 [ -s "$tmp/out-refuse-ok/checksums-partitions-before.json" ] || fail "no partition checksums"
 
 # Alongside: the post-install GPT is checked, not just bytes at the seed's offsets. Shrinking Windows
