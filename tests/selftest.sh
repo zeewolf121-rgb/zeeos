@@ -71,6 +71,7 @@ replay serial-plain.log pass 'imgdiff_gate" value="pass"'
 # OEM disk boot (vm/oem-boot-test.sh, #277): fixtures are the console lines of real boots of the unpinned oem disk
 # (CI run 41631313208, QEMU + AAVMF, HVF), ANSI colour included. The disk is a stand-in file; qemu-img is a shim.
 oemdisk=$tmp/oem.raw; : > "$oemdisk"
+# shellcheck disable=SC2016  # the $ expressions belong to the shim script
 printf '#!/bin/sh\nfor a; do last=$a; done; : > "$last"\n' > "$tmp/qemu-img"; chmod +x "$tmp/qemu-img"
 # oem_replay <fixture> <expect: pass|fail> <SECUREBOOT on|off> <MIN_COLORS> <junit pattern> [junit pattern...]
 oem_replay() {
