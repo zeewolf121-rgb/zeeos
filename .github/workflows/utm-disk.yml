@@ -1,0 +1,64 @@
+# Builds the aarch64 oem disk for the UTM bundle (#277, P5-5) with `make utm-disk` on GitHub's
+# Linux arm64 runner. The owner's Mac cannot build it: kiwi's rsync fails to remove
+# security.selinux xattrs inside the Podman machine VM (owner decision 2026-11-03: build on
+# ubuntu-24.04-arm). Not a required check yet.
+# UNPINNED for now: plasma-setup and dracut-kiwi-oem-repart are not in packages.lock and the
+# Containerfile change is not in a published tools image, so this proves the disk builds; it is
+# not a reproducible artifact. Pinning and a boot test are follow-ups on #277.
+name: utm-disk
+on:
+  pull_request:
+    paths:
+      - build/**
+      - Makefile
+      - .github/workflows/utm-disk.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  disk:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    env:
+      ARCH: aarch64
+      ZEEOS_UNPINNED: '1'
+      ZEEOS_LOCAL_TOOLS: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the oem disk (unpinned)
+        run: |
+          mkdir -p out
+          set -o pipefail
+          make utm-disk ARCH="$ARCH" 2>&1 | tee out/utm-disk-$ARCH.log
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### utm-disk $ARCH (UNPINNED: proves the build, not a release artifact)"
+            echo '```'; grep -E '^(DISK:|packages on the image|oem disk)' "out/utm-disk-$ARCH.log" || true
+            cat "out/$ARCH-oem/partition-table.txt" 2>/dev/null || true; echo '```'
+            if [[ "${{ job.status }}" != success ]]; then
+              echo '```'; tail -n 40 "out/utm-disk-$ARCH.log" 2>/dev/null; echo '```'
+            fi; } >>"$GITHUB_STEP_SUMMARY"
+      - name: Compress the disk
+        run: |
+          raw="$(find "out/$ARCH-oem/image" -name '*.raw' | head -n1)"
+          zstd -T0 -q --rm "$raw"
+      - name: Upload disk
+        uses: actions/upload-artifact@v6
+        with:
+          name: utm-disk-${{ env.ARCH }}-unpinned
+          path: out/${{ env.ARCH }}-oem/image/*.raw.zst
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+      - name: Upload log and manifests
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: utm-disk-log-${{ env.ARCH }}
+          path: |
+            out/utm-disk-${{ env.ARCH }}.log
+            out/${{ env.ARCH }}-oem/packages.list
+            out/${{ env.ARCH }}-oem/partition-table.txt
+          if-no-files-found: ignore
+          retention-days: 14
