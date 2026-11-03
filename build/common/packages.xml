@@ -38,6 +38,9 @@
   <package name="plasma-workspace"/>
   <package name="dbus-tools"/>
   <package name="mesa-dri-drivers"/>
+  <!-- kwin 6.8 dlopens libGLESv2.so.2 without an RPM Requires: without it kwin_wayland aborts at start
+       and no Plasma or plasma-setup session comes up (#277 oem disk, #311). -->
+  <package name="libglvnd-gles"/>
   <package name="sddm-breeze"/>
   <!-- P2-1: no Fedora branding. generic-logos replaces fedora-logos (and its 01-breeze-fedora SDDM theme);
        adw-gtk3 themes GTK3 and the xdg portals carry libadwaita colour-scheme/accent. -->
