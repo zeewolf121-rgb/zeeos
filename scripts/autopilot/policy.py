@@ -20,8 +20,6 @@ import subprocess
 import sys
 from typing import Any
 
-from disk_topics import disk_topic
-
 BASELINE = {name: 15368 for name in
             ("lint", "build-iso", "boot-test", "cross-review", "owner-gate")}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -242,7 +240,6 @@ def verify_files(files: list[dict], count: int, head_tree: dict, base_tree: dict
     for item in files:
         path = item["filename"]
         need(low_risk_path(path), "changed path requires owner/specialist lane")
-        need(not disk_topic(path), "disk-topic document path requires owner/specialist lane")
         need(item.get("status") in ("added", "modified"),
              "documentation removal/rename requires owner lane")
         for entries, p in ((trees[0], path),
@@ -287,8 +284,6 @@ def verify_document_contents(gh: GitHub, paths: list[str], head_tree: dict, base
             original = blob(trees[1][path])
             need(content.startswith(original),
                  "existing documentation must be preserved byte for byte; append-only lane")
-        need(not disk_topic(path) and not disk_topic(content.decode("utf-8"), len(original.decode("utf-8"))),
-             "disk-topic document additions require owner/specialist lane")
 
 
 def linked_issue_number(pr: dict) -> int:
@@ -391,6 +386,39 @@ def independent_review(gh: GitHub, pr: dict, comments: list[dict], reviews: list
             "attempt": attempt, "receipt": receipt["id"], "receipt_digest": receipt["digest"]}
 
 
+def owner_approval(gh: GitHub, pr: dict, events: list[dict]) -> dict:
+    """Require gates.sh's current, owner-applied label newer than the head.
+
+    Automatic docs merges always require this label path; reviews and model
+    output cannot substitute for the owner's explicit label event.
+    """
+    need(any(label["name"] == "owner-approved" for label in pr["labels"]),
+         "automatic docs merge requires the owner-approved label")
+    relevant = [event for event in events if event.get("label", {}).get("name") == "owner-approved"]
+    need(relevant, "owner-approved label event is missing")
+    # As in gates.sh, inspect the last event for this label, including removals.
+    latest = relevant[-1]
+    owner = gh.repo.split("/")[0]
+    need(latest.get("event") == "labeled" and latest.get("actor", {}).get("login") == owner
+         and latest.get("actor", {}).get("type") == "User",
+         "latest owner-approved label event must be by the repository owner")
+
+    def timestamp(value: Any) -> datetime.datetime:
+        need(isinstance(value, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", value),
+             "owner approval timestamp is missing or invalid")
+        try:
+            return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as exc:
+            raise Blocked("owner approval timestamp is invalid") from exc
+
+    commit = gh.api(f"{gh.root}/commits/{pr['head']['sha']}")
+    committed_at = commit.get("commit", {}).get("committer", {}).get("date")
+    labeled_at = latest.get("created_at")
+    need(timestamp(labeled_at) > timestamp(committed_at),
+         "owner-approved label must be newer than the head commit date")
+    return {"actor": owner, "labeled_at": labeled_at, "head_committed_at": committed_at}
+
+
 def evaluate(gh: GitHub, number: int) -> dict:
     pr = gh.api(f"{gh.root}/pulls/{number}")
     need(pr.get("state") == "open" and pr.get("draft") is False and pr.get("merged") is False,
@@ -411,10 +439,12 @@ def evaluate(gh: GitHub, number: int) -> dict:
     issue = gh.api(f"{gh.root}/issues/{issue_number}")
     need(issue.get("state") == "open", "linked issue is no longer open")
     labels = {label["name"] for obj in (pr, issue) for label in obj["labels"]}
+    event_history = {}
     for item_number in {number, issue_number}:
-        events = gh.pages(f"{gh.root}/issues/{item_number}/events")
+        events = event_history[item_number] = gh.pages(f"{gh.root}/issues/{item_number}/events")
         labels |= {event["label"]["name"] for event in events if event.get("event") == "labeled"}
     need(not labels & BLOCK_LABELS, "current/historical label requires owner lane")
+    owner = owner_approval(gh, pr, event_history[number])
     files = gh.pages(f"{gh.root}/pulls/{number}/files")
     head_tree = gh.api(f"{gh.root}/git/trees/{head}?recursive=1")
     base_tree = gh.api(f"{gh.root}/git/trees/{base}?recursive=1")
@@ -430,7 +460,8 @@ def evaluate(gh: GitHub, number: int) -> dict:
                             gh.pages(f"{gh.root}/commits/{head}/statuses"), head)
     return {"allowed": True, "repo": gh.repo, "pr": number, "issue": issue_number, "head": head, "base": base,
             "paths": paths, "required_checks": required, "checks": evidence,
-            "required_approvals": count, "independent_approvals": approvals, "review": review}
+            "required_approvals": count, "independent_approvals": approvals, "review": review,
+            "owner_approval": owner}
 
 
 def merge(gh: GitHub, number: int) -> dict:

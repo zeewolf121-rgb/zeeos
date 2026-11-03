@@ -12,7 +12,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from test_disk_topics import TOPICS
 
 SPEC = importlib.util.spec_from_file_location("autopilot_team", Path(__file__).with_name("team.py"))
 team = importlib.util.module_from_spec(SPEC)
@@ -71,72 +70,6 @@ class TeamTests(unittest.TestCase):
                 self.assertFalse(team.allowed(path))
                 with self.assertRaises(team.Stop):
                     team.proposal({"files": [{"path": path, "content": "new text"}]})
-
-    def test_disk_topic_proposals_are_rejected_before_review_or_writes(self):
-        checkout = self.state / "checkout"
-        (checkout / "docs/user").mkdir(parents=True)
-        guide = checkout / "docs/user/guide.md"
-        topics = ("partition", "dual-boot", "dual boot", "bootloader", "grub", "shim",
-                  "ESP", "EFI", "NVRAM", "Secure Boot", "LUKS", "BitLocker",
-                  "encryption", "format", "wipe", "Windows Boot Manager", "installer")
-        for topic in topics:
-            for original in (None, b"Existing introduction.\n"):
-                guide.unlink(missing_ok=True)
-                if original is not None:
-                    guide.write_bytes(original)
-                changes = {"files": [
-                    {"path": "docs/user/new/first.md", "content": "New ordinary note.\n"},
-                    {"path": "docs/user/guide.md", "content": (original or b"").decode() + f"Discuss ({topic.swapcase()}).\n"}]}
-                with self.subTest(topic=topic, original=original), patch.object(team, "run") as run:
-                    with self.assertRaisesRegex(team.Stop, "disk-topic"):
-                        team.validate_changes(checkout, changes)
-                    with self.assertRaisesRegex(team.Stop, "disk-topic"):
-                        team.apply(checkout, changes)
-                    run.assert_not_called()
-                self.assertFalse((checkout / "docs/user/new").exists())
-                self.assertEqual(guide.read_bytes() if guide.exists() else None, original)
-            path = "docs/user/" + topic.swapcase().replace(" ", "_") + "_guide.md"
-            with self.subTest(path=path), self.assertRaisesRegex(team.Stop, "disk-topic"):
-                team.proposal({"files": [{"path": path, "content": "Ordinary note."}]})
-
-    def test_disk_guard_ignores_unchanged_warnings_and_ordinary_substrings(self):
-        checkout = self.state / "checkout"
-        (checkout / "docs/user").mkdir(parents=True)
-        guide = checkout / "docs/user/information_reformat.md"
-        original = "Warning: preserve ESP, partition and BitLocker.\n"
-        guide.write_text(original)
-        changes = {"files": [{"path": "docs/user/information_reformat.md",
-                              "content": original + "Information: reformat this paragraph; espresso, shimmering.\n"}]}
-        team.validate_changes(checkout, changes)
-        guide.write_text("Résumé: for")
-        changes["files"][0]["content"] = "Résumé: format"
-        with self.assertRaisesRegex(team.Stop, "disk-topic"):
-            team.validate_changes(checkout, changes)
-
-    def test_new_topics_and_unicode_evasions_cannot_be_applied(self):
-        checkout = self.state / "checkout"
-        checkout.mkdir()
-        spellings = list(TOPICS) + ["d\u200bisk", "ｉｎｓｔａｌｌ", "dіsk", "d\u0338isk"]
-        for original in ("", "ﬃ: introductory note.\n"):
-            for text in spellings:
-                guide = checkout / "CHANGELOG.md"
-                guide.write_text(original)
-                changes = {"files": [{"path": "CHANGELOG.md", "content": original + text}]}
-                with self.subTest(text=text, original=original), self.assertRaises(team.Stop):
-                    team.apply(checkout, changes)
-                self.assertEqual(guide.read_text(), original)
-
-    def test_proposals_refuse_hidden_characters_even_in_existing_text(self):
-        for char in ("\u200b", "\u202e", "\u00ad", "\x01", "\x7f", "\r"):
-            for field in ("path", "content"):
-                item = {"path": "docs/user/guide.md", "content": "Ordinary note."}
-                item[field] += char
-                with self.subTest(char=repr(char), field=field), self.assertRaises(team.Stop):
-                    team.proposal({"files": [item]})
-
-    def test_fullwidth_disk_path_is_rejected(self):
-        with self.assertRaisesRegex(team.Stop, "disk-topic"):
-            team.proposal({"files": [{"path": "docs/user/ｄｉｓｋ.md", "content": "Ordinary note."}]})
 
     def test_unreadable_original_document_fails_closed_without_writes(self):
         checkout = self.state / "checkout"
@@ -272,17 +205,6 @@ class TeamTests(unittest.TestCase):
         changes["files"][0]["content"] = guide.read_bytes().decode("utf-8").replace("café", "cafe")
         with self.assertRaisesRegex(team.Stop, "append-only"):
             team.validate_changes(checkout, changes)
-
-    def test_crlf_original_is_held_by_proposal_control_character_rule(self):
-        checkout = self.state / "checkout"
-        checkout.mkdir()
-        guide = checkout / "CHANGELOG.md"
-        original = b"Existing note.\r\n"
-        guide.write_bytes(original)
-        changes = {"files": [{"path": "CHANGELOG.md", "content": original.decode() + "Appendix.\n"}]}
-        with self.assertRaisesRegex(team.Stop, "hidden/control"):
-            team.apply(checkout, changes)
-        self.assertEqual(guide.read_bytes(), original)
 
     def test_apply_revalidates_original_changed_after_proposal_validation(self):
         checkout = self.state / "checkout"

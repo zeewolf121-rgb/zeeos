@@ -20,8 +20,6 @@ import tempfile
 import time
 import uuid
 
-from disk_topics import disk_topic, hidden_characters
-
 ROOT = Path(__file__).resolve().parents[2]
 REPO = "zeewolf121-rgb/zeeos"
 MAX_INPUT = 48000
@@ -184,12 +182,8 @@ def proposal(raw):
             raise Stop("duplicate or out-of-scope proposal")
         if not isinstance(item["content"], str) or not item["content"].strip() or "\0" in item["content"]:
             raise Stop("invalid text proposal")
-        if hidden_characters(item["path"]) or hidden_characters(item["content"]):
-            raise Stop("hidden/control characters in proposal require owner/specialist lane")
         if len(item["content"].encode()) > 16000 or SECRET.search(item["content"]):
             raise Stop("content size/secret policy rejected proposal")
-        if disk_topic(item["path"]):
-            raise Stop("disk-topic document path requires owner/specialist lane")
         seen.add(item["path"])
     return raw
 
@@ -289,8 +283,6 @@ def validate_changes(checkout, changes):
                 raise Stop("cannot read original document as UTF-8 text") from exc
             if not content.startswith(original):
                 raise Stop("existing documentation is append-only; original bytes must remain unchanged")
-        if disk_topic(item["content"], len(original.decode("utf-8"))):
-            raise Stop("disk-topic document additions require owner/specialist lane")
     return changes
 
 

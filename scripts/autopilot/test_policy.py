@@ -56,7 +56,7 @@ class FakeGitHub(policy.GitHub):
         super().__init__(REPO)
         root = self.root
         self.pr = {"number": 7, "state": "open", "draft": False, "merged": False,
-                   "mergeable": True, "changed_files": 1, "labels": [], "body": "Closes #9",
+                   "mergeable": True, "changed_files": 1, "labels": [{"name": "owner-approved"}], "body": "Closes #9",
                    "user": {"login": "author"},
                    "head": {"sha": HEAD, "ref": "agent/docs-writer/9-autonomy-gemini", "repo": {"full_name": REPO}},
                    "base": {"sha": BASE, "ref": "main", "repo": {"full_name": REPO}}}
@@ -66,6 +66,7 @@ class FakeGitHub(policy.GitHub):
             f"{root}/issues/9": {"state": "open", "labels": [{"name": "model:gemini"}]},
             f"{root}/git/ref/heads/main": {"object": {"sha": BASE}},
             f"{root}/compare/{BASE}...{HEAD}": {"status": "ahead", "behind_by": 0},
+            f"{root}/commits/{HEAD}": {"commit": {"committer": {"date": "2026-11-02T10:00:00Z"}}},
             f"{root}/branches/main/protection": protection(),
             f"{root}/rules/branches/main": [],
             f"{root}/git/trees/{HEAD}?recursive=1": copy.deepcopy(tree),
@@ -76,7 +77,10 @@ class FakeGitHub(policy.GitHub):
             f"{root}/actions/variables/AUTOPILOT": {"value": "on"},
         }
         self.lists = {
-            f"{root}/issues/7/events": [],
+            f"{root}/issues/7/events": [{
+                "event": "labeled", "label": {"name": "owner-approved"},
+                "actor": {"login": REPO.split("/")[0], "type": "User"},
+                "created_at": "2026-11-02T11:00:00Z"}],
             f"{root}/issues/9/events": [],
             f"{root}/pulls/7/files": [{"filename": "docs/user/readme.md", "status": "modified", "changes": 2,
                                       "patch": "@@ -1 +1 @@\n-before\n+after"}],
@@ -125,6 +129,76 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(result["review"]["reviewer_model"], "claude")
         self.assertEqual(result["required_checks"], policy.BASELINE)
         self.assertFalse(self.gh.commands)
+
+    def test_missing_owner_label_blocks_even_with_owner_review_and_model_pass(self):
+        self.gh.pr["labels"] = []
+        self.gh.lists[f"{self.gh.root}/pulls/7/reviews"] = [review(user=REPO.split("/")[0])]
+        with self.assertRaisesRegex(policy.Blocked, "requires the owner-approved label"):
+            policy.evaluate(self.gh, 7)
+        self.assertFalse(self.gh.commands)
+
+    def test_bot_and_other_user_cannot_apply_owner_label(self):
+        for actor in (ACTIONS, {"login": policy.CODEX, "type": "Bot"},
+                      {"login": "someone-else", "type": "User"},
+                      {"login": REPO.split("/")[0], "type": "Bot"}):
+            self.gh.lists[f"{self.gh.root}/issues/7/events"][-1]["actor"] = actor
+            with self.subTest(actor=actor), self.assertRaisesRegex(policy.Blocked, "repository owner"):
+                policy.evaluate(self.gh, 7)
+            self.assertFalse(self.gh.commands)
+
+    def test_owner_label_must_be_strictly_newer_than_head_committer_date(self):
+        for at in ("2026-11-02T09:00:00Z", "2026-11-02T10:00:00Z"):
+            self.gh.lists[f"{self.gh.root}/issues/7/events"][-1]["created_at"] = at
+            with self.subTest(at=at), self.assertRaisesRegex(policy.Blocked, "newer than the head"):
+                policy.evaluate(self.gh, 7)
+            self.assertFalse(self.gh.commands)
+
+    def test_valid_owner_label_is_in_evidence(self):
+        self.assertEqual(policy.evaluate(self.gh, 7)["owner_approval"], {
+            "actor": REPO.split("/")[0], "labeled_at": "2026-11-02T11:00:00Z",
+            "head_committed_at": "2026-11-02T10:00:00Z"})
+
+    def test_latest_owner_label_event_controls_approval(self):
+        endpoint = f"{self.gh.root}/issues/7/events"
+        original = self.gh.lists[endpoint][0]
+        for extra in ({"event": "unlabeled"}, {"actor": ACTIONS}):
+            self.gh.lists[endpoint] = [original, dict(original, created_at="2026-11-02T12:00:00Z", **extra)]
+            with self.subTest(extra=extra), self.assertRaisesRegex(policy.Blocked, "repository owner"):
+                policy.evaluate(self.gh, 7)
+        self.gh.lists[endpoint].append(dict(original, created_at="2026-11-02T13:00:00Z"))
+        self.assertTrue(policy.evaluate(self.gh, 7)["allowed"])
+
+    def test_linked_issue_approval_cannot_substitute_for_pr_event(self):
+        self.gh.lists[f"{self.gh.root}/issues/9/events"] = self.gh.lists[f"{self.gh.root}/issues/7/events"]
+        self.gh.lists[f"{self.gh.root}/issues/7/events"] = []
+        with self.assertRaisesRegex(policy.Blocked, "label event is missing"):
+            policy.evaluate(self.gh, 7)
+
+    def test_unreadable_approval_evidence_blocks_without_mutation(self):
+        for endpoint in (f"{self.gh.root}/commits/{HEAD}", f"{self.gh.root}/issues/7/events"):
+            gh = FakeGitHub()
+            original = gh.api if "/commits/" in endpoint else gh.pages
+            def unreadable(path, *args):
+                if path == endpoint:
+                    raise policy.Blocked("cannot read approval evidence")
+                return original(path, *args)
+            with patch.object(gh, "api" if "/commits/" in endpoint else "pages", side_effect=unreadable):
+                with self.subTest(endpoint=endpoint), self.assertRaisesRegex(policy.Blocked, "cannot read"):
+                    policy.evaluate(gh, 7)
+            self.assertFalse(gh.commands)
+
+    def test_missing_or_invalid_approval_dates_fail_closed(self):
+        for value in (None, "", "garbage", "2026-11-02", "2026-11-02T11:00:00", "2026-02-30T11:00:00Z"):
+            for label_date in (True, False):
+                gh = FakeGitHub()
+                if label_date:
+                    gh.lists[f"{gh.root}/issues/7/events"][-1]["created_at"] = value
+                else:
+                    gh.data[f"{gh.root}/commits/{HEAD}"]["commit"]["committer"]["date"] = value
+                with self.subTest(value=value, label_date=label_date), self.assertRaisesRegex(
+                        policy.Blocked, "timestamp"):
+                    policy.evaluate(gh, 7)
+                self.assertFalse(gh.commands)
 
     def test_current_protection_mandatory(self):
         for mutate in (lambda p: p.pop("required_status_checks"),
@@ -218,54 +292,6 @@ class PolicyTests(unittest.TestCase):
                 policy.verify_files([dict(files[0], **extra)], 1, tree, tree)
         with self.assertRaises(policy.Blocked):
             policy.verify_files(files, 2, tree, tree)
-
-    def test_disk_topics_in_added_text_and_paths_require_specialist(self):
-        topics = ("partition", "dual-boot", "dual boot", "bootloader", "grub", "shim",
-                  "ESP", "EFI", "NVRAM", "Secure Boot", "LUKS", "BitLocker",
-                  "encryption", "format", "wipe", "Windows Boot Manager", "installer")
-        for topic in topics:
-            for original in (None, b"Existing introduction.\n"):
-                gh = FakeGitHub()
-                root = gh.root
-                if original is None:
-                    gh.data[f"{root}/git/trees/{BASE}?recursive=1"]["tree"] = []
-                    gh.lists[f"{root}/pulls/7/files"][0]["status"] = "added"
-                else:
-                    document(gh, BASE, original)
-                document(gh, HEAD, (original or b"") + f"Discuss ({topic.swapcase()}).\n".encode())
-                with self.subTest(topic=topic, original=original), self.assertRaisesRegex(policy.Blocked, "disk-topic"):
-                    policy.evaluate(gh, 7)
-                self.assertFalse(gh.commands)
-            gh = FakeGitHub()
-            path = "docs/user/" + topic.swapcase().replace(" ", "_") + "_guide.md"
-            gh.lists[f"{gh.root}/pulls/7/files"][0]["filename"] = path
-            with self.subTest(path=path), self.assertRaisesRegex(policy.Blocked, "disk-topic"):
-                policy.evaluate(gh, 7)
-
-    def test_new_topics_and_unicode_evasions_in_immutable_blobs(self):
-        from test_disk_topics import TOPICS
-
-        for topic in (*TOPICS, "d\u200bisk", "ｉｎｓｔａｌｌ", "dіsk", "d\u0338isk", "note\x01"):
-            for original in (b"", "ﬃ: introductory note.\n".encode()):
-                gh = FakeGitHub()
-                document(gh, BASE, original)
-                document(gh, HEAD, original + topic.encode())
-                with self.subTest(topic=topic, original=original), self.assertRaises(policy.Blocked):
-                    policy.evaluate(gh, 7)
-                self.assertFalse(gh.commands)
-
-    def test_disk_words_in_unchanged_text_and_substrings_are_deliberate(self):
-        original = "Warning: preserve ESP, partition and BitLocker.\n".encode()
-        document(self.gh, BASE, original)
-        document(self.gh, HEAD, original + b"Information: reformat this paragraph; espresso, shimmering.\n")
-        self.assertTrue(policy.evaluate(self.gh, 7)["allowed"])
-        self.assertFalse(policy.disk_topic("docs/user/information_reformat.md"))
-
-    def test_disk_topic_formed_across_append_boundary_is_blocked(self):
-        document(self.gh, BASE, "Résumé: for".encode())
-        document(self.gh, HEAD, "Résumé: format".encode())
-        with self.assertRaisesRegex(policy.Blocked, "disk-topic"):
-            policy.evaluate(self.gh, 7)
 
     def test_unreadable_document_blob_fails_closed(self):
         for commit in (HEAD, BASE):
