@@ -52,3 +52,35 @@ hardening_worst() {
   done
   echo none
 }
+
+# --- OEM disk (vm/oem-boot-test.sh, #277) -----------------------------------------------------------------------
+# The raw oem disk has no user until the plasma-setup wizard runs (no default passwords, docs/phases/phase-5.md), so
+# there is no ZEEOS_DESKTOP_READY. The markers below are what the stock Fedora kernel and systemd print on the
+# serial console (no ZeeOS unit is needed). Matched on a copy of the log with ANSI colour and CR removed.
+# Name|extended regex. All must appear. Order is not checked.
+OEM_MARKERS='kernel|Linux version
+rootfs|^Welcome to .*!
+multi-user|Reached target .*multi-user\.target
+plasma-setup|Finished .*plasma-setup\.service
+sddm|Started .*sddm\.service
+graphical|Reached target .*graphical\.target
+wizard-session|Started .*Session [0-9]+ of User plasma-setup'
+
+# oem_clean IN OUT: strip ANSI escapes and CR (systemd colours its console output).
+oem_clean() { LC_ALL=C sed -e $'s/\033\\[[0-9;?]*[a-zA-Z]//g' -e 's/\r//g' "$1" > "$2" 2>/dev/null || : > "$2"; }
+
+# oem_missing CLEANLOG -> names of the OEM markers not (yet) seen, one per line
+oem_missing() {
+  local line
+  while IFS= read -r line; do
+    grep -aqE -- "${line#*|}" "$1" 2>/dev/null || echo "${line%%|*}"
+  done <<<"$OEM_MARKERS"
+}
+
+# oem_failed CLEANLOG -> first systemd "[FAILED]" line, kernel panic or frozen PID 1, if any
+oem_failed() { grep -aE -m1 -e '\[FAILED\]' -e 'Kernel panic' -e 'Freezing execution' "$1" 2>/dev/null | cut -c1-200 || true; }
+
+# oem_wizard_ended CLEANLOG -> the first line showing the first-boot session did not survive, if any: a core dump
+# (audit type=1701) or a stopped user manager (audit type=1131 unit=user@<uid>). The kernel audit lines are
+# rate-limited, so absence proves nothing; presence is a failure. Checked after the SETTLE delay.
+oem_wizard_ended() { grep -aE -m1 -e 'audit: type=1701 ' -e 'audit: type=1131 .*unit=user@[0-9]+' "$1" 2>/dev/null | cut -c1-220 || true; }

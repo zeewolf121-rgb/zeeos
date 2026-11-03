@@ -70,3 +70,33 @@ entry that existed before keep title and device path and relative BootOrder orde
 first; refuse-* must not gain `ZeeOS` or an `\EFI\fedora` entry. Firmware-added entries (PXE, shell, DVD) are tolerated
 (a disk-only boot of real OVMF kept the seeded entry and added its own: DVD, PXE, setup; with the seeded stub failing to load, BDS fell through to the next entry). No check is skipped any more.
 Offline self-tests: `tests/install-selftest.sh` (run by `tests/selftest.sh`).
+
+## OEM disk boot test (#277, P5-5)
+
+`vm/oem-boot-test.sh` boots the raw `oem` disk of the UTM bundle (aarch64 only) under QEMU + AAVMF, Secure Boot on or off.
+There is no ISO: the disk is the boot drive, attached through a qcow2 overlay (the image is never modified).
+
+```bash
+DISK=out/aarch64-oem/image/ZeeOS-aarch64.aarch64-0.1.0.raw SECUREBOOT=on vm/oem-boot-test.sh
+```
+
+Env: `DISK` (required), `SECUREBOOT`, `OUT`, `TIMEOUT` (300 s; 1800 s under TCG), `SETTLE` (screenshot delay after the
+last marker; 30 s, 120 s under TCG), `MIN_COLORS`, `DRY_RUN`, and `QEMU_BIN`/`QEMU_IMG`/`FW_CODE`/`FW_VARS` as in `boot-test.sh`.
+Firmware and acceleration (KVM, HVF, else TCG; recorded in `OUT/accel`) are chosen as in `boot-test.sh`.
+
+Pass marker. The oem disk has no user until the plasma-setup first-boot wizard runs (no default passwords), so
+`ZEEOS_DESKTOP_READY` cannot apply, and no ZeeOS unit is needed. The cell passes when the serial console shows all of
+`OEM_MARKERS` (vm/markers.sh), which the stock Fedora kernel and systemd print: `Linux version`, the switch-root
+`Welcome to ...!`, `Reached target multi-user.target`, `Finished plasma-setup.service` (the first-boot oneshot that
+creates the temporary `plasma-setup` user), `Started sddm.service`, `Reached target graphical.target`, and
+`Started session-N.scope - Session N of User plasma-setup` (SDDM logged the wizard user in). After `SETTLE` seconds
+it also requires that the session survived: any kernel audit core dump (`type=1701`) or stopped user manager
+(`type=1131 unit=user@<uid>`) fails the cell (`wizard_session_ended`). It fails on any systemd
+`[FAILED]` line, a kernel panic, a frozen PID 1, a timeout, or a kernel `secureboot: Secure boot enabled|disabled` line
+that differs from `SECUREBOOT`. Order is not checked.
+
+What this does not prove: that the wizard is on screen. The audit lines are rate-limited, so a missing crash line is no proof. The
+screenshot (`OUT/screenshot.ppm`) is taken `SETTLE` seconds after the last marker and its distinct-colour count is
+recorded in junit (`screenshot_colors`); it is report-only until `MIN_COLORS=<n>` is set (a text console has 2, a painted
+Plasma wizard has hundreds). Turn the gate on once the wizard paints. A real desktop-ready marker for the wizard needs a
+guest unit (desktop-shell) and is a follow-up on #277.
