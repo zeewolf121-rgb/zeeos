@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import quote
 
 BASELINE = {name: 15368 for name in
             ("lint", "build-iso", "boot-test", "cross-review", "owner-gate")}
@@ -86,6 +87,22 @@ class GitHub:
             if len(batch) < 100:
                 return collected
         raise Blocked("GitHub pagination exceeds evidence budget")
+
+    def activity(self, ref: str) -> list[dict]:
+        # This endpoint uses Link-header cursors, not numbered pages. Let gh
+        # follow those links, subject to command()'s timeout/response budget.
+        endpoint = f"{self.root}/activity?ref={quote(ref, safe='')}&per_page=100"
+        try:
+            pages = json.loads(self.command(["api", "--paginate", "--slurp", endpoint]))
+        except (ValueError, TypeError) as exc:
+            raise Blocked("GitHub returned invalid activity JSON") from exc
+        need(isinstance(pages, list) and 0 < len(pages) <= MAX_PAGES,
+             "activity pagination is missing or exceeds evidence budget")
+        need(all(isinstance(page, list) and len(page) <= 100 for page in pages),
+             "invalid paginated activity response")
+        entries = [entry for page in pages for entry in page]
+        need(all(isinstance(entry, dict) for entry in entries), "invalid activity entry")
+        return entries
 
     def threads(self, number: int) -> list[dict]:
         cursor = None
@@ -387,7 +404,7 @@ def independent_review(gh: GitHub, pr: dict, comments: list[dict], reviews: list
 
 
 def owner_approval(gh: GitHub, pr: dict, events: list[dict]) -> dict:
-    """Require gates.sh's current, owner-applied label newer than the head.
+    """Require a current, owner-applied label newer than GitHub's head push.
 
     Automatic docs merges always require this label path; reviews and model
     output cannot substitute for the owner's explicit label event.
@@ -404,19 +421,23 @@ def owner_approval(gh: GitHub, pr: dict, events: list[dict]) -> dict:
          "latest owner-approved label event must be by the repository owner")
 
     def timestamp(value: Any) -> datetime.datetime:
-        need(isinstance(value, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", value),
+        need(isinstance(value, str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", value),
              "owner approval timestamp is missing or invalid")
         try:
             return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
         except ValueError as exc:
             raise Blocked("owner approval timestamp is invalid") from exc
 
-    commit = gh.api(f"{gh.root}/commits/{pr['head']['sha']}")
-    committed_at = commit.get("commit", {}).get("committer", {}).get("date")
+    # Commit dates are author-controlled. Only GitHub's recorded branch
+    # activity can establish when this exact head was pushed.
+    matches = [entry for entry in gh.activity(pr["head"]["ref"])
+               if entry.get("after") == pr["head"]["sha"]]
+    need(len(matches) == 1, "head push activity is missing or ambiguous")
+    pushed_at = matches[0].get("timestamp")
     labeled_at = latest.get("created_at")
-    need(timestamp(labeled_at) > timestamp(committed_at),
-         "owner-approved label must be newer than the head commit date")
-    return {"actor": owner, "labeled_at": labeled_at, "head_committed_at": committed_at}
+    need(timestamp(labeled_at) > timestamp(pushed_at),
+         "owner-approved label must be newer than the head push")
+    return {"actor": owner, "labeled_at": labeled_at, "head_pushed_at": pushed_at}
 
 
 def evaluate(gh: GitHub, number: int) -> dict:

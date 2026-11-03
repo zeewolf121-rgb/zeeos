@@ -96,6 +96,7 @@ class FakeGitHub(policy.GitHub):
             f"{root}/commits/{HEAD}/statuses": [],
         }
         self.review_threads = []
+        self.activity_entries = [{"after": HEAD, "timestamp": "2026-11-02T10:00:00Z"}]
         self.commands = []
         document(self, BASE, b"Warning: preserve data.\n")
         document(self, HEAD, b"Warning: preserve data.\n\nAdditional note.\n")
@@ -110,6 +111,11 @@ class FakeGitHub(policy.GitHub):
 
     def threads(self, number):
         return copy.deepcopy(self.review_threads)
+
+    def activity(self, ref):
+        if ref != self.pr["head"]["ref"]:
+            raise policy.Blocked("unexpected activity ref")
+        return copy.deepcopy(self.activity_entries)
 
     def command(self, args):
         self.commands.append(args)
@@ -146,17 +152,44 @@ class PolicyTests(unittest.TestCase):
                 policy.evaluate(self.gh, 7)
             self.assertFalse(self.gh.commands)
 
-    def test_owner_label_must_be_strictly_newer_than_head_committer_date(self):
+    def test_owner_label_must_be_strictly_newer_than_head_push(self):
         for at in ("2026-11-02T09:00:00Z", "2026-11-02T10:00:00Z"):
             self.gh.lists[f"{self.gh.root}/issues/7/events"][-1]["created_at"] = at
             with self.subTest(at=at), self.assertRaisesRegex(policy.Blocked, "newer than the head"):
                 policy.evaluate(self.gh, 7)
             self.assertFalse(self.gh.commands)
 
+    def test_backdated_commit_cannot_inherit_label_older_than_push(self):
+        self.gh.data[f"{self.gh.root}/commits/{HEAD}"]["commit"]["committer"]["date"] = "2000-01-01T00:00:00Z"
+        self.gh.activity_entries[0]["timestamp"] = "2026-11-02T12:00:00Z"
+        with self.assertRaisesRegex(policy.Blocked, "newer than the head push"):
+            policy.evaluate(self.gh, 7)
+        self.assertFalse(self.gh.commands)
+
+    def test_missing_or_ambiguous_head_activity_fails_closed(self):
+        entry = self.gh.activity_entries[0]
+        for entries in ([], [{"after": HEAD[:12], "timestamp": entry["timestamp"]}],
+                        [{"after": BASE, "timestamp": entry["timestamp"]}],
+                        [entry, entry], [entry, dict(entry, timestamp="2026-11-02T12:00:00Z")]):
+            self.gh.activity_entries = entries
+            with self.subTest(entries=entries), self.assertRaisesRegex(policy.Blocked, "missing or ambiguous"):
+                policy.evaluate(self.gh, 7)
+            self.assertFalse(self.gh.commands)
+
+    def test_missing_activity_timestamp_fails_closed(self):
+        del self.gh.activity_entries[0]["timestamp"]
+        with self.assertRaisesRegex(policy.Blocked, "timestamp"):
+            policy.evaluate(self.gh, 7)
+        self.assertFalse(self.gh.commands)
+
     def test_valid_owner_label_is_in_evidence(self):
+        self.gh.activity_entries.insert(0, {"after": BASE, "timestamp": "2026-11-02T12:00:00Z"})
+        # Approval depends only on the matching push, even if the commit date
+        # is unavailable.
+        del self.gh.data[f"{self.gh.root}/commits/{HEAD}"]
         self.assertEqual(policy.evaluate(self.gh, 7)["owner_approval"], {
             "actor": REPO.split("/")[0], "labeled_at": "2026-11-02T11:00:00Z",
-            "head_committed_at": "2026-11-02T10:00:00Z"})
+            "head_pushed_at": "2026-11-02T10:00:00Z"})
 
     def test_latest_owner_label_event_controls_approval(self):
         endpoint = f"{self.gh.root}/issues/7/events"
@@ -175,26 +208,29 @@ class PolicyTests(unittest.TestCase):
             policy.evaluate(self.gh, 7)
 
     def test_unreadable_approval_evidence_blocks_without_mutation(self):
-        for endpoint in (f"{self.gh.root}/commits/{HEAD}", f"{self.gh.root}/issues/7/events"):
+        for method, endpoint in (("activity", self.gh.pr["head"]["ref"]),
+                                 ("pages", f"{self.gh.root}/issues/7/events")):
             gh = FakeGitHub()
-            original = gh.api if "/commits/" in endpoint else gh.pages
+            original = getattr(gh, method)
             def unreadable(path, *args):
                 if path == endpoint:
                     raise policy.Blocked("cannot read approval evidence")
                 return original(path, *args)
-            with patch.object(gh, "api" if "/commits/" in endpoint else "pages", side_effect=unreadable):
+            with patch.object(gh, method, side_effect=unreadable):
                 with self.subTest(endpoint=endpoint), self.assertRaisesRegex(policy.Blocked, "cannot read"):
                     policy.evaluate(gh, 7)
             self.assertFalse(gh.commands)
 
     def test_missing_or_invalid_approval_dates_fail_closed(self):
-        for value in (None, "", "garbage", "2026-11-02", "2026-11-02T11:00:00", "2026-02-30T11:00:00Z"):
+        for value in (None, "", 123, "garbage", "2026-11-02", "2026-11-02T11:00:00",
+                      "2026-02-30T11:00:00Z", "2026-11-02T25:00:00Z", "2026-11-02 11:00:00Z",
+                      "2026-11-02T11:00:00Z\n", "２０２６-11-02T11:00:00Z"):
             for label_date in (True, False):
                 gh = FakeGitHub()
                 if label_date:
                     gh.lists[f"{gh.root}/issues/7/events"][-1]["created_at"] = value
                 else:
-                    gh.data[f"{gh.root}/commits/{HEAD}"]["commit"]["committer"]["date"] = value
+                    gh.activity_entries[0]["timestamp"] = value
                 with self.subTest(value=value, label_date=label_date), self.assertRaisesRegex(
                         policy.Blocked, "timestamp"):
                     policy.evaluate(gh, 7)
@@ -562,6 +598,23 @@ class PolicyTests(unittest.TestCase):
         with patch.object(gh, "api", return_value=[{}] * 100):
             with self.assertRaisesRegex(policy.Blocked, "pagination"):
                 gh.pages("endpoint")
+
+    def test_activity_follows_cursor_pagination_and_encodes_branch(self):
+        gh = policy.GitHub(REPO)
+        entry = {"after": HEAD, "timestamp": "2026-11-02T10:00:00Z"}
+        with patch.object(gh, "command", return_value=json.dumps([[{"after": BASE}] * 100, [entry]])) as command:
+            self.assertEqual(gh.activity("agent/docs/9-branch&suffix")[-1], entry)
+            command.assert_called_once_with([
+                "api", "--paginate", "--slurp",
+                f"{gh.root}/activity?ref=agent%2Fdocs%2F9-branch%26suffix&per_page=100"])
+
+    def test_invalid_or_over_budget_activity_responses_fail_closed(self):
+        gh = policy.GitHub(REPO)
+        for response in ("invalid JSON", "null", "{}", "[]", "[{}]", "[[null]]",
+                         json.dumps([[{}] * 101]), json.dumps([[]] * (policy.MAX_PAGES + 1))):
+            with self.subTest(response=response), patch.object(gh, "command", return_value=response):
+                with self.assertRaises(policy.Blocked):
+                    gh.activity("branch")
 
     def test_graphql_thread_pagination_reads_second_page(self):
         gh = policy.GitHub(REPO)
