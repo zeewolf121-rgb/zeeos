@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name [origin: zeeos-rebuild | zeeos-rebuild-src]
 # release=44
 # arch=aarch64
-# resolved=2026-11-03T16:22:17Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:6d2f824a2b4624e9308065b41c5be85877c70206f82b81d9a700bcf36f5347d2
+# resolved=2026-11-03T21:29:32Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-aarch64@sha256:1dc01a2f1d05222938e70340782d5fdf5fc41985e3110dc2f6b960d619e0049f
 # oem-only=dracut-kiwi-oem-repart 0:11.1.1-2.fc44.noarch
 # oem-only=plasma-setup 0:6.8.2-1.fc44.aarch64
 LibRaw 0:0.22.2-1.fc44.aarch64 e92b9744b717843d7028ea5e9dfc9fbf1641c7dbf9d43e63345087ad41a08793 LibRaw
@@ -427,6 +427,7 @@ libgcc 0:16.2.1-2.fc44.aarch64 6fc6249253b06d3a84a6f2bda1c04d52c991c9c779febf7af
 libgcrypt 0:1.12.2-1.fc44.aarch64 dccf560fc58cdfa246d8f4b4e05af3eb3eb1e0685f12244e8930114d716e7a0a libgcrypt
 libglvnd 1:1.7.0-9.fc44.aarch64 afb791387e8c7dbdc80cee61d8a568cfec89842c21a033f5f7ab5f04fd515667 libglvnd
 libglvnd-egl 1:1.7.0-9.fc44.aarch64 2e08ecfc2219abb015a2c96ca37425464fd654e6fe8de078da4196b8fdca5d68 libglvnd
+libglvnd-gles 1:1.7.0-9.fc44.aarch64 c3cfa5c97a8f5c2ea52af49eb0c63009f81841ff5429e4752b582ad45b18e584 libglvnd
 libglvnd-glx 1:1.7.0-9.fc44.aarch64 f044373e7ce19fded8da3ba24c286c8ac040baba41552749d3514800d7b2ab0a libglvnd
 libglvnd-opengl 1:1.7.0-9.fc44.aarch64 5383e47be9c1b50fe3693cdcaf1c449a15aef579bb9bc1435dea94e0bc5cba3a libglvnd
 libgomp 0:16.2.1-2.fc44.aarch64 704950e8d428c053624d75ec66facfd512b9d0e187f27100c03b262da2c82928 gcc
