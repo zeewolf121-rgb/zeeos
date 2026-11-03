@@ -4,7 +4,7 @@
 # ubuntu-24.04-arm). Not a required check yet.
 # PINNED (ADR-0008): the digest-pinned tools image and the closure repo from packages.lock (the
 # union of the live and oem sets; oem-only packages are recorded in the lock header). The boot
-# test is a follow-up on #277.
+# job below boots it (vm/oem-boot-test.sh).
 name: utm-disk
 on:
   pull_request:
@@ -60,3 +60,85 @@ jobs:
             out/${{ env.ARCH }}-oem/partition-table.txt
           if-no-files-found: ignore
           retention-days: 14
+  # Boots the disk just built (vm/oem-boot-test.sh, #312): first-boot markers up to the plasma-setup session, the
+  # session still alive after SETTLE, the kernel's Secure Boot state, and a painted wizard (MIN_COLORS; a text console
+  # has 2 colours). On the owner's Mac (HVF) like boot-test.yml; fork PRs fall back to GitHub's arm64 runner (TCG).
+  boot:
+    needs: disk
+    strategy:
+      fail-fast: false
+      matrix:
+        sb: ['on', 'off']
+    name: boot (aarch64 oem, sb-${{ matrix.sb }})
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && fromJSON('["self-hosted", "macOS", "ARM64", "zeeos-aarch64"]') || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 45
+    env:
+      SB: ${{ matrix.sb }}
+      OUT: out/oem-boot/sb${{ matrix.sb }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: QEMU and UEFI firmware (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends qemu-system-arm qemu-efi-aarch64 qemu-utils zstd python3
+      # Same pinned AAVMF build as boot-test.yml: Homebrew's QEMU has no aarch64 Secure Boot firmware.
+      - name: AArch64 UEFI firmware (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo /opt/homebrew/bin >>"$GITHUB_PATH"; export PATH="/opt/homebrew/bin:$PATH"
+          fw="$RUNNER_TEMP/aavmf"; mkdir -p "$fw"
+          podman run --rm -v "$fw:/o" docker.io/library/ubuntu:24.04 sh -c 'apt-get update -qq &&
+            apt-get install -yqq --no-install-recommends qemu-efi-aarch64 >/dev/null &&
+            cp /usr/share/AAVMF/AAVMF_CODE.ms.fd /usr/share/AAVMF/AAVMF_VARS.ms.fd \
+               /usr/share/AAVMF/AAVMF_CODE.no-secboot.fd /usr/share/AAVMF/AAVMF_VARS.fd /o/'
+          (cd "$fw" && shasum -a 256 -c) <<'SUMS' || { echo "::error::AAVMF changed upstream; check it and update the pinned hashes"; exit 1; }
+          d37119b2c1173ecdc88d09c00848842fdf575899403b7549a5b51f06766c20d6  AAVMF_CODE.ms.fd
+          bdd5b6f03eecf9b18e395925012764c9100cdcf164a0e5aa4373017d3d75534b  AAVMF_VARS.ms.fd
+          545e2eda871a00dba51c0df48a34829fe3b0de6ec10ea760c75f1fc1c6a29dc5  AAVMF_CODE.no-secboot.fd
+          b3b855c5a80310168051164986855692d1bdb06e67619856177965cd87c6774f  AAVMF_VARS.fd
+          SUMS
+          if [[ "$SB" == on ]]; then code=AAVMF_CODE.ms.fd vars=AAVMF_VARS.ms.fd; else code=AAVMF_CODE.no-secboot.fd vars=AAVMF_VARS.fd; fi
+          { echo "FW_CODE=$fw/$code"; echo "FW_VARS=$fw/$vars"; } >>"$GITHUB_ENV"
+      # Parallel range download (see scripts/fetch-artifact.sh); download-artifact is the fallback.
+      - name: Download the disk (parallel)
+        id: fetch
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/fetch-artifact.sh "${{ github.run_id }}" utm-disk-aarch64 out/disk
+      - name: Download the disk
+        if: steps.fetch.outcome != 'success'
+        uses: actions/download-artifact@v6
+        with:
+          name: utm-disk-aarch64
+          path: out/disk
+      - name: Boot
+        run: |
+          zst="$(find out/disk -name '*.raw.zst' | head -n1)"
+          [[ -n "$zst" ]] || { echo "::error::no disk in the utm-disk-aarch64 artifact"; exit 1; }
+          zstd -d -q --sparse --rm "$zst"
+          DISK="${zst%.zst}" SECUREBOOT="$SB" OUT="$OUT" MIN_COLORS=50 vm/oem-boot-test.sh
+      - name: Summary
+        if: always()
+        run: |
+          prop() { sed -n "s/.*<property name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$OUT/junit.xml" 2>/dev/null | head -n1; }
+          { echo "### oem boot sb-$SB: accel $(cat "$OUT/accel" 2>/dev/null || echo n/a)"
+            echo "boot $(prop boot_seconds) s, Secure Boot $(prop secureboot_kernel), missing markers $(prop missing_markers), screenshot colours $(prop screenshot_colors)"
+            grep -o '<failure message="[^"]*"' "$OUT/junit.xml" 2>/dev/null || true
+            echo '```'; tail -n 40 "$OUT/serial.clean.log" 2>/dev/null || echo "(no serial log)"; echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: oem-boot-sb${{ matrix.sb }}
+          path: |
+            ${{ env.OUT }}/serial.log
+            ${{ env.OUT }}/junit.xml
+            ${{ env.OUT }}/screenshot.ppm
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Free the disk space
+        if: always()
+        run: rm -rf out/disk "$OUT/oem-overlay.qcow2"
