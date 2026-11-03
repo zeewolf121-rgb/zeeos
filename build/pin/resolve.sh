@@ -9,6 +9,7 @@ arch="${1:?usage: resolve.sh <arch> [out-dir]}"
 # shellcheck source=build/pin/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 out="${2:-$PIN_ROOT/out/$arch}"
+mkdir -p "$out"   # resolver metadata is written before build-iso.sh stages (and would create) it
 lock="$(pin_lock "$arch")"
 
 # Hold mode (ZEEOS_PIN_HOLD=1, `make pin-packages HOLD=1`, #310): build/pin/hold.sh staged the current lock's
