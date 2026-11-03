@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir -p out
           set -o pipefail
-          make utm-disk ARCH="$ARCH" 2>&1 | tee out/utm-disk-$ARCH.log
+          make utm-disk ARCH="$ARCH" 2>&1 | tee "out/utm-disk-$ARCH.log"
       - name: Summary
         if: always()
         run: |
