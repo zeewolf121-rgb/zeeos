@@ -83,6 +83,10 @@ jobs:
           else
             echo "no /dev/kvm on this runner; QEMU falls back to TCG"
           fi
+      # Same shared Podman machine as boot-test.yml (#288): start it if stopped before the first podman call.
+      - name: Ensure the Podman machine is running (macOS)
+        if: runner.os == 'macOS'
+        run: scripts/ensure-podman-machine.sh
       # Same pinned AAVMF build as boot-test.yml (Homebrew's QEMU has no aarch64 Secure Boot firmware).
       - name: AArch64 UEFI firmware (macOS)
         if: runner.os == 'macOS'
