@@ -21,20 +21,33 @@ if [[ -f "$zl" ]]; then
 fi
 
 # 1. Let kiwi itself resolve (prepare only) so the lock matches what a real build installs.
-ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 ZEEOS_PROFILE=live "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
-pin_identities <"$out/resolved.list" >"$out/resolved.ids"
-[[ -s "$out/resolved.ids" ]] || { echo "kiwi resolved no packages" >&2; exit 1; }
+resolve_profile() {   # resolve_profile <live|oem> <ids-out>
+  ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 ZEEOS_PROFILE="$1" "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
+  pin_identities <"$out/resolved.list" >"$2"
+  [[ -s "$2" ]] || { echo "kiwi resolved no packages for the $1 profile" >&2; exit 1; }
+}
 # An arch whose description has an oem profile (aarch64, #277) is resolved twice and locked as the
 # union. The identities only the oem disk installs are recorded as "# oem-only=" header lines so the
 # live ISO check can tolerate exactly those; the oem check needs every disk package locked.
+# The two resolves are minutes apart: if the live mirrors moved in between, a package resolves to two
+# versions and only one is downloadable. Resolve again (fail closed after 3 tries) instead of locking skew.
 : >"$out/oem-only.ids"
 if grep -q '<profile name="oem"' "$PIN_ROOT/build/arch/$arch/config.xml"; then
-  cp "$out/resolved.ids" "$out/resolved.live.ids"
-  ZEEOS_UNPINNED=1 ZEEOS_RESOLVE_ONLY=1 ZEEOS_PROFILE=oem "$PIN_ROOT/build/build-iso.sh" "$arch" "$out"
-  pin_identities <"$out/resolved.list" >"$out/resolved.oem.ids"
-  [[ -s "$out/resolved.oem.ids" ]] || { echo "kiwi resolved no packages for the oem profile" >&2; exit 1; }
+  for try in 1 2 3; do
+    resolve_profile live "$out/resolved.live.ids"
+    resolve_profile oem "$out/resolved.oem.ids"
+    # Same name.arch with a different version in the two sets = skew.
+    LC_ALL=C sort -u "$out/resolved.live.ids" "$out/resolved.oem.ids" \
+      | awk '{ a = $2; sub(/^.*\./, "", a); k = $1 "." a; c[k]++; l[k] = l[k] " " $2 }
+             END { for (k in c) if (c[k] > 1) print k ":" l[k] }' >"$out/skew.txt"
+    [[ ! -s "$out/skew.txt" ]] && break
+    echo "live and oem resolves disagree on versions (try $try of 3):" >&2; cat "$out/skew.txt" >&2
+    [[ "$try" != 3 ]] || { echo "repo metadata kept moving; rerun make pin-packages" >&2; exit 1; }
+  done
   LC_ALL=C comm -13 "$out/resolved.live.ids" "$out/resolved.oem.ids" >"$out/oem-only.ids"
   LC_ALL=C sort -u "$out/resolved.live.ids" "$out/resolved.oem.ids" >"$out/resolved.ids"
+else
+  resolve_profile live "$out/resolved.ids"
 fi
 # Fail closed: a package ZeeOS rebuilds (a locked build/rpms/<name>/source.lock) must never be
 # pinned as Fedora's stock build, e.g. calamares with setxkbmap (ADR-0011). Without zeeos.lock
