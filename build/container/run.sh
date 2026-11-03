@@ -70,6 +70,9 @@ fi
 epoch="${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}"
 args=("$arch")
 mounts=(-v "$root:/work")
+# The oem disk (make utm-disk) partitions a loop device: the host's udev creates /dev/loopNpM
+# after the container started, so the container needs the live host /dev, not a snapshot.
+if [[ "${ZEEOS_PROFILE:-live}" == oem ]]; then mounts+=(-v /dev:/dev); fi
 # ZEEOS_KIWI_CACHE: absolute host dir kept between runs as kiwi's package cache.
 if [[ -n "${ZEEOS_KIWI_CACHE:-}" ]]; then
   [[ "$ZEEOS_KIWI_CACHE" == /* ]] || { echo "ZEEOS_KIWI_CACHE must be an absolute path" >&2; exit 2; }
