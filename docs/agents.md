@@ -11,9 +11,11 @@
 | vm-integrator | Claude | `/vm`, `/tests` | A |
 | ci-engineer | Claude | `/.github`, `/scripts` | C (day one) |
 | reviewer | Codex | read-only: PR review, data-loss audit, license audit | — |
-| docs-writer | Gemini or Claude (bounded lane), either model interactively | `/docs/user`, `CHANGELOG.md` | — |
+| docs-writer | Gemini or Claude (bounded lane; Gemini through codex-local only), either model interactively | `/docs/user`, `CHANGELOG.md` | — |
 
 Every agent may also write its own handoff file, `.agent/state/<issue>.md`, for the issue it works on (template: `.agent/state/TEMPLATE.md`; autopilot's fix runs update it). Nothing else under `.agent/` is in any agent's scope.
+
+Gemini handles bounded `docs-writer` tasks only through the `codex-local` controller under `docs/AUTONOMY.md`: new files or byte-preserving appends within `docs/user/**/*.md` and `CHANGELOG.md`. Gemini returns scoped JSON without tools or direct repository writes. Codex maintains `.agent/state/<issue>.md` for Gemini's work using the handoff template, updating it before every push; this does not expand the controller's allowed paths.
 
 Codex is the top-level orchestrator and owns integration, policy decisions, `CLAUDE.md`, `AGENTS.md` and `docs/agent-context.md`. Gemini and Claude implement/review bounded task-specific work. `docs/AUTONOMY.md` defines the opt-in local controller; until owner rollout, existing Actions workers retain their documented limits. Model output never grants permissions or approval.
 

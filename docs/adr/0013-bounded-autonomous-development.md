@@ -1,8 +1,8 @@
 # ADR-0013: Bounded Codex-led autonomous development
 
-- Status: **Proposed**; acceptance requires PR merge after independent cross-review and resolved threads.
+- Status: **Accepted**; merged in PR #295 on 2026-11-03 after independent cross-review and resolved threads.
 - Date: 2026-10-31
-- Deciders: owner-directed issue #292; Codex integration; independent Claude review pending.
+- Deciders: owner-directed issue #292; Codex integration; independent Claude review.
 
 ## Context
 
@@ -21,7 +21,7 @@ workflows or expand their write scopes. Existing progress and recovery work must
 
 ## Decision
 
-Propose option 3, as specified in `../AUTONOMY.md`. Codex integrates policy and permissions;
+Adopt option 3, as specified in `../AUTONOMY.md`. Codex integrates policy and permissions;
 provider agents return scoped JSON without tools, hooks, GitHub or signing credentials.
 Durable leases, budgets, attempt caps and private audit metadata bound execution. The initial
 lane permits only new documentation files or byte-preserving appends to existing files.
@@ -37,15 +37,16 @@ ADR-0007 signing requirements, and installer safety requirements remain in force
 workflow and merge-guard changes retain owner approval and owner merge under CONVENTIONS.
 That requirement comes from the sensitive implementation files in this PR, not from ADR
 acceptance itself: ADRs follow the cross-review/merge rule in `README.md` without a separate
-owner approval requirement. This proposal does not authorize its own rollout before merge.
+owner approval requirement. Acceptance does not authorize rollout before the conditions in
+`../AUTONOMY.md` are met.
 
 ## Owner decision on governance scope
 
 On 2026-11-01, the [owner decision on PR #293](https://github.com/zeewolf121-rgb/zeeos/pull/293#issuecomment-6562664361)
 accepted the hard rule 9 and agent-ownership changes and ADR-0013 as written and in scope
 for this PR, settling the governance scope dispute. This decision is not owner-gate approval
-of any commit. This ADR remains **Proposed** and becomes **Accepted** on merge after
-cross-review with all review threads resolved, as specified in `README.md`.
+of any commit. This ADR became **Accepted** when PR #295 merged on 2026-11-03 after
+independent cross-review with all review threads resolved, as specified in `README.md`.
 
 ## Consequences
 
