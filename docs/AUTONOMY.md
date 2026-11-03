@@ -1,9 +1,9 @@
 # Codex-led autonomous development
 
 This document describes the proposed codex-local implementation for issue #292.
-The rule 9, agent-ownership and governance changes are in PR #295;
-they are not accepted policy on main. **Do not enable codex-local until PR #295
-is accepted.** The existing governance rules remain in force.
+The rule 9, agent-ownership and governance changes were accepted in PR #295 on
+2026-11-03. **Do not enable codex-local until the owner rollout conditions below
+are met.** The existing governance rules remain in force.
 
 In the proposed mode, Codex owns orchestration and deterministic permissions;
 Gemini and Claude are bounded implementation/review agents. An agent's text is untrusted
@@ -142,9 +142,9 @@ or recreated automatically. An empty-expected-value branch push lease allows cre
 
 ## Owner rollout and recovery
 
-1. Have governance PR #295 accepted before enabling codex-local. Review
-   implementation PR #293 through the existing independent review/CI process; the owner approves
-   and merges it. Codex must not approve its own PR.
+1. Governance PR #295 was accepted on 2026-11-03. Implementation PR #293 was reviewed,
+   approved by the owner and merged on 2026-11-03; these docs came through PR #297.
+   Codex must not approve its own PR.
 2. Inspect current legacy cloud tasks and running Actions jobs. Finish or explicitly reconcile
    them without discarding work. The controller holds while legacy in-progress agent/model
    issues or dispatch jobs remain. `needs-human` is not evidence that a cloud task stopped.
