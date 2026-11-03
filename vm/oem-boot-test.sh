@@ -99,6 +99,10 @@ if [ "$result" = pass ]; then
   ended=$(oem_wizard_ended "$clean"); [ -z "$ended" ] || { result=wizard_session_ended; failed=$ended; }
 fi
 
+# A guest that passed its markers must still be running for the screenshot: QEMU exiting (guest reset, crash)
+# before then, including during the settle delay, fails the cell instead of passing on old serial lines.
+if [ "$result" = pass ] && [ "$shot" = none ]; then result=qemu_exited; fi
+
 # Opt-in graphical gate (see MIN_COLORS above). With no screenshot there are no colours to count: that fails the gate.
 min=${MIN_COLORS:-0}
 if [ "$min" -gt 0 ] && { [ -z "$colors" ] || [ "$colors" -lt "$min" ]; }; then result="$result,screenshot-colors-${colors:-none}-below-$min"; fi

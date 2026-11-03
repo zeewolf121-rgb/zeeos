@@ -71,12 +71,13 @@ replay serial-plain.log pass 'imgdiff_gate" value="pass"'
 # OEM disk boot (vm/oem-boot-test.sh, #277): fixtures are the console lines of real boots of the unpinned oem disk
 # (CI run 41631313208, QEMU + AAVMF, HVF), ANSI colour included. The disk is a stand-in file; qemu-img is a shim.
 oemdisk=$tmp/oem.raw; : > "$oemdisk"
+# shellcheck disable=SC2016  # the shim's $ expressions are for the shim, not this shell
 printf '#!/bin/sh\nfor a; do last=$a; done; : > "$last"\n' > "$tmp/qemu-img"; chmod +x "$tmp/qemu-img"
 # oem_replay <fixture> <expect: pass|fail> <SECUREBOOT on|off> <MIN_COLORS> <junit pattern> [junit pattern...]
 oem_replay() {
   local fx=$1 want=$2 sb=$3 minc=$4 o rc=0; shift 4
   o=$tmp/oem-${fx%.log}-$sb
-  FAKE_SERIAL=tests/fixtures/$fx QEMU_BIN=$tmp/qemu QEMU_IMG=$tmp/qemu-img FW_CODE=$fw FW_VARS=$fw DISK=$oemdisk OUT=$o \
+  FAKE_SERIAL=tests/fixtures/$fx QEMU_BIN=${OEM_QEMU:-$tmp/qemu} QEMU_IMG=$tmp/qemu-img FW_CODE=$fw FW_VARS=$fw DISK=$oemdisk OUT=$o \
     SECUREBOOT=$sb SETTLE=0 TIMEOUT=6 MIN_COLORS=$minc vm/oem-boot-test.sh >"$o.log" 2>&1 || rc=$?
   if { [ "$want" = pass ] && [ "$rc" != 0 ]; } || { [ "$want" = fail ] && [ "$rc" = 0 ]; }; then
     echo "FAIL: $fx (sb-$sb) expected $want, exit $rc" >&2; cat "$o.log" >&2; exit 1
@@ -100,6 +101,10 @@ oem_replay serial-oem-user-stopped.log fail off 0 'wizard_session_ended' 'unit=u
 # Graphical gate: off by default; with MIN_COLORS the 1-colour fixture screenshot fails it.
 oem_replay serial-oem-ok.log pass off 0 'screenshot_colors" value="1"'
 oem_replay serial-oem-ok.log fail off 50 'screenshot-colors-1-below-50'
+# QEMU exiting after the markers (guest reset or crash, e.g. during SETTLE) fails the cell (Codex P2 on #312).
+printf '#!/bin/sh\nfor a; do case $a in file:*) cp "$FAKE_SERIAL" "${a#file:}";; esac; done\nexit 1\n' > "$tmp/qemu-exits"
+chmod +x "$tmp/qemu-exits"
+OEM_QEMU=$tmp/qemu-exits oem_replay serial-oem-ok.log fail off 0 'qemu_exited'
 if ARCH=x86_64 DRY_RUN=1 OUT=$tmp vm/oem-boot-test.sh 2>/dev/null; then echo "FAIL: oem test accepted ARCH=x86_64" >&2; exit 1; fi
 oemout=$(DRY_RUN=1 OUT=$tmp DISK=$oemdisk SECUREBOOT=off vm/oem-boot-test.sh)
 grep -q 'qemu-system-aarch64' <<<"$oemout" || { echo "FAIL: oem dry run prints no qemu command" >&2; exit 1; }
