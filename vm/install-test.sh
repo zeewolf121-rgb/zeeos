@@ -18,6 +18,7 @@
 # under OUT are ever written; OUT/disk.img must be a regular file.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=markers.sh
 . "$here/markers.sh"
 ARCH=${ARCH:-x86_64}; CASE=${CASE:-erase}; SECUREBOOT=${SECUREBOOT:-on}
 OUT=${OUT:-out/install-test/$ARCH-$CASE}; ISO=${ISO:-}

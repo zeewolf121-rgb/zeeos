@@ -10,6 +10,7 @@
 # overlay, so the seed image is never modified.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=markers.sh
 . "$here/markers.sh"
 ARCH=${ARCH:-x86_64}; SECUREBOOT=${SECUREBOOT:-on}; TIMEOUT=${TIMEOUT:-600}
 MARKER=${MARKER:-ZEEOS_DESKTOP_READY}; OUT=${OUT:-out/boot-test/$ARCH-sb$SECUREBOOT}

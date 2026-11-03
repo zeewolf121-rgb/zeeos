@@ -33,7 +33,7 @@ run() {
   o=$tmp/out-$name
   FAKE_SERIAL_INSTALL=$fx/$fi FAKE_SERIAL_INSTALLED=$fx/$fd FAKE_POWEROFF=1 QEMU_BIN=$tmp/qemu \
     FW_CODE=$tmp/code.fd FW_VARS=$tmp/vars.fd ISO=$tmp/fake.iso SEED_DIR=$sd OUT=$o ARCH=x86_64 CASE=$case \
-    INSTALL_TIMEOUT=10 BOOT_TIMEOUT=10 UNLOCK_TIMEOUT=6 vm/install-test.sh >"$o.log" 2>&1 || rc=$?
+    INSTALL_TIMEOUT=10 BOOT_TIMEOUT=10 UNLOCK_TIMEOUT=6 THEME_TIMEOUT=6 vm/install-test.sh >"$o.log" 2>&1 || rc=$?
   if { [ "$want" = pass ] && [ "$rc" != 0 ]; } || { [ "$want" = fail ] && [ "$rc" = 0 ]; }; then
     cat "$o.log" >&2; fail "$name expected $want, exit $rc"
   fi
