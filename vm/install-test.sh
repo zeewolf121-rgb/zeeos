@@ -6,6 +6,7 @@
 #      ISO=<path>  OUT=<result dir>  SECUREBOOT=on|off (default on)
 #      INSTALL_TIMEOUT (s, default 3600)  BOOT_TIMEOUT (s, default 900)
 #      UNLOCK_TIMEOUT (s, default BOOT_TIMEOUT): the luks case waits this long for the passphrase prompt
+#      THEME_TIMEOUT (s, default 600): how long the installed boot waits for ZEEOS_HARDENING_OK after its announce
 #      VIRT_FW_VARS=<command> overrides virt-fw-vars (python virt-firmware 26.9), which alongside/refuse-* need
 #      SEED_DIR=<dir with disk.img + seed.json> skips seeding (tests/install-selftest.sh)
 #      QEMU_BIN / FW_CODE / FW_VARS override the emulator and firmware, as in vm/boot-test.sh
@@ -17,6 +18,8 @@
 # under OUT are ever written; OUT/disk.img must be a regular file.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=markers.sh
+. "$here/markers.sh"
 ARCH=${ARCH:-x86_64}; CASE=${CASE:-erase}; SECUREBOOT=${SECUREBOOT:-on}
 OUT=${OUT:-out/install-test/$ARCH-$CASE}; ISO=${ISO:-}
 INSTALL_TIMEOUT=${INSTALL_TIMEOUT:-3600}; BOOT_TIMEOUT=${BOOT_TIMEOUT:-900}; UNLOCK_TIMEOUT=${UNLOCK_TIMEOUT:-$BOOT_TIMEOUT}
@@ -163,6 +166,25 @@ check_sb() { # name serial-log
   if [ "$got" = "$want_sb" ]; then record "$1" ok; else record "$1" "Secure Boot ${got:-unreported}, want $want_sb"; fi
 }
 
+# Marker protocol (docs/phases/phase-5.md, vm/markers.sh). Each check is recorded only when the guest printed
+# ZEEOS_SECUREBOOT / announced ZEEOS_HARDENING_CHECK; a guest that never does is checked for nothing new.
+check_sb_marker() { # name serial-log
+  local g; g=$(sb_guest "$2")
+  if [ "$g" = unreported ]; then return 0; fi
+  if [ "$g" = "$SECUREBOOT" ]; then record "$1" ok; else record "$1" "guest reports ZEEOS_SECUREBOOT $g, want $SECUREBOOT"; fi
+}
+hard_last=none
+check_hardening() { # name serial-log waited(0|1); sets hard_last
+  hard_last=$(hardening_state "$2" "$3")
+  case $hard_last in
+    none) ;;
+    ok) record "$1" ok;;
+    unchecked) record "$1" "skipped:the boot failed before the hardening check could be waited for";;
+    *) record "$1" "$(hardening_msg "$hard_last" "$2")";;
+  esac
+}
+hard_install=none; hard_installed=none; sbg_install=unreported; sbg_installed=unreported
+
 start=$SECONDS
 # The preset disk's serial is a virtio-blk device property: QEMU 8.2 (ubuntu-24.04) rejects
 # `-drive ...,serial=` ("Block format 'raw' does not support the option 'serial'") and exits.
@@ -185,6 +207,9 @@ esac
 # The guest powers off after DONE/FAIL; give it a minute, then stop QEMU ourselves.
 t=$SECONDS; while kill -0 "$qpid" 2>/dev/null && (( SECONDS - t < 60 )); do sleep 2; done; stop
 check_sb secureboot-install "$OUT/serial-install.log"
+sbg_install=$(sb_guest "$OUT/serial-install.log"); check_sb_marker secureboot-marker-install "$OUT/serial-install.log"
+hw=0; [ "${results[0]}" != ok ] || hw=1
+check_hardening hardening-install "$OUT/serial-install.log" "$hw"; hard_install=$hard_last
 # NVRAM after the install, read from the stopped VM's VARS copy (the installed boot comes later, so firmware
 # noise from it can't mask what the installer did). Windows Boot Manager must survive; alongside puts ZeeOS
 # first in BootOrder; refuse leaves the old entries alone (rules: vm/install-nvram.py).
@@ -228,8 +253,15 @@ for l in open(sys.argv[1]):
     wait_for "$slog" '^ZEEOS_DESKTOP_READY' '^ZEEOS_[A-Z_]*FAIL' "$BOOT_TIMEOUT" || rc=$?
   fi
   if [ "$rc" = 0 ]; then record boot ok; else record boot "installed system: no ZEEOS_DESKTOP_READY (rc=$rc)"; fi
+  # Only when the guest announced the hardening check (test presets install the unit): wait for its verdict.
+  hw=0
+  if [ "$rc" = 0 ] && grep -aq '^ZEEOS_HARDENING_CHECK' "$slog"; then
+    hw=1; hardening_wait "$slog" "${THEME_TIMEOUT:-600}" "$qpid" || true
+  fi
   stop
   check_sb secureboot-installed "$slog"
+  sbg_installed=$(sb_guest "$slog"); check_sb_marker secureboot-marker-installed "$slog"
+  check_hardening hardening-installed "$slog" "$hw"; hard_installed=$hard_last
   bm=$(grep -aom1 '^ZEEOS_BOOTMENU .*' "$slog" | tr -d '\r' || true)
   want_win=0; [ "$CASE" = alongside ] && want_win=1
   if [[ "$bm" == *"zeeos=1"* && "$bm" == *"windows=$want_win"* ]]; then record bootmenu ok
@@ -273,6 +305,9 @@ xml() { sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   printf '<testsuite name="zeeos-install" tests="%d" failures="%d" skipped="%d" time="%d">\n' "${#checks[@]}" "$nfail" "$nskip" "$elapsed"
   printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="case" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$CASE" "$SECUREBOOT"
+  # secureboot above is what was requested; secureboot_guest_* is what each boot reported (or unreported).
+  printf '<property name="secureboot_guest_install" value="%s"/><property name="secureboot_guest_installed" value="%s"/>' "$sbg_install" "$sbg_installed"
+  printf '<property name="hardening" value="%s"/>' "$(hardening_worst "$hard_install" "$hard_installed")"
   [ -z "$fwvars_ver" ] || printf '<property name="virt_firmware" value="%s"/>' "$fwvars_ver"
   echo '</properties>'
   for i in "${!checks[@]}"; do

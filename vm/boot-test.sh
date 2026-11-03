@@ -3,12 +3,15 @@
 # Boot a ZeeOS ISO under QEMU + OVMF/AAVMF and wait for the desktop-ready serial marker.
 # Env: ARCH=x86_64|aarch64  SECUREBOOT=on|off  ISO=<path>  DISK=<seed image, optional>
 #      OUT=<result dir>  TIMEOUT=<seconds>  MARKER=<serial string>  DRY_RUN=1 (print command only)
+#      THEME_TIMEOUT=<seconds, default 600> per theme/layout step, and for ZEEOS_HARDENING_OK after its announce
 #      SCREENSHOT_DELAY=<seconds after the marker; default 0, 90 under TCG>
 #      QEMU_BIN / FW_CODE / FW_VARS override the emulator and firmware (offline tests/selftest.sh)
 # Writes OUT/{serial.log,screenshot.ppm,junit.xml,accel}. DISK is attached through a qcow2
 # overlay, so the seed image is never modified.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=markers.sh
+. "$here/markers.sh"
 ARCH=${ARCH:-x86_64}; SECUREBOOT=${SECUREBOOT:-on}; TIMEOUT=${TIMEOUT:-600}
 MARKER=${MARKER:-ZEEOS_DESKTOP_READY}; OUT=${OUT:-out/boot-test/$ARCH-sb$SECUREBOOT}
 DRY_RUN=${DRY_RUN:-0}; DISK=${DISK:-}
@@ -107,7 +110,7 @@ wait_for() {
 }
 # stepres[i] is the result of steps[i]. Indexed arrays only, and every expansion of a maybe-empty array is
 # guarded: the macOS runner's bash is 3.2 (no declare -A, and "${a[@]}" of an empty array trips set -u).
-theme=none; layout=none; steps=(); stepres=()
+theme=none; layout=none; hwaited=0; steps=(); stepres=()
 start=$SECONDS; result=timeout; retried=0
 while (( SECONDS - start < TIMEOUT )); do
   if grep -aq -- "$MARKER" "$OUT/serial.log"; then result=pass; break; fi
@@ -169,6 +172,10 @@ if kill -0 "$qpid" 2>/dev/null; then
     # screenshot.ppm was taken before the desktop painted; the light capture is the real one.
     [ ! -s "$OUT/screenshot-light.ppm" ] || cp "$OUT/screenshot-light.ppm" "$OUT/screenshot.ppm"
   fi
+  # Hardening check (phase-5.md marker protocol): only when the guest announced it. No announce, no wait.
+  if [ "$result" = pass ] && grep -aq '^ZEEOS_HARDENING_CHECK' "$OUT/serial.log"; then
+    hwaited=1; hardening_wait "$OUT/serial.log" "${THEME_TIMEOUT:-600}" "$qpid" || true
+  fi
   python3 -I "$here/qmp.py" "$sock" quit >/dev/null 2>&1 || true
 fi
 
@@ -198,17 +205,27 @@ want=enabled; [ "$SECUREBOOT" = off ] && want=disabled
 got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$OUT/serial.log" | awk '{print $NF}' || true)
 if [ "$got" != "$want" ]; then result="$result,secureboot-${got:-unreported}"; fi
 
+# Guest-reported Secure Boot state (ZEEOS_SECUREBOOT) must match the request; absent = not checked.
+sbg=$(sb_guest "$OUT/serial.log")
+if [ "$sbg" != unreported ] && [ "$sbg" != "$SECUREBOOT" ]; then result="$result,secureboot-marker-$sbg"; fi
+hard=$(hardening_state "$OUT/serial.log" "$hwaited")
+case $hard in fail|timeout) result="$result,hardening-$hard";; esac
+
 name="boot.$ARCH.sb-$SECUREBOOT"
 fail=1; [ "$result" = pass ] && fail=0
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   # One extra testcase per theme/layout step; a failed step counts as a failure of its own.
   nfail=$fail; for r in ${stepres[@]+"${stepres[@]}"}; do [ "$r" = ok ] || [ "$r" = skipped ] || nfail=$((nfail + 1)); done
-  printf '<testsuite name="zeeos-boot" tests="%d" failures="%d" time="%d">\n' "$((1 + ${#steps[@]}))" "$nfail" "$elapsed"
+  nhard=0; [ "$hard" = none ] || nhard=1
+  case $hard in fail|timeout) nfail=$((nfail + 1));; esac
+  printf '<testsuite name="zeeos-boot" tests="%d" failures="%d" time="%d">\n' "$((1 + ${#steps[@]} + nhard))" "$nfail" "$elapsed"
   printf '<properties><property name="accel" value="%s"/><property name="arch" value="%s"/><property name="secureboot" value="%s"/>' "$accel" "$ARCH" "$SECUREBOOT"
   printf '<property name="imgdiff_gate" value="%s"/><property name="boot_retry" value="%d"/>' "$gate" "$retried"
   printf '<property name="theme_check" value="%s"/><property name="boot_seconds" value="%d"/>' "$theme" "$elapsed"
   printf '<property name="layout_check" value="%s"/>' "$layout"
+  # secureboot above is what was requested; secureboot_guest is what the guest reported (or unreported).
+  printf '<property name="secureboot_guest" value="%s"/><property name="hardening" value="%s"/>' "$sbg" "$hard"
   for k in total_kb available_kb used_kb; do
     v=$(memkv "$k"); [ -z "$v" ] || printf '<property name="idle_%s" value="%s"/>' "$k" "$v"
   done
@@ -223,6 +240,16 @@ fail=1; [ "$result" = pass ] && fail=0
     case $r in ok) ;; skipped) printf '<skipped/>';; *) printf '<failure message="step %s: %s"/>' "$nm" "$r";; esac
     echo '</testcase>'
   done
+  if [ "$hard" != none ]; then
+    printf '<testcase classname="boot.step" name="%s.hardening">' "$name"
+    case $hard in
+      ok) ;;
+      unchecked) printf '<skipped/>';;
+      *) hmsg=$(hardening_msg "$hard" "$OUT/serial.log" | sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+         printf '<failure message="step hardening: %s"/>' "$hmsg";;
+    esac
+    echo '</testcase>'
+  fi
   echo '</testsuite>'
 } > "$OUT/junit.xml"
 echo "$name: $result after ${elapsed}s (accel=$accel); results in $OUT"
