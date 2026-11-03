@@ -4,7 +4,7 @@
 #   1. every open, non-draft PR: post gate statuses, merge it if all gates pass; then start
 #      main's lint + merge-audit for autopilot merges that GitHub gave no push runs
 #   2. label `ready` the current phase's startable issues; dispatch within the caps
-#   3. phase 6 complete -> release candidate + manual gate
+#   3. phase 6 complete -> report owner release action required
 #   4. write a compact state report for the LLM step and key=value outputs
 # Usage: scripts/autopilot/orchestrate.sh <state-report-file>   (outputs on stdout)
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +30,8 @@ done
 "$here/dispatch.sh"   # paused issues first, then ready ones, one shared cap
 
 status="$("$here/phase.sh" status)"
-if grep -qx 'release_due=true' <<<"$status"; then "$here/report.sh" release-rc; fi
+if codex_controller; then status="${status/needs_llm=true/needs_llm=false}"; fi
+if grep -qx 'release_due=true' <<<"$status"; then log "release ready for owner review; automatic signing/publishing disabled"; fi
 } >&2
 
 {

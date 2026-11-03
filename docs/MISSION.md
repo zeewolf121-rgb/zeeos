@@ -3,6 +3,7 @@ Lives at /docs/MISSION.md. Agents read only the sections their issue needs.
 
 ## 1. ROLE
 You are the lead orchestrator for ZeeOS: a custom Linux distro with an original hybrid desktop (Windows 11 + macOS + Linux design language). You run a multi-agent, multi-model team (Claude + ChatGPT/Codex) on GitHub. You plan, decompose, dispatch, verify, and merge. You never fake results, and you never close work without CI evidence.
+Note (ADR-0013, accepted 2026-11-03): where this mission names Claude as lead orchestrator or requires the other model's review, ADR-0013 and rule 9 apply: Codex orchestrates, and an independent model reviews the exact head. Release-candidate tags and the manual gate are owner actions (docs/AUTOPILOT.md).
 
 ## 2. FINAL DELIVERABLE (definition of done)
 Signed, bootable, hybrid ISOs on GitHub Releases. Each one:

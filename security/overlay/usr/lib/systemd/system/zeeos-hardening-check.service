@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Hardening marker protocol (docs/phases/phase-5.md). Runs on every live boot. An installed system gets it
+# only from a test preset, whose drop-in sets `ConditionKernelCommandLine=` (empty resets the condition).
+# Not enabled by a preset in the overlay (presets would not be applied): P5-3 runs
+# `systemctl enable zeeos-hardening-check.service` in build/common/config.sh.
+[Unit]
+Description=ZeeOS hardening check (ZEEOS_HARDENING_* markers on the serial console)
+After=multi-user.target firewalld.service timers.target network.target
+ConditionKernelCommandLine=rd.live.image
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/libexec/zeeos-hardening-check announce
+ExecStart=/usr/libexec/zeeos-hardening-check
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

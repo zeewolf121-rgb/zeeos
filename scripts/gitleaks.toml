@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 ZeeOS contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+# gitleaks config for scripts/secret-scan.sh (P5-8, #274): every default rule, plus one allowlist.
+# Lock files list packages as "name epoch:version-release.arch", and a name such as volume_key-libs
+# makes the generic-api-key rule read "volume_key-libs 0:0.3.12-29.fc44.x86_64" as a key assignment.
+# Allowed only when BOTH hold: the file is a lock, and the match has exactly that package-entry
+# shape. A real secret in a lock, or this shape anywhere else, still fails.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "package entries in lock files"
+condition = "AND"
+paths = ['''^build/arch/[^/]+/(packages|tools|tools-image)\.lock$''', '''^build/arch/[^/]+/rpms-buildroot/[^/]+\.lock$''', '''^build/rpms/[^/]+/source\.lock$''']
+regexTarget = "match"
+regexes = ['''^[A-Za-z0-9._+-]+ [0-9]+:[A-Za-z0-9._+~^-]+$''']

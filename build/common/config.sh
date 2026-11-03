@@ -6,6 +6,10 @@ set -euxo pipefail
 echo "ZeeOS" >/etc/hostname
 systemctl set-default graphical.target
 systemctl enable NetworkManager.service sddm.service zeeos-desktop-ready.service
+# ADR-0012: firewall on everywhere; the update timer is enabled here and skipped in the live
+# session by security/overlay's ConditionKernelCommandLine=!rd.live.image drop-in (not masked,
+# so the system Calamares copies to disk runs it with no installer step).
+systemctl enable firewalld.service dnf5-automatic.timer
 
 # Live desktop user (autologin comes from the desktop/live overlay's SDDM config); passwordless.
 useradd -m -G wheel -s /bin/bash liveuser

@@ -1,6 +1,6 @@
 # ADR-0012: Hardening defaults: firewalld, no sshd, security-only dnf5 automatic, SELinux enforcing
 
-- Status: Proposed
+- Status: **Accepted** (owner, delegated to the orchestrator, 2026-10-26)
 - Date: 2026-10-26
 - Deciders: owner; architect (Claude); reviewer (Codex)
 - Refs: #270 (P5-1), docs/phases/phase-5.md. Implemented by P5-2 (`security/overlay/`, check unit) and P5-3 (image wiring)
