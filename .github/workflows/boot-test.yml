@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Replay boot marker fixtures
         run: bash tests/selftest.sh
+      - name: Podman machine helper self-test
+        run: scripts/ensure-podman-machine-selftest.sh
   boot:
     strategy:
       fail-fast: false
@@ -63,6 +65,12 @@ jobs:
       # Homebrew's QEMU has no aarch64 Secure Boot firmware. Take the same AAVMF build the Ubuntu
       # runners use (qemu-efi-aarch64 2024.02-2ubuntu0.10) and pin it by hash: a changed package
       # fails here instead of silently testing other firmware.
+      # The Podman machine on the shared Mac can be stopped (#288: "connection refused" on the first
+      # podman call). Start it if needed and wait for `podman info`; safe when both runner instances
+      # run this at once. The machine is left running.
+      - name: Ensure the Podman machine is running (macOS)
+        if: runner.os == 'macOS'
+        run: scripts/ensure-podman-machine.sh
       - name: AArch64 UEFI firmware (macOS)
         if: runner.os == 'macOS'
         run: |
