@@ -36,7 +36,7 @@
        default root filesystem. No rd.live.image, no overlay, no squashfs. The root partition grows on
        first boot (dracut-kiwi-oem-repart). The size is the minimum virtual disk; UTM can enlarge it. -->
   <preferences profiles="oem">
-    <type image="oem" filesystem="btrfs" firmware="uefi" format="raw" efipartsize="512"
+    <type image="oem" filesystem="btrfs" firmware="uefi" efipartsize="512"
           bootpartition="false" devicepersistency="by-uuid"
           kernelcmdline="console=tty0 console=ttyAMA0,115200">
       <bootloader name="grub2" timeout="3"/>

@@ -107,8 +107,20 @@ fi
 
 if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
 if [[ "$profile" == oem ]]; then ktype=oem; else ktype=iso; fi
+# kiwi needs a target dir with xattrs and ACLs. A bind-mounted checkout on macOS (Podman machine, virtiofs)
+# has neither, so the oem build runs on the container's own filesystem and the results are copied back.
+ktarget="$out/image"
+if [[ "$profile" == oem && "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then ktarget="/var/tmp/zeeos-kiwi-$profile"; fi
+rm -rf "$out/image" "$ktarget"
+mkdir -p "$ktarget"
 "${run[@]}" "$(command -v kiwi-ng)" --profile "$profile" --type "$ktype" system build \
-  --description "$desc" --target-dir "$out/image"
+  --description "$desc" --target-dir "$ktarget"
+if [[ "$ktarget" != "$out/image" ]]; then
+  mkdir -p "$out/image"
+  # The image-root build tree stays behind; only the artifacts (raw disk, .packages, .verified, .channel) come back.
+  find "$ktarget" -maxdepth 1 -type f -exec cp --sparse=always {} "$out/image/" \;
+  rm -rf "$ktarget"
+fi
 pk="$(find "$out/image" -name '*.packages' | head -1)"
 [[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
 # P2-1: Fedora branding must not ship in the image.
