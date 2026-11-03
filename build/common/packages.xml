@@ -56,6 +56,10 @@
   <!-- Phase 3 (P3-1, #127): checked in Fedora 44 via mdapi.fedoraproject.org on 2026-10-20. -->
   <package name="kde-gtk-config"/>                      <!-- GTK3 dark-mode sync with Plasma (#118) -->
   <package name="unity-gtk3-module"/>                   <!-- GTK3 menus over DBusMenu for the Global Menu -->
+  <!-- Phase 5 hardening (P5-3, #276, ADR-0012): checked with Fedora 44 dnf5 repoquery on 2026-10-26.
+       No openssh-server (ADR-0012 §3); mokutil is already pulled in. -->
+  <package name="firewalld"/>                           <!-- nftables backend, public zone from security/overlay -->
+  <package name="dnf5-plugin-automatic"/>               <!-- dnf5-automatic.timer, security-only updates -->
   <!-- Exclude Fedora branding at install time (dnf exclude), not <packages type="uninstall">:
        uninstall also removes every package depending on them, which took plasma-workspace and
        the plasma.desktop session with it (#98, run 39057784343). generic-logos provides

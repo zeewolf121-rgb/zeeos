@@ -4,15 +4,17 @@
 # and records every write. Run by `make lint`. Needs bash and jq.
 # shellcheck disable=SC2016,SC2034  # ok() evals its checks later, on purpose
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin"
-export FIX="$tmp/fix" CALLS="$tmp/calls" GITHUB_REPOSITORY=o/r AUTOPILOT_STAGGER=0 PATH="$tmp/bin:$PATH"
+export FIX="$tmp/fix" CALLS="$tmp/calls" GITHUB_REPOSITORY=o/r AUTOPILOT_STAGGER=0 AUTOPILOT_CONTROLLER_MODE=legacy PATH="$tmp/bin:$PATH"
 
 cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 # Fake gh: reads answer from $FIX/<key>.json (filtered by --jq); writes are logged to $CALLS.
 jqx=""; key=""; write=""; args=("$@"); i=0
+if [[ "$1 $2" == "issue view" && -n "${FAIL_LABEL_READ:-}" ]]; then exit 1; fi
 while (( i < ${#args[@]} )); do
   a="${args[i]}"
   case "$a" in
@@ -46,6 +48,16 @@ if [[ -n "$jqx" ]]; then jq -r "$jqx" "$f"; else cat "$f"; fi
 EOF
 chmod +x "$tmp/bin/gh"
 
+# Observe the real policy entry point without replacing its fail-closed behavior.
+AUTOPILOT_TEST_PYTHON="$(command -v python3)"
+export AUTOPILOT_TEST_PYTHON
+cat >"$tmp/bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == */policy.py ]]; then echo "CALL python3 $*" >>"$CALLS"; fi
+exec "$AUTOPILOT_TEST_PYTHON" "$@"
+EOF
+chmod +x "$tmp/bin/python3"
+
 pass=0; fail=0
 ok() { [[ -n "${VERBOSE:-}" ]] && echo "== $1"; if eval "$2"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; fi; }
 reset() { rm -rf "$FIX"; mkdir -p "$FIX"; : >"$CALLS"; }
@@ -72,21 +84,40 @@ codex_done
 ok "cross-review passes after Codex Completed on head" 'gates cross-review 5 >/dev/null'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange)"}]}}]}}}}}' | fx graphql
 ok "unresolved Codex P1 blocks" '! gates cross-review 5 >/dev/null'
-echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P2 Badge](https://img.shields.io/badge/P2-yellow)"}]}}]}}}}}' | fx graphql
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"P2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P2 Badge](https://img.shields.io/badge/P2-yellow)"}]}}]}}}}}' | fx graphql
 ok "unresolved Codex P2 does not block" 'gates cross-review 5 >/dev/null'
 ok "plain PR needs no owner approval" 'gates owner-gate 5 >/dev/null'
-ok "merge goes through when all gates pass" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+echo '{}' | fx branches_main_protection
+ok "legacy protected merge uses gh --auto and settles threads" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5 --repo o/r --auto --squash --delete-branch" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && ! grep -q "policy.py" "$CALLS"'
+: >"$CALLS"
+ok "unset mode retains legacy --auto merge" 'env -u AUTOPILOT_CONTROLLER_MODE "$here/gates.sh" merge 5 >/dev/null && grep -q "CALL pr merge 5 --repo o/r --auto --squash --delete-branch" "$CALLS" && ! grep -q "policy.py" "$CALLS"'
+: >"$CALLS"; rm "$FIX/branches_main_protection.json"
+ok "legacy unprotected merge pins the checked head" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5 --repo o/r --squash --delete-branch --match-head-commit $sha" "$CALLS" && ! grep -q -- "--auto" "$CALLS"'
+: >"$CALLS"
+ok "unknown mode refuses without merge, policy or thread mutations" '! AUTOPILOT_CONTROLLER_MODE=typo gates merge 5 >/dev/null && [[ ! -s "$CALLS" ]]'
+echo '{"value":"off"}' | fx actions_variables_AUTOPILOT
+ok "codex-local invokes policy merge and comments its refusal reason" '! AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null && grep -q "policy.py merge 5 --repo o/r" "$CALLS" && grep -q "autopilot-policy-refused sha=$sha" "$CALLS" && grep -q "AUTOPILOT kill switch is off" "$CALLS" && ! grep -q "CALL pr merge\|resolveReviewThread" "$CALLS"'
+jq --arg m "<!-- autopilot-policy-refused sha=$sha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"
+ok "policy refusal comment is deduplicated for this head" '! AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null && grep -q "policy.py merge 5" "$CALLS" && ! grep -q "CALL pr comment\|CALL pr merge" "$CALLS"'
+oldsha="$sha"; sha=1234567890abcdef; claude_pr; codex_done
+jq --arg m "<!-- autopilot-policy-refused sha=$oldsha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+: >"$CALLS"
+ok "a new head gets its own policy refusal comment" '! AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null && grep -q "autopilot-policy-refused sha=$sha" "$CALLS"'
+sha="$oldsha"
 
 # Autopilot merges push with GITHUB_TOKEN, which starts no workflows: gates.sh dispatches
-# main's lint + merge-audit for the merge commit itself.
+# main's lint + merge-audit for the merge commit itself. Test the audit sweep
+# independently of merge authorization.
 msha=1111111111111111111111111111111111111111
-ok "an unmerged (queued --auto) PR dispatches nothing yet" '! grep -q "workflow run" "$CALLS"'
-: >"$CALLS"; echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
-ok "merged PR dispatches lint + merge-audit for its merge commit" 'gates merge 5 >/dev/null || true
+ok "a refused merge dispatches no post-merge workflows" '! grep -q "workflow run" "$CALLS"'
+: >"$CALLS"
+echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list_base_main
+ok "audit sweep dispatches lint + merge-audit for an already merged commit" 'gates push-workflows >/dev/null
   grep -q "CALL workflow run lint.yml --repo o/r --ref main -f sha=$msha" "$CALLS" &&
   grep -q "CALL workflow run merge-audit.yml --repo o/r --ref main -f sha=$msha" "$CALLS"'
 : >"$CALLS"
-ok "a failed dispatch doesn't fail the merge" 'FAIL_WORKFLOW_RUN=1 gates merge 5 >/dev/null && grep -q "pr merge 5" "$CALLS"'
+ok "failed post-merge audit dispatch is contained and never attempts a merge" 'FAIL_WORKFLOW_RUN=1 gates push-workflows >/dev/null && grep -q "CALL workflow run" "$CALLS" && ! grep -q "pr merge" "$CALLS"'
 reset
 echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}},{\"mergedBy\":{\"login\":\"o\"},\"mergeCommit\":{\"oid\":\"2222222222222222222222222222222222222222\"}}]" | fx pr_list_base_main
 ok "sweep dispatches for an autopilot merge with no audit run, not for owner merges" 'gates push-workflows >/dev/null
@@ -97,17 +128,25 @@ reset; claude_pr; codex_done
 echo "{\"merged\":true,\"merge_commit_sha\":\"$msha\"}" | fx pulls_5
 echo "[{\"mergedBy\":{\"login\":\"app/github-actions\"},\"mergeCommit\":{\"oid\":\"$msha\"}}]" | fx pr_list_base_main
 export AUTOPILOT_LOG="$tmp/autopilot.log"; : >"$AUTOPILOT_LOG"
-gates merge 5 >/dev/null || true; gates push-workflows >/dev/null || true
+gates push-workflows >/dev/null; gates push-workflows >/dev/null
 unset AUTOPILOT_LOG
-ok "merge + sweep in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
+ok "two audit sweeps in one orchestrator run dispatch merge-audit once" '[[ $(grep -c "workflow run merge-audit.yml" "$CALLS") == 1 ]]'
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"},{"event":"unlabeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:30:00Z"}]' | fx issues_5_events
 ok "installer-disk alone needs no owner approval (#70)" 'gates owner-gate 5 >/dev/null'
 ok "a removed hard-stop label still counts" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates owner-gate 5 >/dev/null'
-ok "hard stop is never merged, owner pinged" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS"'
+ok "hard stop never merges and hands the head to its owner" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "pr merge" "$CALLS" && grep -q "autopilot-owner-merge sha=$sha" "$CALLS"'
+jq --arg m "<!-- autopilot-owner-merge sha=$sha -->" '. + [{"user":{"login":"github-actions[bot]"},"body":$m}]' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
 : >"$CALLS"
-ok "installer-disk PR merges through the gate once reviewed (#70)" 'gates merge 5 >/dev/null && grep -q "CALL pr merge 5" "$CALLS"'
+ok "owner handoff is deduplicated for the same head" '! AUTOPILOT_HARD_STOP_LABELS=installer-disk gates merge 5 >/dev/null && ! grep -q "autopilot-owner-merge" "$CALLS" && ! grep -q "pr merge" "$CALLS"'
+: >"$CALLS"
+ok "installer-disk PR stays outside the codex-local automatic merge lane" '! AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null && ! grep -q "CALL pr merge 5" "$CALLS"'
+
+reset; claude_pr
+echo '{"labels":[{"name":"needs-decision"}]}' | fx issue_view_5
+ok "model disagreement stops further review dispatch and merge mutations" 'gates request-review 5 >/dev/null && ! gates merge 5 >/dev/null && [[ ! -s "$CALLS" ]]'
+ok "failed decision-label read cannot dispatch a review" '! FAIL_LABEL_READ=1 gates request-review 5 >/dev/null && [[ ! -s "$CALLS" ]]'
 
 reset; claude_pr; codex_done
 echo '[{"filename":".github/workflows/x.yml"}]' | fx pulls_5_files
@@ -118,6 +157,18 @@ echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"
 ok "owner-approved before the head commit doesn't count" '! gates owner-gate 5 >/dev/null'
 echo '[{"event":"labeled","label":{"name":"owner-approved"},"actor":{"login":"o"},"created_at":"2026-10-16T11:00:00Z"}]' | fx issues_5_events
 ok "owner-approved by the owner after the push counts" 'gates owner-gate 5 >/dev/null'
+
+# Owner-merge PRs still need legacy settlement before the hard-stop handoff,
+# even without owner approval. Codex-local must never settle the same thread.
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"OWNER_P2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P2 Badge](https://img.shields.io/badge/P2-yellow) nit"}]}}]}}}}}' | fx graphql
+for approval in pending approved; do
+  if [[ "$approval" == pending ]]; then echo '{"labels":[]}' | fx issue_view_5
+  else echo '{"labels":[{"name":"owner-approved"}]}' | fx issue_view_5; fi
+  : >"$CALLS"
+  ok "legacy settles owner-merge threads before handoff ($approval)" '! gates merge 5 >/dev/null && grep -q "addPullRequestReviewThreadReply" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && grep -q "autopilot-owner-merge" "$CALLS" && ! grep -q "CALL pr merge" "$CALLS" && [[ $(grep -n "resolveReviewThread" "$CALLS" | cut -d: -f1) -lt $(grep -n "autopilot-owner-merge" "$CALLS" | cut -d: -f1) ]]'
+  : >"$CALLS"
+  ok "codex-local leaves owner-merge threads untouched ($approval)" '! AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null && ! grep -q "addPullRequestReviewThreadReply\|resolveReviewThread\|CALL pr merge" "$CALLS"'
+done
 
 reset; claude_pr; codex_done
 echo '[{"event":"labeled","label":{"name":"installer-disk"},"actor":{"login":"x"},"created_at":"2026-10-16T09:00:00Z"}]' | fx issues_6_events
@@ -162,20 +213,28 @@ ok "state for another commit -> waiting" '[[ "$(gates cross-review 5)" == waitin
 cstate "$sha" false | fx issues_5_comments
 ok "clean state on head -> reviewed" 'gates cross-review 5 >/dev/null'
 
-# Outdated blocking threads don't block a re-reviewed head; the gate resolves them on merge.
+# The legacy model verdict may exempt outdated findings; the live merge policy
+# still requires every conversation resolved, without resolving it itself. Legacy
+# mode retains main's existing settlement behavior.
 reset; claude_pr; codex_done
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) old"}]}}]}}}}}' | fx graphql
 ok "outdated P1 thread doesn't block" 'gates cross-review 5 >/dev/null'
-gates merge 5 >/dev/null || true
-ok "merge resolves the superseded thread" 'grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T1" "$CALLS"'
+AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null || true
+ok "codex-local never resolves an outdated review thread or merges around it" '! grep -q "resolveReviewThread" "$CALLS" && ! grep -q "CALL pr merge" "$CALLS"'
+: >"$CALLS"
+# Reuse the old thread fixture to prove the legacy path still resolves it.
+echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T1","isResolved":false,"isOutdated":true,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"old"}]}}]}}}}}' | fx graphql
+ok "legacy resolves a superseded thread and merges" 'gates merge 5 >/dev/null && grep -q "resolveReviewThread" "$CALLS" && grep -q "CALL pr merge" "$CALLS"'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T2","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"![P1 Badge](https://img.shields.io/badge/P1-orange) live"}]}}]}}}}}' | fx graphql
 ok "a P1 thread that still applies keeps blocking" '! gates cross-review 5 >/dev/null'
 # Non-blocking threads (Codex P2) never held the gate, but GitHub's required conversation
-# resolution would hold the merge (#101, #114): the gate replies and resolves them.
+# resolution still holds codex-local merges. Legacy mode replies and settles them.
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T3","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"chatgpt-codex-connector"},"body":"**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> live nit"}]}}]}}}}}' | fx graphql
 ok "a live P2 thread doesn't block" 'gates cross-review 5 >/dev/null'
-: >"$CALLS"; gates merge 5 >/dev/null || true
-ok "merge replies on the P2 thread, then resolves it" 'grep -q "addPullRequestReviewThreadReply" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && grep -q "id=T3" "$CALLS"'
+: >"$CALLS"; AUTOPILOT_CONTROLLER_MODE=codex-local gates merge 5 >/dev/null || true
+ok "codex-local leaves P2 conversations unresolved and makes no reply or merge mutation" '! grep -q "addPullRequestReviewThreadReply" "$CALLS" && ! grep -q "resolveReviewThread" "$CALLS" && ! grep -q "CALL pr merge" "$CALLS"'
+: >"$CALLS"
+ok "legacy replies to and settles non-blocking threads before merge" 'gates merge 5 >/dev/null && grep -q "addPullRequestReviewThreadReply" "$CALLS" && grep -q "resolveReviewThread" "$CALLS" && grep -q "CALL pr merge" "$CALLS"'
 echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"T4","isResolved":false,"isOutdated":false,"comments":{"nodes":[{"author":{"login":"someone"},"body":"human question"}]}}]}}}}}' | fx graphql
 : >"$CALLS"; gates merge 5 >/dev/null || true
 ok "the gate never resolves a thread the reviewer didn't open" '! grep -q "id=T4" "$CALLS"'
@@ -196,12 +255,15 @@ ok "human PR: outdated Codex P1 is exempt once Codex re-reviewed" 'gates cross-r
 # Codex PR: Claude verdict marker must come from agent-dispatch's claude-review job on main.
 reset; claude_pr
 jq '.headRefName = "codex/foo" | .body = ""' "$FIX/pr_view_5.json" >"$FIX/t" && mv "$FIX/t" "$FIX/pr_view_5.json"
-echo "[{\"user\":{\"login\":\"github-actions[bot]\"},\"body\":\"<!-- claude-review sha=$sha verdict=pass run=77 -->\"}]" | fx issues_5_comments
+echo "[{\"user\":{\"login\":\"github-actions[bot]\",\"id\":41898282,\"type\":\"Bot\"},\"body\":\"<!-- claude-review sha=$sha verdict=pass run=77 -->\"}]" | fx issues_5_comments
 echo '{"path":".github/workflows/orchestrator.yml","head_branch":"main"}' | fx actions_runs_77
 ok "forged Claude verdict (wrong workflow) rejected" '! gates cross-review 5 >/dev/null'
 echo '{"path":".github/workflows/agent-dispatch.yml","head_branch":"main"}' | fx actions_runs_77
 echo '{"jobs":[{"name":"claude-review"}]}' | fx actions_runs_77_jobs
 ok "verified Claude verdict passes" 'gates cross-review 5 >/dev/null'
+jq '.[0].body = "Summary only\n" + .[0].body' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
+ok "model summary marker cannot authorize legacy cross-review" '! gates cross-review 5 >/dev/null'
+jq '.[0].body |= sub("Summary only\n"; "")' "$FIX/issues_5_comments.json" >"$FIX/t" && mv "$FIX/t" "$FIX/issues_5_comments.json"
 sed -i.bak 's/verdict=pass/verdict=fail/' "$FIX/issues_5_comments.json" && rm -f "$FIX/issues_5_comments.json.bak"
 : >"$CALLS"; CODEX_TOKEN=x gates merge 5 >/dev/null || true
 ok "Claude fail verdict on a Codex PR -> review fix sent to Codex, marker in the same comment" 'grep -q "autopilot-review-fix sha=$sha n=1 -->@codex address" "$CALLS"'
@@ -315,6 +377,26 @@ ok "skipped nightly (kill switch) doesn't count as green" '[[ "$out" == *prev_ex
 echo '{"jobs":[{"name":"health","conclusion":"success"}]}' | fx actions_runs_9_jobs
 out="$("$here/phase.sh" status 2>/dev/null)"
 ok "phase 1 done + nightly green -> phase 2 needs opening" '[[ "$out" == *current=2* && "$out" == *needs_llm=true* ]]'
+
+# Release publication is explicitly outside unattended automation, even for a
+# legacy caller that invokes the old command directly.
+reset
+ok "release-rc refuses publication without creating tags, workflows or issues" '! "$here/report.sh" release-rc >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+
+# Codex-local mode has a single dispatch owner. Legacy workers must perform no
+# writes, even when called manually with a ready task or a failing review.
+reset; claude_pr; codex_done
+ok "codex-local mode suppresses legacy dispatch without mutations" 'AUTOPILOT_CONTROLLER_MODE=codex-local "$here/dispatch.sh" >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+ok "codex-local mode suppresses legacy review fixes without mutations" 'AUTOPILOT_CONTROLLER_MODE=codex-local "$here/fix-retry.sh" --review 5 >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+ok "codex-local mode suppresses legacy CI fixes without mutations" 'AUTOPILOT_CONTROLLER_MODE=codex-local "$here/fix-retry.sh" agent/image-builder/6-kiwi "$sha" 7 >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+ok "codex-local mode never tags or publishes a release candidate" '! AUTOPILOT_CONTROLLER_MODE=codex-local "$here/report.sh" release-rc >/dev/null 2>&1 && [[ ! -s "$CALLS" ]]'
+
+# Exercise the new evidence/merge guard and isolated provider controller in CI.
+# Their GitHub/provider boundaries are mocked; no credentials or network needed.
+ok "live merge policy adversarial tests" 'python3 "$here/test_policy.py"'
+ok "trusted review receipt workflow tests" 'python3 "$here/test_review_receipt.py"'
+ok "single-request Gemini API adversarial tests" 'python3 "$here/test_gemini_request.py"'
+ok "bounded multi-agent controller adversarial tests" 'python3 "$here/test_team.py"'
 
 echo "selftest: $pass passed, $fail failed"
 (( fail == 0 ))

@@ -38,7 +38,7 @@ unresolved_threads() { # pr [reviewer-prefix...]: "login first-comment" per thre
 head_reviewers() { # pr sha model: login prefixes of the models that reviewed this head commit
   case "$3" in
     claude) codex_reviewed "$1" "$2" && echo "$CODEX_BOT" ;;
-    codex) [[ -n "$(claude_verdict "$1" "$2")" ]] && echo "$CLAUDE_BOT" ;;
+    codex|gemini) [[ -n "$(claude_verdict "$1" "$2")" ]] && echo "$CLAUDE_BOT" ;;
     human)
       codex_reviewed "$1" "$2" && echo "$CODEX_BOT"
       [[ "$(claude_verdict "$1" "$2")" == pass ]] && echo "$CLAUDE_BOT" ;;
@@ -109,10 +109,15 @@ codex_reviewed() { # pr sha: Codex finished reviewing this exact commit, finding
   comments_by "$1" "$CODEX_BOT" | grep -F 'Code Review' | grep -F 'Completed' | grep -qF "\`${2:0:7}\`"
 }
 claude_verdict() { # pr sha -> pass | fail | (empty)
-  # The marker is posted by agent-dispatch's claude-review job (github-actions). It only counts
-  # if its run id really is that job on main, so no other workflow or LLM step can forge one.
+  # Legacy cross-review requires an Actions marker naming a main-based review job.
+  # Automatic merge additionally verifies the stronger receipt policy below.
   local m v run
-  m="$(comments_by "$1" 'github-actions' | grep -oE "<!-- claude-review sha=$2 verdict=[a-z]+ run=[0-9]+ -->" | tail -n1)"
+  # First line only: the appended model-written summary is never review authority.
+  # Legacy markers remain readable for sensitive PR rollout; low-risk policy.py
+  # additionally requires the new exact PR/head/run-attempt artifact receipt.
+  m="$(gh api --paginate "repos/$REPO/issues/$1/comments" \
+    --jq '.[] | select(.user.login == "github-actions[bot]" and .user.id == 41898282 and .user.type == "Bot") | .body | split("\n")[0]' \
+    | grep -E "^<!-- claude-review sha=$2 verdict=[a-z]+ run=[0-9]+( attempt=[0-9]+)? -->$" | tail -n1)"
   [[ -n "$m" ]] || return 0
   v="$(sed -E 's/.*verdict=([a-z]+).*/\1/' <<<"$m")"; run="$(sed -E 's/.*run=([0-9]+).*/\1/' <<<"$m")"
   if [[ "$(gh api "repos/$REPO/actions/runs/$run" --jq '"\(.path) \(.head_branch)"' 2>/dev/null)" != ".github/workflows/agent-dispatch.yml main" ]] \
@@ -134,7 +139,7 @@ cross_review() {
       if grep -qE "^${CODEX_BOT}[^ ]* .*badge/P[01]-" <<<"$threads"; then
         echo "unresolved Codex P0/P1 comments"; return 1
       fi ;;
-    codex)
+    codex|gemini)
       v="$(claude_verdict "$pr" "$sha")"
       [[ -n "$v" ]] || { echo "waiting for Claude review of ${sha:0:7}"; return 1; }
       [[ "$v" == pass ]] || { echo "Claude review verdict: $v"; return 1; }
@@ -214,7 +219,12 @@ status() {
 }
 
 request_review() {
-  local pr="$1" sha model since
+  local pr="$1" sha model since labels
+  labels="$(labels_of "$pr")" || { log "#$pr: cannot read decision labels; no review dispatch"; return 1; }
+  if grep -qxF needs-decision <<<"$labels"; then
+    log "#$pr: models disagree; no more review rounds until owner decision"
+    return 0
+  fi
   sha="$(pr_head "$pr")"; model="$(pr_model "$pr")"; since="$(pushed_at "$sha")"
   case "$model" in
     claude|human)
@@ -226,7 +236,7 @@ request_review() {
       [[ -n "${CODEX_TOKEN:-}" ]] || { log "#$pr: no CODEX_TOKEN, can't request Codex review"; return 0; }
       GH_TOKEN="$CODEX_TOKEN" w gh pr comment "$pr" --repo "$REPO" --body "@codex review" >/dev/null
       log "#$pr: requested Codex review of ${sha:0:7}" ;;
-    codex)
+    codex|gemini)
       # One more request after an unfinished review (verdict=error); otherwise once per commit.
       local v reqs limit=1
       v="$(claude_verdict "$pr" "$sha")"
@@ -256,14 +266,15 @@ protected() { gh api "repos/$REPO/branches/main/protection" >/dev/null 2>&1; }
 # dispatched run's head is main's tip at dispatch time, so dedupe on merge-audit's run-name
 # (which carries the audited sha), not on the run's commit.
 push_workflows() { # merge-sha
-  local sha="$1" wf
+  local sha="$1" wf runs
   # A run that was just dispatched takes a few seconds to show up in `gh run list`, so also
   # skip what an earlier gates.sh call in this orchestrator run dispatched (shared log).
   if [[ -n "${AUTOPILOT_LOG:-}" ]] && grep -qF "dispatched merge-audit.yml for $sha" "$AUTOPILOT_LOG" 2>/dev/null; then
     return 0
   fi
-  if gh run list --repo "$REPO" --workflow merge-audit.yml --limit 200 --json displayTitle,headSha,event \
-      --jq '.[] | .displayTitle, (select(.event == "push") | .headSha)' | grep -qF "$sha"; then
+  runs="$(gh run list --repo "$REPO" --workflow merge-audit.yml --limit 200 --json displayTitle,headSha,event \
+      --jq '.[] | .displayTitle, (select(.event == "push") | .headSha)')"
+  if grep -qF "$sha" <<<"$runs"; then
     return 0
   fi
   for wf in lint.yml merge-audit.yml; do
@@ -281,7 +292,12 @@ push_workflows_recent() {
 }
 
 merge() {
-  local pr="$1" sha info out reasons msha
+  local pr="$1" sha info out reasons msha notices who reason
+  local mode="${AUTOPILOT_CONTROLLER_MODE:-legacy}"
+  case "$mode" in
+    legacy|codex-local) ;;
+    *) echo "#$pr unknown controller mode: $mode; refusing merge"; return 1 ;;
+  esac
   info="$(gh pr view "$pr" --repo "$REPO" --json isDraft,mergeable,state --jq '"\(.state) \(.isDraft) \(.mergeable)"')"
   [[ "$info" == "OPEN false MERGEABLE" ]] || { echo "#$pr not mergeable ($info)"; return 1; }
   sha="$(pr_head "$pr")"
@@ -294,23 +310,47 @@ merge() {
     fi
     echo "#$pr cross-review: $out"; return 1
   fi
-  # The reviewer's latest review of the head is clean: clear its outdated and non-blocking
-  # threads, which GitHub's required conversation resolution would otherwise block on.
-  local who
-  for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_settled "$pr" "$who"; done
+  if [[ "$mode" == legacy ]]; then
+    # Match main: settle clean reviewers' threads even on owner-merge PRs.
+    # Codex-local must leave every conversation for the reviewer/owner.
+    for who in $(head_reviewers "$pr" "$sha" "$(pr_model "$pr")"); do resolve_settled "$pr" "$who"; done
+  fi
   reasons="$(hard_stop_reasons "$pr")"
   if [[ -n "$reasons" ]]; then
-    # Hard stop: never merged by autopilot. Ping the owner once per commit.
-    if ! gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body' | grep -qF "<!-- autopilot-owner-merge sha=$sha -->"; then
-      w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-owner-merge sha=$sha -->@$OWNER all automated gates pass at ${sha:0:7}. Hard stop ($reasons): approve and merge yourself." >/dev/null
+    # Keep the existing owner handoff without granting approval or merging. Read
+    # the whole response before matching, so pipefail/SIGPIPE cannot cause repeats.
+    notices="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body')"
+    if ! grep -qF "<!-- autopilot-owner-merge sha=$sha -->" <<<"$notices"; then
+      w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-owner-merge sha=$sha -->@$OWNER lint/build/boot summary and cross-review gates pass at ${sha:0:7}. Hard stop ($reasons): owner approval and owner merge remain required; inspect all live checks before acting." >/dev/null
     fi
     echo "#$pr hard stop, left for the owner ($reasons)"; return 1
   fi
   out="$(owner_gate "$pr")" || { echo "#$pr owner-gate: $out"; return 1; }
-  if protected; then w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
-  else w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi
+  case "$mode" in
+    legacy)
+      # Preserve main's legacy settlement and protected/unprotected merge paths.
+      if protected; then w gh pr merge "$pr" --repo "$REPO" --auto --squash --delete-branch
+      else w gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"; fi ;;
+    codex-local)
+      # The low-risk guard never resolves threads or enqueues a future head.
+      if [[ -n "${DRY_RUN:-}" ]]; then
+        python3 "$here/policy.py" check "$pr" --repo "$REPO"
+        return
+      fi
+      if ! out="$(python3 "$here/policy.py" merge "$pr" --repo "$REPO")"; then
+        reason="$(jq -er '.reason | select(type == "string" and length > 0)' <<<"$out" 2>/dev/null)" \
+          || reason="policy command failed without a readable refusal reason"
+        echo "#$pr policy refused merge: $reason"
+        notices="$(gh api --paginate "repos/$REPO/issues/$pr/comments" --jq '.[].body')" || return 1
+        if ! grep -qF "<!-- autopilot-policy-refused sha=$sha -->" <<<"$notices"; then
+          w gh pr comment "$pr" --repo "$REPO" --body "<!-- autopilot-policy-refused sha=$sha -->Automatic codex-local merge refused at $sha: $reason" >/dev/null
+        fi
+        return 1
+      fi ;;
+  esac
+
   log "#$pr merged at ${sha:0:7}"
-  # --auto may merge now or later; if later, the orchestrator's push-workflows sweep catches it.
+  # --auto may merge now or later; the push-workflows sweep catches later merges.
   # An open PR has a merge_commit_sha too (the test merge), so check .merged first.
   msha="$(gh api "repos/$REPO/pulls/$pr" --jq 'select(.merged == true) | .merge_commit_sha // empty' 2>/dev/null || true)"
   if [[ -n "$msha" ]]; then push_workflows "$msha" || true; fi

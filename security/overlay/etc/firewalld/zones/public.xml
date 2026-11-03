@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- ADR-0012: ZeeOS owns the inbound list of the default zone. No ssh (no sshd installed). -->
+<zone>
+  <short>Public</short>
+  <description>For use in public areas. Only DHCPv6 client replies and mDNS are allowed in. Open more on purpose with firewall-cmd or Plasma's firewall page.</description>
+  <service name="dhcpv6-client"/>
+  <service name="mdns"/>
+</zone>

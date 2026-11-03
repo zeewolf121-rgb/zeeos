@@ -20,6 +20,9 @@ cp -a "$src/." "$desc/"
 # Live desktop overlay (owned by desktop-shell): copied into the image root, never edited here.
 mkdir -p "$desc/root"
 cp -a "$root/desktop/live/overlay/." "$desc/root/"
+# Hardening overlay (owned by security-hardener, ADR-0012): copied as-is, never edited here;
+# skipped while absent (P5-2 adds it).
+if [[ -d "$root/security/overlay" ]]; then cp -a "$root/security/overlay/." "$desc/root/"; fi
 # ZeeOS wallpapers (owned by theme-designer): every Plasma wallpaper package in branding/wallpapers/
 # (a directory with a metadata.json; src/ holds the generator and is not shipped).
 mkdir -p "$desc/root/usr/share/wallpapers"
