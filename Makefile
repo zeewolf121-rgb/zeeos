@@ -3,17 +3,24 @@ ARCH ?= x86_64
 SECUREBOOT ?= on
 # The ISO that `make iso ARCH=…` writes; override with ISO=<path>.
 ISO ?= $(firstword $(wildcard out/$(ARCH)/image/*.iso))
-.PHONY: iso iso-host pin-container pin-packages rpms rpms-source-lock test-build reproducible boot-test lint
+.PHONY: iso iso-host utm-disk pin-container pin-packages rpms rpms-source-lock test-build reproducible boot-test lint
 iso:
 	build/container/run.sh $(ARCH)
+# The raw oem disk for the UTM bundle (P5-5, ADR-0002: kiwi-ng, one description). aarch64 only.
+# Writes out/$(ARCH)-oem/image/*.raw. Same pinning rules as `make iso`.
+utm-disk:
+	@[ "$(ARCH)" = aarch64 ] || { echo "make utm-disk is aarch64 only (ARCH=$(ARCH))" >&2; exit 2; }
+	ZEEOS_PROFILE=oem build/container/run.sh $(ARCH)
 iso-host:
 	build/build-iso.sh $(ARCH)
 pin-container:
 	build/container/pin.sh
 # Refresh build/arch/$(ARCH)/packages.lock (resolve in the build container, publish the closure repo).
 # Needs network and `podman login ghcr.io` with packages: write. PUBLISH=0 resolves only.
+# HOLD=1 keeps every version in the current lock and only adds new packages (build/pin/hold.sh, resolve.sh).
 pin-packages:
-	ZEEOS_UNPINNED=1 ZEEOS_ENTRY=build/pin/resolve.sh build/container/run.sh $(ARCH)
+	$(if $(HOLD),build/pin/hold.sh $(ARCH))
+	ZEEOS_PIN_HOLD=$(if $(HOLD),1,0) ZEEOS_UNPINNED=1 ZEEOS_ENTRY=build/pin/resolve.sh build/container/run.sh $(ARCH)
 	$(if $(filter 0,$(PUBLISH)),,build/pin/publish.sh $(ARCH))
 # ZeeOS rebuilds of Fedora SRPMs (ADR-0011): native per arch, in the digest-pinned tools image.
 # Writes out/$(ARCH)/zeeos/ and build/arch/$(ARCH)/rpms-buildroot/. RPM=<name> builds one package.

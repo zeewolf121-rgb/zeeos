@@ -3,8 +3,8 @@
 # Columns: name epoch:version-release.arch sha256 source-rpm-name [origin: zeeos-rebuild | zeeos-rebuild-src]
 # release=44
 # arch=x86_64
-# resolved=2026-10-26T15:02:06Z
-# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-x86_64@sha256:7316c0836c9ae645fdee1d515b8f998df36e9cd31657e56ee0a17be97127f696
+# resolved=2026-11-03T21:26:46Z
+# closure=ghcr.io/zeewolf121-rgb/zeeos-closure-x86_64@sha256:f9d91ad1e4a83f08ba7a4e1b8625ae1bbd868a2ab719de2e5ffda774b06c806b
 LibRaw 0:0.22.2-1.fc44.x86_64 a067b7e73bf950679dff4ead6b7fc8a8c1d7ca36a7d6480fc0e3d258b4bbe7a8 LibRaw
 ModemManager-glib 0:1.24.2-3.fc44.x86_64 7b0dbb4b78031a2434480c1b391711e578579b616c184095e2dc2d032f22261b ModemManager
 NetworkManager 1:1.56.1-2.fc44.x86_64 8ccdaa8da6ab019fe629bd492ad12c88bb0157608908c3e98f1008f2186a5b62 NetworkManager
@@ -426,6 +426,7 @@ libgcc 0:16.2.1-2.fc44.x86_64 e9ccd7564d639c85ae455693f11d7a6cd990d1efdae6889656
 libgcrypt 0:1.12.2-1.fc44.x86_64 9b34c995e8feab6f9623917ee907052aca214d33656015d506ae73a0c5c07ac5 libgcrypt
 libglvnd 1:1.7.0-9.fc44.x86_64 212df4a80c24320c53477d6d4a1fae424c58bbe475761d04a74c648c350a5fdc libglvnd
 libglvnd-egl 1:1.7.0-9.fc44.x86_64 30286b1e16ab7830a0d9e34dc82fcc0234d3cfc7dbb937940bb3fc7b38b84272 libglvnd
+libglvnd-gles 1:1.7.0-9.fc44.x86_64 c23493344e44f01306d96e9639eff3b168af74b75262b2ad16b11d666b7b6fbd libglvnd
 libglvnd-glx 1:1.7.0-9.fc44.x86_64 f8f04675d76927068b35bfa1af7d5a332bd69498909206efb60a699dbd232d10 libglvnd
 libglvnd-opengl 1:1.7.0-9.fc44.x86_64 9ff4a8342698a36cf9bf8ba2d9a7cea3f2dd957180b133805b1b350e12a0be46 libglvnd
 libgomp 0:16.2.1-2.fc44.x86_64 0add0db002191a83c43697ce70b44aa7eec7dd54e21dbe3e4cf998e883507b29 gcc

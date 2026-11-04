@@ -25,6 +25,16 @@ pin_identities() {
 # packages, so they never count as an identity.
 pin_lock_identities() { grep -v '^#' "$1" | awk 'NF >= 3 && $5 != "zeeos-rebuild-src" { print $1, $2 }' | LC_ALL=C sort -u; }
 
+# Identities that only the oem disk installs (aarch64): "# oem-only=<name> <evra>" header lines. The
+# live ISO build tolerates exactly these as absent from its package list; empty when the arch has no oem profile.
+pin_lock_oem_only() { sed -n 's/^# oem-only=//p' "$1" | LC_ALL=C sort -u; }
+
+# Live ISO check: <diff> is the comm output of build-iso.sh ("-id" only in the lock, "+id" only in the image).
+# Passes when the "-" lines are exactly the lock's oem-only set and there is no "+" line. Fail closed.
+pin_live_diff_ok() {
+  [[ "$(LC_ALL=C sort "$2")" == "$(pin_lock_oem_only "$1" | sed 's/^/-/' | LC_ALL=C sort)" ]]
+}
+
 # Lock lines with origin $2 ("fedora" matches lines without an origin column).
 pin_lock_lines() {
   grep -v '^#' "$1" | awk -v o="$2" 'NF >= 3 { x = ($5 == "" ? "fedora" : $5); if (x == o) print }'

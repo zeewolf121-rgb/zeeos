@@ -2,11 +2,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Build the ZeeOS live ISO with kiwi-ng. Needs root (loop devices); CI runs it on a full VM.
 # Usage: build/build-iso.sh <arch> [out-dir]   (DRY_RUN=1 stages the description only)
+# ZEEOS_PROFILE=oem builds the raw disk image for the UTM bundle (P5-5, `make utm-disk`) from the same
+# description instead of the ISO: kiwi profile oem, default out dir out/<arch>-oem, no ISO checks.
 set -euo pipefail
 
 arch="${1:?usage: build-iso.sh <arch> [out-dir]}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-out="${2:-$root/out/$arch}"
+profile="${ZEEOS_PROFILE:-live}"
+case "$profile" in
+  live) out="${2:-$root/out/$arch}" ;;
+  oem) out="${2:-$root/out/$arch-oem}" ;;
+  *) echo "ZEEOS_PROFILE must be live or oem, not $profile" >&2; exit 2 ;;
+esac
 src="$root/build/arch/$arch"
 [[ -f "$src/config.xml" ]] || { echo "no image description for ARCH=$arch" >&2; exit 2; }
 
@@ -36,7 +43,8 @@ for theme in "$root"/branding/aurorae/*/metadata.json; do
   cp -a "$(dirname "$theme")" "$desc/root/usr/share/aurorae/themes/"
 done
 # Calamares installer config and zee-* modules (owned by installer-engineer); skipped while absent.
-"$root/build/stage-installer.sh" "$root" "$desc/root"
+# The oem disk has no installer.
+if [[ "$profile" == live ]]; then "$root/build/stage-installer.sh" "$root" "$desc/root"; fi
 # Escape a value for use inside an XML attribute and as a sed replacement (| delimiter).
 xml_esc() { local v="${1//&/&amp;}"; v="${v//\"/&quot;}"; printf '%s' "${v//</&lt;}"; }
 xml_sed() { xml_esc "$1" | sed 's/[\\&|]/\\&/g'; }
@@ -54,6 +62,11 @@ if [[ "${ZEEOS_UNPINNED:-0}" == 1 ]]; then
   # A local `make rpms` result (unsigned, development only) joins the live mirrors.
   zdir=""; [[ ! -f "$out/zeeos/repodata/repomd.xml" ]] || zdir="$(xml_esc "$out/zeeos")"
   pin_inject_zeeos_repo "$desc/repos.xml" "$zdir"
+  # Hold mode (build/pin/resolve.sh, #310): the current lock's closure outranks Fedora's repos.
+  if [[ -n "${ZEEOS_HOLD_DIR:-}" ]]; then
+    hold_block="$(printf '  <repository type="rpm-md" alias="zeeos-hold" priority="2" package_gpgcheck="false" repository_gpgcheck="false">\n    <source path="dir://%s"/>\n  </repository>' "$(xml_esc "$ZEEOS_HOLD_DIR")")"
+    HB="$hold_block" awk '/<\/image>/ { print ENVIRON["HB"] } { print }' "$desc/repos.xml" >"$desc/repos.xml.new" && mv "$desc/repos.xml.new" "$desc/repos.xml"
+  fi
   echo "WARNING: ZEEOS_UNPINNED=1: building from live Fedora mirrors; the output is NOT reproducible" >&2
 else
   closure="${ZEEOS_CLOSURE_DIR:-$out/closure}"
@@ -97,15 +110,30 @@ if [[ "${ZEEOS_RESOLVE_ONLY:-0}" == 1 ]]; then
   # make pin-packages: install into a root only, then list it (same fields as kiwi's .packages).
   [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]] || { echo "ZEEOS_RESOLVE_ONLY runs inside the build container" >&2; exit 2; }
   rm -rf "$out/resolve-root"
-  kiwi-ng system prepare --description "$desc" --root "$out/resolve-root"
+  # live (the default profile) is resolved exactly as before; oem needs its profile and disk type.
+  if [[ "$profile" == oem ]]; then rprof=(--profile oem --type oem); else rprof=(); fi
+  kiwi-ng "${rprof[@]}" system prepare --description "$desc" --root "$out/resolve-root"
   rpm --root "$out/resolve-root" -qa --qf '%{NAME}|%{EPOCHNUM}|%{VERSION}|%{RELEASE}|%{ARCH}\n' >"$out/resolved.list"
   rm -rf "$out/resolve-root"
   exit 0
 fi
 
 if [[ "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then run=(); else run=(sudo -E); fi
-"${run[@]}" "$(command -v kiwi-ng)" --type iso system build \
-  --description "$desc" --target-dir "$out/image"
+if [[ "$profile" == oem ]]; then ktype=oem; else ktype=iso; fi
+# kiwi needs a target dir with xattrs and ACLs. A bind-mounted checkout on macOS (Podman machine, virtiofs)
+# has neither, so the oem build runs on the container's own filesystem and the results are copied back.
+ktarget="$out/image"
+if [[ "$profile" == oem && "${ZEEOS_IN_CONTAINER:-0}" == 1 ]]; then ktarget="/var/tmp/zeeos-kiwi-$profile"; fi
+rm -rf "$out/image" "$ktarget"
+mkdir -p "$ktarget"
+"${run[@]}" "$(command -v kiwi-ng)" --profile "$profile" --type "$ktype" system build \
+  --description "$desc" --target-dir "$ktarget"
+if [[ "$ktarget" != "$out/image" ]]; then
+  mkdir -p "$out/image"
+  # The image-root build tree stays behind; only the artifacts (raw disk, .packages, .verified, .channel) come back.
+  find "$ktarget" -maxdepth 1 -type f -exec cp --sparse=always {} "$out/image/" \;
+  rm -rf "$ktarget"
+fi
 pk="$(find "$out/image" -name '*.packages' | head -1)"
 [[ -n "$pk" ]] && sort "$pk" >"$out/packages.list"
 # P2-1: Fedora branding must not ship in the image.
@@ -122,12 +150,37 @@ if (( ! unpinned )); then
   # Lines: "-<identity>" only in the lock, "+<identity>" only in the image.
   LC_ALL=C comm -3 <(pin_lock_identities "$lock") <(pin_identities <"$out/packages.list") \
     | sed -e 's/^\t/+/' -e '/^+/!s/^/-/' >"$out/lock-vs-packages.diff"
-  if [[ -s "$out/lock-vs-packages.diff" ]]; then
-    echo "packages.list does not match $lock (see $out/lock-vs-packages.diff):" >&2
-    cat "$out/lock-vs-packages.diff" >&2
-    exit 1
+  if [[ "$profile" == oem ]]; then
+    # The oem disk is a subset of the ISO set (no live parts) plus its own packages. Every package
+    # on the disk must be locked ("+" lines are unlocked and fatal); locked packages the disk leaves
+    # out ("-" lines) are expected and only reported.
+    if grep -q '^+' "$out/lock-vs-packages.diff"; then
+      echo "oem disk has packages that are not in $lock:" >&2
+      grep '^+' "$out/lock-vs-packages.diff" >&2
+      exit 1
+    fi
+    echo "oem disk packages are all in packages.lock ($(grep -c '^-' "$out/lock-vs-packages.diff") locked packages are not on the disk)"
+  else
+    # The lock is the union of the live and oem sets (build/pin/resolve.sh). The identities that only
+    # the oem disk installs are recorded in the lock header; the ISO may lack exactly those and nothing else.
+    pin_live_diff_ok "$lock" "$out/lock-vs-packages.diff" || {
+      echo "packages.list does not match $lock apart from its oem-only packages (see $out/lock-vs-packages.diff):" >&2
+      cat "$out/lock-vs-packages.diff" >&2
+      exit 1
+    }
   fi
-  echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages)"
+  [[ "$profile" == oem ]] || echo "packages.list matches packages.lock ($(pin_lock_identities "$lock" | wc -l) packages, $(pin_lock_oem_only "$lock" | wc -l) oem-only)"
+fi
+echo "packages on the image: $(wc -l <"$out/packages.list")"
+if [[ "$profile" == oem ]]; then
+  raw="$(find "$out/image" -name '*.raw' | head -1)"
+  [[ -n "$raw" ]] || { echo "kiwi produced no raw disk" >&2; exit 1; }
+  echo "DISK: $raw ($(stat -c %s "$raw") bytes apparent, $(du -k "$raw" | cut -f1) KiB allocated)"
+  # GPT with an ESP and a root partition; Fedora's signed boot chain on the ESP.
+  sfdisk -d "$raw" | tee "$out/partition-table.txt"
+  grep -q 'label: gpt' "$out/partition-table.txt" || { echo "disk is not GPT" >&2; exit 1; }
+  grep -qi 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B' "$out/partition-table.txt" || { echo "no ESP partition" >&2; exit 1; }
+  exit 0
 fi
 iso="$(find "$out/image" -name '*.iso' | head -1)"
 [[ -n "$iso" ]] || { echo "kiwi produced no ISO" >&2; exit 1; }
