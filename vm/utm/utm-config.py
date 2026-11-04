@@ -49,10 +49,7 @@ def show(path):
 def zip_dir(src, dest):
     src = os.path.abspath(src)
     top = os.path.basename(src)
-    files = []
-    for root, dirs, names in os.walk(src):
-        dirs.sort()
-        files += [os.path.join(root, n) for n in sorted(names)]
+    files = sorted(os.path.join(root, n) for root, _, names in os.walk(src) for n in names)
     with zipfile.ZipFile(dest, "w") as z:
         for f in files:
             info = zipfile.ZipInfo(os.path.join(top, os.path.relpath(f, src)), EPOCH)
