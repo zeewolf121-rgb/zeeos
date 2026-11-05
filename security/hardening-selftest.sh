@@ -49,6 +49,8 @@ mk() {
       sshd=password) echo sshd.service >> "$r/st/active"; printf 'passwordauthentication yes\nkbdinteractiveauthentication no\n' > "$r/st/sshd-T";;
       timer=off) : > "$r/st/enabled"; echo firewalld.service > "$r/st/active";;
       timer=live-active) ;;
+      # a healthy live session: the timer stays enabled, but its ConditionKernelCommandLine keeps it inactive
+      timer=live) echo firewalld.service > "$r/st/active";;
       sb=off) printf '\007\000\000\000\000' > "$r/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c";;
       sb=none) rm -rf "$r/sys/firmware/efi";;
       *) fail "bad override $kv";;
@@ -73,7 +75,7 @@ ok() { echo "ok: $1"; }
 
 OVR='' run installed-ok pass 'ZEEOS_SECUREBOOT enabled=1' \
   'ZEEOS_HARDENING_OK selinux=enforcing firewall=firewalld inbound=deny sshd=off autoupdate=on'; ok installed
-OVR='cmdline=rd.live.image' run live-ok pass \
+OVR='timer=live cmdline=rd.live.image' run live-ok pass \
   'ZEEOS_HARDENING_OK selinux=enforcing firewall=firewalld inbound=deny sshd=off autoupdate=live-off'; ok live-off
 OVR='timer=off cmdline=rd.live.image' run live-timer-off pass 'autoupdate=live-off'; ok live-timer-inactive
 OVR='sb=off' run sb-off pass 'ZEEOS_SECUREBOOT enabled=0' 'ZEEOS_HARDENING_OK'; ok sb-off
