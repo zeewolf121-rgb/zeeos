@@ -5,16 +5,32 @@
 # PINNED (ADR-0008): the digest-pinned tools image and the closure repo from packages.lock (the
 # union of the live and oem sets; oem-only packages are recorded in the lock header). The boot
 # job below boots it (vm/oem-boot-test.sh).
+# P5-W2 (#319): the bundle job wraps the disk with vm/utm/make-bundle.sh and the utm-test job boots
+# the bundle's disk with UTM.app's own firmware on the Mac (vm/utm/utm-test.sh). release.yml calls
+# this workflow (P5-W1) and publishes the bundle artifact.
 name: utm-disk
 on:
   pull_request:
     paths:
       - build/**
       - Makefile
+      - vm/utm/**
+      - vm/markers.sh
+      - security/overlay/**
       - .github/workflows/utm-disk.yml
+  schedule:
+    - cron: '47 3 * * *'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: bundle version (zeeos-<version>-aarch64.utm.zip)
+        type: string
+        required: false
+        default: ''
 permissions:
   contents: read
+  actions: read   # scripts/fetch-artifact.sh reads this run's artifacts through the REST API
 jobs:
   disk:
     runs-on: ubuntu-24.04-arm
@@ -142,3 +158,92 @@ jobs:
       - name: Free the disk space
         if: always()
         run: rm -rf out/disk "$OUT/oem-overlay.qcow2"
+  # Bundle: raw oem disk -> compressed qcow2 -> zeeos-<ver>-aarch64.utm -> .utm.zip (vm/utm/make-bundle.sh).
+  bundle:
+    needs: disk
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ inputs.version || '0.0.0-dev' }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends qemu-utils zstd
+      - name: Download the disk
+        uses: actions/download-artifact@v6
+        with:
+          name: utm-disk-aarch64
+          path: out/disk
+      - name: Make the bundle
+        run: |
+          zst="$(find out/disk -name '*.raw.zst' | head -n1)"
+          [[ -n "$zst" ]] || { echo "::error::no disk in the utm-disk-aarch64 artifact"; exit 1; }
+          zstd -d -q --sparse --rm "$zst"
+          DISK="${zst%.zst}" VERSION="$VERSION" OUT=out/utm vm/utm/make-bundle.sh
+          rm -f "${zst%.zst}"
+          ls -l out/utm
+      - name: Upload the bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: utm-bundle-aarch64
+          path: out/utm/*.utm.zip
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+  # Boots the bundle's own disk the way UTM does (QEMU + HVF, UTM.app's edk2 firmware, the plist's machine and
+  # devices). Exit check 3 of Phase 5: the oem first-boot markers and a painted wizard (vm/utm/utm-test.sh). Needs
+  # UTM.app on the Mac runner, so fork PRs (no self-hosted runner) skip it.
+  utm-test:
+    needs: bundle
+    if: github.event.pull_request.head.repo.fork != true
+    runs-on: [self-hosted, macOS, ARM64, zeeos-aarch64]
+    timeout-minutes: 45
+    env:
+      OUT: out/utm-test
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tools
+        run: |
+          echo /opt/homebrew/bin >>"$GITHUB_PATH"
+          [[ -r /Applications/UTM.app/Contents/Resources/qemu/edk2-aarch64-code.fd ]] \
+            || { echo "::error::UTM.app is not installed on this runner (its firmware is the one under test)"; exit 1; }
+      - name: Download the bundle (parallel)
+        id: fetch
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/fetch-artifact.sh "${{ github.run_id }}" utm-bundle-aarch64 out/bundle
+      - name: Download the bundle
+        if: steps.fetch.outcome != 'success'
+        uses: actions/download-artifact@v6
+        with:
+          name: utm-bundle-aarch64
+          path: out/bundle
+      - name: Boot the bundle
+        run: |
+          zip="$(find out/bundle -name '*.utm.zip' | head -n1)"
+          [[ -n "$zip" ]] || { echo "::error::no bundle in the utm-bundle-aarch64 artifact"; exit 1; }
+          BUNDLE="$zip" OUT="$OUT" UTM_APP=/Applications/UTM.app MIN_COLORS=50 vm/utm/utm-test.sh
+      - name: Summary
+        if: always()
+        run: |
+          prop() { sed -n "s/.*<property name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" "$OUT/junit.xml" 2>/dev/null | head -n1; }
+          { echo "### utm-test (bundle disk, UTM firmware): accel $(cat "$OUT/accel" 2>/dev/null || echo n/a)"
+            echo "boot $(prop boot_seconds) s, Secure Boot $(prop secureboot_kernel), hardening $(prop hardening), missing markers $(prop missing_markers), screenshot colours $(prop screenshot_colors)"
+            grep -o '<failure message="[^"]*"' "$OUT/junit.xml" 2>/dev/null || true
+            echo '```'; tail -n 40 "$OUT/serial.clean.log" 2>/dev/null || echo "(no serial log)"; echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: utm-test-aarch64
+          path: |
+            ${{ env.OUT }}/serial.log
+            ${{ env.OUT }}/junit.xml
+            ${{ env.OUT }}/screenshot.ppm
+            ${{ env.OUT }}/config.show
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Free the disk space
+        if: always()
+        run: rm -rf out/bundle "$OUT/unpacked" "$OUT/overlay.qcow2" "$OUT/vars.fd"
