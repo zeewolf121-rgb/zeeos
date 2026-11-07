@@ -122,6 +122,10 @@ Pass marker: `OEM_MARKERS` as in `oem-boot-test.sh`. The disk has no user before
 If the guest announces `ZEEOS_HARDENING_CHECK`, or `REQUIRE_HARDENING=1`, then `ZEEOS_HARDENING_OK ... autoupdate=on` must follow
 (`autoupdate=live-off` or any `ZEEOS_HARDENING_FAIL` fails). junit: `zeeos-utm-test`, properties `accel`, `secureboot_kernel`, `hardening`, `plist_*`.
 
-**UTM firmware and Secure Boot: not yet recorded.** Whether UTM's edk2 enforces Secure Boot needs the first real run on the Mac;
-`utm-test.sh` records the kernel's `secureboot: Secure boot enabled|disabled` line in `OUT/secureboot` and junit (it is not a pass
-condition). The result belongs here once the self-hosted Mac run exists. Offline checks: `tests/utm-selftest.sh` (run by `tests/selftest.sh`).
+**UTM firmware and Secure Boot: not enforced.** First real run on the owner's Mac (2026-11-07, UTM.app's
+`edk2-aarch64-code.fd` and `edk2-arm-vars.fd`, HVF, the Plasma 6.8.2 oem disk from utm-disk run 42060637316): pass after 14 s,
+all OEM markers, the plasma-setup wizard painted (30503 screenshot colours), and the kernel reported
+`secureboot: Secure boot disabled`. UTM's default aarch64 firmware has no enrolled keys, so a UTM VM boots ZeeOS with Secure
+Boot off; the signed chain is exercised by the AAVMF cells (`vm/oem-boot-test.sh`, boot-test) instead. UTM ships
+`edk2-arm-vars.fd` unpadded; `utm-test.sh` pads its working copy to the code image's size, as QEMU's virt pflash requires.
+Offline checks: `tests/utm-selftest.sh` (run by `tests/selftest.sh`).

@@ -56,7 +56,10 @@ tmo=600; settle=${SETTLE:-30}
 if [ "$accel" = tcg ]; then cpu=max,pauth-impdef=on; tmo=1800; settle=${SETTLE:-120}; fi
 TIMEOUT=${TIMEOUT:-$tmo}; HTMO=${HARDENING_TIMEOUT:-120}
 
-sock=$OUT/qmp.sock
+# The QMP socket lives in a short temp dir: a Unix socket path must stay under 104 bytes on macOS, and OUT may be deep.
+sockdir=$(mktemp -d /tmp/zq.XXXXXX)
+trap 'rm -rf "$sockdir"' EXIT
+sock=$sockdir/qmp.sock
 args=(-accel "$accel" -cpu "$cpu" -m "$(cfg MEMORY)" -smp "$(cfg CPUS)" -machine "$(cfg TARGET),gic-version=max"
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=$code"
   -drive "if=pflash,format=raw,unit=1,file=$OUT/vars.fd"
@@ -71,9 +74,15 @@ echo "$accel" > "$OUT/accel"
 rm -f "$OUT"/screenshot*.ppm "$sock"
 "$qimg" create -q -f qcow2 -b "$image" -F qcow2 "$OUT/overlay.qcow2"
 cp "$vars" "$OUT/vars.fd"; : > "$OUT/serial.log"
+# UTM ships its vars store unpadded (edk2-arm-vars.fd is ~320 KiB); QEMU's virt pflash1 must match pflash0's size. The
+# pad is the erased-flash state, so only the working copy grows.
+csize=$(wc -c <"$code" | tr -d ' '); vsize=$(wc -c <"$OUT/vars.fd" | tr -d ' ')
+if [ "$vsize" -lt "$csize" ]; then
+  python3 -I -c 'import sys; f=open(sys.argv[1],"ab"); f.write(b"\0"*(int(sys.argv[2])-f.tell()))' "$OUT/vars.fd" "$csize"
+fi
 "$qemu" "${args[@]}" 2>"$OUT/qemu.stderr" &
 qpid=$!
-trap 'kill "$qpid" 2>/dev/null || true' EXIT
+trap 'kill "$qpid" 2>/dev/null || true; rm -rf "$sockdir"' EXIT
 
 clean=$OUT/serial.clean.log
 start=$SECONDS; result=timeout; failed=""
