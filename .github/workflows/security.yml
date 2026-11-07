@@ -1,0 +1,48 @@
+# Secret scan and package CVE scan (P5-W3, #317; scripts from P5-8, #274). Phase 5 exit check 5:
+# both green on main. Runs on every PR, on pushes to main, nightly (new Fedora advisories land
+# without a commit) and on demand.
+#   secrets: gitleaks (pinned by version and SHA-256 in the script) over the full history.
+#   cve:     each packages.lock against Fedora 44's updates updateinfo; fails on an unfixed
+#            Critical/Important advisory unless security/cve-allowlist.yaml lists it with an expiry.
+name: security
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '29 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the whole history, every ref the checkout has
+      - name: Self-test (secret and CVE scanners, throwaway fixtures)
+        run: bash scripts/scan-selftest.sh
+      - name: Secret scan
+        run: bash scripts/secret-scan.sh
+  cve:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    name: cve (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Metadata only: dnf5 reads the updates repo's updateinfo for either arch, nothing is installed
+    # from it, so one x86_64 runner covers both locks.
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Tools
+        run: dnf5 -q -y install python3 >/dev/null
+      - uses: actions/checkout@v5
+      - name: CVE scan
+        run: bash scripts/cve-scan.sh "${{ matrix.arch }}"
