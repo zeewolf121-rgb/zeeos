@@ -10,6 +10,7 @@ USER_NAME=${LIVE_USER:-liveuser}
 DRY_RUN=${DRY_RUN:-0}
 TIMEOUT=${TIMEOUT:-840}
 DIAG_AFTER=${DIAG_AFTER:-240}
+KSPLASH_GRACE=${KSPLASH_GRACE:-60}
 
 # Serial ttys with a real UART behind them (sysfs type != 0). Not a fixed ttyS0/ttyAMA0 list: on
 # QEMU aarch64 virt, ttyS0 is an 8250 placeholder (type 0). It opens, but every write fails with
@@ -43,6 +44,16 @@ scan_procs() {
     done
 }
 
+# wayland_up: the user's compositor socket exists. Any wayland-N, not only wayland-0: the socket
+# number depends on what else holds a display (#311).
+wayland_up() {
+    local s
+    for s in "/run/user/$uid"/wayland-[0-9]*; do
+        [[ -S $s ]] && return 0
+    done
+    return 1
+}
+
 diagnostics() {
     {
         echo "=== zeeos-desktop-ready: desktop not up after ${1}s, diagnostics follow ==="
@@ -54,6 +65,11 @@ diagnostics() {
         journalctl -b --no-pager -o short-monotonic -u sddm.service 2>&1 | tail -n 40
         journalctl -b --no-pager -o short-monotonic 2>/dev/null \
             | grep -E 'kwin|plasma|sddm-helper|pam_' | tail -n 40
+        echo "--- readiness: plasmashell=$has_plasmashell xorg=$has_xorg ksplash=$has_ksplash wayland=$(wayland_up && echo yes || echo no)"
+        echo "--- /run/user/$uid"; find "/run/user/$uid" -maxdepth 1 -printf "%y %M %u %f\n" 2>&1 | head -n 20
+        echo "--- user processes"; ps -u "$uid" -o pid=,etimes=,comm= 2>&1 | head -n 60
+        echo "--- user journal"; journalctl -b --no-pager -o short-monotonic _UID="$uid" 2>/dev/null \
+            | grep -v 'Failed to connect to PipeWire' | tail -n 60
         echo "--- coredumps"; coredumpctl --no-pager list 2>&1 | tail -n 5
         echo "--- consoles: ${ttys[*]-none}; active: $(cat /sys/class/tty/console/active 2>&1)"
         echo "=== end diagnostics ==="
@@ -61,16 +77,24 @@ diagnostics() {
 }
 
 uid=$(id -u "$USER_NAME" 2>/dev/null) || { echo "no user $USER_NAME" | serial; exit 1; }
-up=0 diag_done=0
+up=0 diag_done=0 shell_since=0
 # Time with $SECONDS, not iterations: a slow poll must not stretch the timeout or the diagnostics.
 start=$SECONDS
 while (( SECONDS - start < TIMEOUT )); do
     # Ready = plasmashell on Wayland and the startup splash gone (ksplashqml exits when Plasma
     # finishes starting), so the screenshot taken at the marker shows the desktop, not the splash.
+    # A splash that outlives a running Wayland shell by KSPLASH_GRACE seconds no longer gates the
+    # marker: Plasma 6.8 can leave ksplashqml waiting on a stage that never comes (#311).
     scan_procs "$uid"
-    if (( has_plasmashell && ! has_xorg && ! has_ksplash )) && [ -S "/run/user/$uid/wayland-0" ]; then
-        up=1
-        break
+    if (( has_plasmashell && ! has_xorg )) && wayland_up; then
+        (( shell_since )) || shell_since=$SECONDS
+        if (( ! has_ksplash || SECONDS - shell_since >= KSPLASH_GRACE )); then
+            (( has_ksplash )) && echo "ksplashqml still running ${KSPLASH_GRACE}s after the shell came up; not waiting for it" | serial
+            up=1
+            break
+        fi
+    else
+        shell_since=0
     fi
     if (( ! diag_done && SECONDS - start >= DIAG_AFTER )) && [ "$DRY_RUN" != 1 ]; then
         diagnostics "$((SECONDS - start))"; diag_done=1

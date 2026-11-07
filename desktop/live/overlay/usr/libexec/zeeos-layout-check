@@ -34,8 +34,18 @@ fail() { emit "ZEEOS_LAYOUT_FAIL $cur_mode: $*"; exit 1; }
 uid=$(id -u "$USER_NAME" 2>/dev/null) || fail "no user $USER_NAME"
 home=$(getent passwd "$USER_NAME" | cut -d: -f6)
 rt=/run/user/$uid
+# wayland_display: the user's compositor socket name. Not a fixed wayland-0: under Plasma 6.8.2 the
+# session's socket has another number, and Qt tools abort when they cannot reach the display (#311).
+wayland_display() {
+    local s
+    for s in "$rt"/wayland-[0-9]*; do
+        [[ -S $s ]] && { echo "${s##*/}"; return; }
+    done
+    echo wayland-0
+}
+
 as_user() {
-    runuser -u "$USER_NAME" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY=wayland-0 \
+    runuser -u "$USER_NAME" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$(wayland_display)" \
         DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" "$@"
 }
 
