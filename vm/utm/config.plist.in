@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- UTM (QEMU backend) VM definition for the ZeeOS aarch64 bundle. Rendered by vm/utm/utm-config.py render; @NAME@ @UUID@ @DISK@ @CPUS@ @MEMORY@ are filled in. -->
+<!-- UTM (QEMU backend) VM definition for the ZeeOS aarch64 bundle. Rendered by vm/utm/utm-config.py render; @NAME@ @UUID@ @MAC@ @DISK@ @CPUS@ @MEMORY@ are filled in.
+     Every key UTM 4.6.5 decodes without a default is present (Configuration/UTMQemuConfiguration*.swift); a missing one makes UTM refuse the bundle. -->
 <plist version="1.0">
 <dict>
 	<key>ConfigurationVersion</key>
@@ -27,20 +28,23 @@
 		<string>virt</string>
 		<key>CPU</key>
 		<string>default</string>
+		<key>CPUFlagsAdd</key>
+		<array/>
+		<key>CPUFlagsRemove</key>
+		<array/>
 		<key>CPUCount</key>
 		<integer>@CPUS@</integer>
+		<key>ForceMulticore</key>
+		<false/>
 		<key>MemorySize</key>
 		<integer>@MEMORY@</integer>
-		<key>Boot</key>
-		<dict>
-			<key>UEFIBoot</key>
-			<true/>
-			<key>OperatingSystem</key>
-			<string>Linux</string>
-		</dict>
+		<key>JITCacheSize</key>
+		<integer>0</integer>
 	</dict>
 	<key>QEMU</key>
 	<dict>
+		<key>DebugLog</key>
+		<false/>
 		<key>Hypervisor</key>
 		<true/>
 		<key>UEFIBoot</key>
@@ -51,6 +55,12 @@
 		<false/>
 		<key>TPMDevice</key>
 		<false/>
+		<key>RTCLocalTime</key>
+		<false/>
+		<key>PS2Controller</key>
+		<false/>
+		<key>AdditionalArguments</key>
+		<array/>
 	</dict>
 	<key>Drive</key>
 	<array>
@@ -74,6 +84,12 @@
 			<string>virtio-gpu-pci</string>
 			<key>DynamicResolution</key>
 			<true/>
+			<key>NativeResolution</key>
+			<false/>
+			<key>UpscalingFilter</key>
+			<string>Linear</string>
+			<key>DownscalingFilter</key>
+			<string>Linear</string>
 		</dict>
 	</array>
 	<key>Network</key>
@@ -83,6 +99,12 @@
 			<string>virtio-net-pci</string>
 			<key>Mode</key>
 			<string>Shared</string>
+			<key>MacAddress</key>
+			<string>@MAC@</string>
+			<key>IsolateFromHost</key>
+			<false/>
+			<key>PortForward</key>
+			<array/>
 		</dict>
 	</array>
 	<key>Input</key>
@@ -91,6 +113,8 @@
 		<string>3.0</string>
 		<key>UsbSharing</key>
 		<false/>
+		<key>MaximumUsbShare</key>
+		<integer>3</integer>
 	</dict>
 	<key>Sharing</key>
 	<dict>
@@ -98,6 +122,12 @@
 		<true/>
 		<key>DirectoryShareMode</key>
 		<string>None</string>
+		<key>DirectoryShareReadOnly</key>
+		<false/>
 	</dict>
+	<key>Serial</key>
+	<array/>
+	<key>Sound</key>
+	<array/>
 </dict>
 </plist>

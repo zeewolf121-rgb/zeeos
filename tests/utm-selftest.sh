@@ -32,7 +32,9 @@ python3 -I - "$b/config.plist" "$tmp/b/zeeos-1.2.3-aarch64.utm.zip" <<'PY'
 import plistlib, sys, zipfile
 p = plistlib.load(open(sys.argv[1], "rb"))
 assert p["System"]["MemorySize"] == 4096 and p["System"]["CPUCount"] == 4 and p["System"]["Target"] == "virt"
-assert p["Backend"] == "QEMU" and p["System"]["Boot"]["UEFIBoot"] is True
+assert p["Backend"] == "QEMU" and p["QEMU"]["UEFIBoot"] is True
+assert p["Network"][0]["MacAddress"].startswith("5A:") and len(p["Network"][0]["MacAddress"]) == 17
+assert p["Serial"] == [] and p["Sound"] == [] and p["System"]["JITCacheSize"] == 0
 assert p["Drive"][0]["ImageName"] == "zeeos-1.2.3-aarch64.qcow2"
 assert p["Display"][0]["Hardware"] == "virtio-gpu-pci" and p["Network"][0]["Hardware"] == "virtio-net-pci"
 assert p["Sharing"]["ClipboardSharing"] is True
@@ -79,4 +81,31 @@ utm_replay serial-oem-hardening-missing.log fail - 'hardening-timeout'
 utm_replay serial-oem-no-sddm.log fail - 'missing_markers" value="sddm"'
 utm_replay serial-oem-failed.log fail - 'boot_failed'
 utm_replay serial-oem-wizard-died.log fail - 'wizard_session_ended'
+
+# UTM refuses a config without a key it decodes unconditionally (Codex P1 on #313).
+python3 -I - "$b/config.plist" "$tmp/broken.plist" <<'PY'
+import plistlib, sys
+p = plistlib.load(open(sys.argv[1], "rb")); del p["System"]["JITCacheSize"]; del p["Serial"]
+plistlib.dump(p, open(sys.argv[2], "wb"))
+PY
+if err=$(python3 -I vm/utm/utm-config.py show "$tmp/broken.plist" 2>&1); then die "config without UTM keys accepted"; fi
+grep -q 'System.JITCacheSize' <<<"$err" && grep -q 'Serial' <<<"$err" || die "missing keys not named: $err"
+
+# A relative .utm directory: the overlay's backing file must be absolute (qemu-img resolves it against the overlay).
+# shellcheck disable=SC2016  # the $ expressions belong to the shim script
+printf '#!/bin/sh\necho "$@" >> "%s"\nfor a; do last=$a; done; printf x > "$last"\n' "$tmp/qimg.args" > "$tmp/qemu-img-log"
+chmod +x "$tmp/qemu-img-log"
+( cd "$tmp/b" && env FAKE_SERIAL="$OLDPWD/tests/fixtures/serial-oem-ok.log" QEMU_BIN=$tmp/qemu QEMU_IMG=$tmp/qemu-img-log \
+    FW_CODE=$fw FW_VARS=$fw BUNDLE=zeeos-1.2.3-aarch64.utm OUT=$tmp/t-rel SETTLE=0 TIMEOUT=6 \
+    "$OLDPWD/vm/utm/utm-test.sh" >"$tmp/t-rel.log" 2>&1 ) || { cat "$tmp/t-rel.log" >&2; die "relative bundle dir run failed"; }
+grep -q -- "-b $tmp/b/zeeos-1.2.3-aarch64.utm/Data/" "$tmp/qimg.args" || die "backing file not absolute: $(cat "$tmp/qimg.args")"
+
+# A hardening announcement and failure that arrive during SETTLE still fail the cell (Codex P2 on #313).
+o=$tmp/t-late
+( until grep -aq 'plasma-setup' "$o/serial.log" 2>/dev/null; do sleep 0.2; done; sleep 0.5
+  printf 'ZEEOS_HARDENING_CHECK\nZEEOS_HARDENING_FAIL firewall: inactive\n' >> "$o/serial.log" ) &
+rc=0; env FAKE_SERIAL=tests/fixtures/serial-oem-ok.log QEMU_BIN=$tmp/qemu QEMU_IMG=$tmp/qemu-img FW_CODE=$fw FW_VARS=$fw \
+  BUNDLE=$tmp/b/zeeos-1.2.3-aarch64.utm.zip OUT=$o SETTLE=3 TIMEOUT=6 HARDENING_TIMEOUT=3 vm/utm/utm-test.sh >"$o.log" 2>&1 || rc=$?
+wait
+[ "$rc" != 0 ] && grep -q 'hardening-fail' "$o/junit.xml" || { cat "$o.log" "$o/junit.xml" >&2; die "late hardening failure ignored (exit $rc)"; }
 echo "utm selftest ok"

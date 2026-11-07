@@ -15,13 +15,45 @@ import zipfile
 
 EPOCH = (2026, 1, 1, 0, 0, 0)
 
+# Keys UTM 4.6.5 decodes with decode() (no default): a bundle without any of them fails to load in UTM.
+REQUIRED = {
+    "": ("Information", "System", "QEMU", "Input", "Sharing", "Display", "Drive", "Network", "Serial", "Sound"),
+    "Information": ("Name", "IconCustom", "Icon", "UUID"),
+    "System": ("Architecture", "Target", "CPU", "CPUFlagsAdd", "CPUFlagsRemove", "CPUCount", "ForceMulticore",
+               "MemorySize", "JITCacheSize"),
+    "QEMU": ("DebugLog", "UEFIBoot", "RNGDevice", "BalloonDevice", "TPMDevice", "Hypervisor", "RTCLocalTime",
+             "PS2Controller", "AdditionalArguments"),
+    "Input": ("UsbBusSupport", "UsbSharing", "MaximumUsbShare"),
+    "Sharing": ("DirectoryShareMode", "DirectoryShareReadOnly", "ClipboardSharing"),
+    "Display[]": ("Hardware", "DynamicResolution", "UpscalingFilter", "DownscalingFilter", "NativeResolution"),
+    "Drive[]": ("ImageType", "Interface", "Identifier"),
+    "Network[]": ("Mode", "Hardware", "MacAddress", "IsolateFromHost", "PortForward"),
+}
+
+
+def missing_keys(p):
+    out = []
+    for section, keys in REQUIRED.items():
+        if section == "":
+            where = [("", p)]
+        elif section.endswith("[]"):
+            name = section[:-2]
+            where = [("%s[%d]." % (name, i), d) for i, d in enumerate(p.get(name, []))]
+        else:
+            where = [(section + ".", p.get(section, {}))]
+        out += [prefix + k for prefix, d in where for k in keys if k not in d]
+    return out
+
 
 def render(template, out, name, disk, cpus="4", memory="4096"):
     text = open(template, encoding="utf-8").read()
     ident = str(uuid.uuid5(uuid.NAMESPACE_DNS, "zeeos.invalid/" + name)).upper()
-    for key, val in (("NAME", name), ("UUID", ident), ("DISK", disk), ("CPUS", cpus), ("MEMORY", memory)):
+    # Stable per name, locally administered unicast (first octet 0x5a).
+    mac = ":".join(["5A"] + ["%02X" % b for b in uuid.UUID(ident).bytes[:5]])
+    for key, val in (("NAME", name), ("UUID", ident), ("MAC", mac), ("DISK", disk), ("CPUS", cpus), ("MEMORY", memory)):
         text = text.replace("@%s@" % key, val.replace("&", "&amp;").replace("<", "&lt;"))
-    plistlib.loads(text.encode())  # must parse
+    missing = missing_keys(plistlib.loads(text.encode()))  # must parse and be loadable by UTM
+    assert not missing, "template lacks UTM keys: " + ", ".join(missing)
     with open(out, "w", encoding="utf-8") as f:
         f.write(text)
 
@@ -29,9 +61,11 @@ def render(template, out, name, disk, cpus="4", memory="4096"):
 def show(path):
     with open(path, "rb") as f:
         p = plistlib.load(f)
+    missing = missing_keys(p)
+    assert not missing, "UTM cannot load this config, missing: " + ", ".join(missing)
     sysd = p["System"]
     assert p["Backend"] == "QEMU" and sysd["Architecture"] == "aarch64" and sysd["Target"] == "virt", "not an aarch64 QEMU virt VM"
-    assert sysd["Boot"]["UEFIBoot"] is True, "UEFI boot is required"
+    assert p["QEMU"]["UEFIBoot"] is True, "UEFI boot is required"
     drive = p["Drive"][0]
     image = drive["ImageName"]
     assert "/" not in image and not image.startswith("."), "unsafe ImageName"

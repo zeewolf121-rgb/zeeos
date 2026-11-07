@@ -24,7 +24,9 @@ UTM_APP=${UTM_APP:-/Applications/UTM.app}
 qemu=${QEMU_BIN:-qemu-system-aarch64}; qimg=${QEMU_IMG:-qemu-img}
 [ -n "$BUNDLE" ] && [ -e "$BUNDLE" ] || { echo "bundle not found; set BUNDLE=<.utm.zip or .utm dir>" >&2; exit 2; }
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
-if [ -d "$BUNDLE" ]; then utm=$BUNDLE
+# Absolute: the overlay names the bundle disk as its backing file, which qemu-img resolves against the overlay's
+# directory, not ours.
+if [ -d "$BUNDLE" ]; then utm=$(cd "$BUNDLE" && pwd)
 else
   rm -rf "$OUT/unpacked"; mkdir -p "$OUT/unpacked"
   python3 -I "$here/utm-config.py" unzip "$BUNDLE" "$OUT/unpacked"
@@ -85,8 +87,10 @@ while (( SECONDS - start < TIMEOUT )); do
 done
 
 # Hardening: required when announced or asked for; waits up to HARDENING_TIMEOUT after the boot markers.
+# Run again after the settle interval, so an announcement (and failure) that arrives late is not ignored.
 hstate=none; hmsg=""
-if [ "$result" = pass ]; then
+check_hardening() {
+  [ "$result" = pass ] && [ "$hstate" = none ] || return 0
   if [ "${REQUIRE_HARDENING:-0}" = 1 ] || grep -aq '^ZEEOS_HARDENING_CHECK' "$OUT/serial.log"; then
     hardening_wait "$OUT/serial.log" "$HTMO" "$qpid" || true
     hstate=$(hardening_state "$OUT/serial.log" 1)
@@ -97,12 +101,13 @@ if [ "$result" = pass ]; then
     [ -n "$hmsg" ] || hmsg=$(hardening_msg "$hstate" "$OUT/serial.log")
     [ "$hstate" = ok ] || result="hardening-$hstate"
   fi
-fi
+}
+check_hardening
 elapsed=$((SECONDS - start))
 
 shot=none; colors=""
 if kill -0 "$qpid" 2>/dev/null; then
-  if [ "$result" = pass ]; then sleep "$settle"; fi
+  if [ "$result" = pass ]; then sleep "$settle"; check_hardening; fi
   if kill -0 "$qpid" 2>/dev/null; then
     if python3 -I "$here/../qmp.py" "$sock" screendump "{\"filename\":\"$OUT/screenshot.ppm\"}" >/dev/null 2>&1; then
       shot=taken
@@ -121,6 +126,9 @@ if [ "$result" = pass ]; then
   ended=$(oem_wizard_ended "$clean"); [ -z "$ended" ] || { result=wizard_session_ended; failed=$ended; }
 fi
 if [ "$result" = pass ] && [ "$shot" = none ]; then result=qemu_exited; fi
+if [ "$result" = pass ] && grep -aq '^ZEEOS_HARDENING_FAIL' "$OUT/serial.log"; then
+  hstate=fail; hmsg=$(hardening_msg fail "$OUT/serial.log"); result=hardening-fail
+fi
 
 got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$clean" | awk '{print $NF}' || true)
 echo "${got:-unreported}" > "$OUT/secureboot"
