@@ -108,4 +108,7 @@ rc=0; env FAKE_SERIAL=tests/fixtures/serial-oem-ok.log QEMU_BIN=$tmp/qemu QEMU_I
   BUNDLE=$tmp/b/zeeos-1.2.3-aarch64.utm.zip OUT=$o SETTLE=3 TIMEOUT=6 HARDENING_TIMEOUT=3 vm/utm/utm-test.sh >"$o.log" 2>&1 || rc=$?
 wait
 [ "$rc" != 0 ] && grep -q 'hardening-fail' "$o/junit.xml" || { cat "$o.log" "$o/junit.xml" >&2; die "late hardening failure ignored (exit $rc)"; }
+# MIN_COLORS: the fake QEMU's screenshot is a flat image, so a gate above its colour count fails the cell.
+utm_replay serial-oem-ok.log pass MIN_COLORS=1 'failures="0"'
+utm_replay serial-oem-ok.log fail MIN_COLORS=100000 'screenshot-colors-'
 echo "utm selftest ok"

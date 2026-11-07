@@ -5,6 +5,7 @@
 # Env: BUNDLE=<zeeos-<ver>-aarch64.utm.zip or .utm directory, required>  OUT=<result dir>  TIMEOUT=<s, 600; 1800 under TCG>
 #      SETTLE=<s from the last marker to the screenshot, 30; 120 under TCG>  HARDENING_TIMEOUT=<s, 120>
 #      REQUIRE_HARDENING=1 fail unless ZEEOS_HARDENING_OK ... autoupdate=on appears (see below)  DRY_RUN=1 (print command)
+#      MIN_COLORS=<n> fail unless the final screenshot has at least n distinct colours (default 0: report only)
 #      UTM_APP=<UTM.app, default /Applications/UTM.app> supplies edk2-aarch64-code.fd and edk2-arm-vars.fd;
 #      FW_CODE / FW_VARS / QEMU_BIN / QEMU_IMG override firmware and tools (offline tests/selftest.sh)
 # Markers: the bundle's disk is the oem disk, which has no user before the plasma-setup wizard, so ZEEOS_DESKTOP_READY cannot
@@ -138,6 +139,11 @@ if [ "$result" = pass ] && [ "$shot" = none ]; then result=qemu_exited; fi
 if [ "$result" = pass ] && grep -aq '^ZEEOS_HARDENING_FAIL' "$OUT/serial.log"; then
   hstate=fail; hmsg=$(hardening_msg fail "$OUT/serial.log"); result=hardening-fail
 fi
+
+# Opt-in graphical gate, as in vm/oem-boot-test.sh: the wizard must have painted (a text console has 2 colours).
+# With no screenshot there are no colours to count: that fails the gate.
+min=${MIN_COLORS:-0}
+if [ "$min" -gt 0 ] && { [ -z "$colors" ] || [ "$colors" -lt "$min" ]; }; then result="$result,screenshot-colors-${colors:-none}-below-$min"; fi
 
 got=$(grep -aom1 'secureboot: Secure boot [a-z]*' "$clean" | awk '{print $NF}' || true)
 echo "${got:-unreported}" > "$OUT/secureboot"
