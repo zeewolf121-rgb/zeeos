@@ -100,3 +100,32 @@ screenshot (`OUT/screenshot.ppm`) is taken `SETTLE` seconds after the last marke
 recorded in junit (`screenshot_colors`); it is report-only until `MIN_COLORS=<n>` is set (a text console has 2, a painted
 Plasma wizard has hundreds). Turn the gate on once the wizard paints. A real desktop-ready marker for the wizard needs a
 guest unit (desktop-shell) and is a follow-up on #277.
+
+## UTM bundle (#278, P5-7)
+
+`vm/utm/` builds and tests the aarch64 UTM bundle. `config.plist.in` is the UTM (QEMU backend) VM definition: `virt`
+machine, UEFI boot, 4 vCPU, 4096 MiB, one VirtIO disk, `virtio-gpu-pci`, `virtio-net-pci` (shared), clipboard sharing
+(the SPICE agent channel; guest tools come from the image's `spice-vdagent`), hypervisor on, RNG on, TPM off.
+
+```bash
+DISK=out/aarch64-oem/image/ZeeOS-aarch64.aarch64-0.1.0.raw VERSION=0.1.0 vm/utm/make-bundle.sh   # DRY_RUN=1 prints the steps
+BUNDLE=out/utm/zeeos-0.1.0-aarch64.utm.zip vm/utm/utm-test.sh                                    # on the Apple silicon Mac
+```
+
+`make-bundle.sh`: raw -> `qemu-img convert -c` qcow2 -> `zeeos-<ver>-aarch64.utm/{config.plist,Data/<disk>.qcow2}` ->
+`zeeos-<ver>-aarch64.utm.zip` (a reproducible zip: sorted entries, fixed timestamps, qcow2 stored). The UUID is derived from the name.
+
+`utm-test.sh` unpacks the bundle (safe extract), reads machine, CPU count, memory, GPU, NIC and disk from its `config.plist`,
+and boots the bundle's own qcow2 through an overlay with UTM's edk2 firmware (`$UTM_APP/Contents/Resources/qemu/edk2-aarch64-code.fd`
+and the bundle's `Data/efi_vars.fd`, else `edk2-arm-vars.fd`), HVF on a Mac (KVM on an aarch64 host, else TCG, recorded in `OUT/accel`).
+Pass marker: `OEM_MARKERS` as in `oem-boot-test.sh`. The disk has no user before the wizard, so `ZEEOS_DESKTOP_READY` cannot print.
+If the guest announces `ZEEOS_HARDENING_CHECK`, or `REQUIRE_HARDENING=1`, then `ZEEOS_HARDENING_OK ... autoupdate=on` must follow
+(`autoupdate=live-off` or any `ZEEOS_HARDENING_FAIL` fails). junit: `zeeos-utm-test`, properties `accel`, `secureboot_kernel`, `hardening`, `plist_*`.
+
+**UTM firmware and Secure Boot: not enforced.** First real run on the owner's Mac (2026-11-07, UTM.app's
+`edk2-aarch64-code.fd` and `edk2-arm-vars.fd`, HVF, the Plasma 6.8.2 oem disk from utm-disk run 42060637316): pass after 14 s,
+all OEM markers, the plasma-setup wizard painted (30503 screenshot colours), and the kernel reported
+`secureboot: Secure boot disabled`. UTM's default aarch64 firmware has no enrolled keys, so a UTM VM boots ZeeOS with Secure
+Boot off; the signed chain is exercised by the AAVMF cells (`vm/oem-boot-test.sh`, boot-test) instead. UTM ships
+`edk2-arm-vars.fd` unpadded; `utm-test.sh` pads its working copy to the code image's size, as QEMU's virt pflash requires.
+Offline checks: `tests/utm-selftest.sh` (run by `tests/selftest.sh`).

@@ -115,4 +115,5 @@ if grep -q 'media=cdrom' <<<"$oemout"; then echo "FAIL: oem run attached an ISO"
 rm -rf "$tmp"
 bash tests/imgdiff_gate_test.sh
 bash tests/install-selftest.sh
+bash tests/utm-selftest.sh
 echo "selftest ok"

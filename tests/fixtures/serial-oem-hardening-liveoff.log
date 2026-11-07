@@ -1,0 +1,10 @@
+[    0.000000] Linux version 7.2.15-200.fc44.aarch64 (mockbuild@host) #1 SMP PREEMPT_DYNAMIC Sun Nov  1 16:10:44 UTC 2026
+[    0.000000] secureboot: Secure boot disabled
+Welcome to Fedora Linux 44 (Forty Four)!
+[  OK  ] Finished plasma-setup.service - Plasma Out-of-Box / First-Run setup wizard.
+[  OK  ] Reached target multi-user.target - Multi-User System.
+[  OK  ] Started sddm.service - Simple Desktop Display Manager.
+[  OK  ] Reached target graphical.target - Graphical Interface.
+[  OK  ] Started session-1.scope - Session 1 of User plasma-setup.
+ZEEOS_HARDENING_CHECK
+ZEEOS_HARDENING_OK selinux=enforcing firewall=firewalld inbound=deny sshd=off autoupdate=live-off
