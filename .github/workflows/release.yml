@@ -1,6 +1,7 @@
 # Release (docs/AUTOPILOT.md §8, ADR-0007). Autopilot may only start release candidates
 # (vX.Y.Z-rc.N, published as pre-releases). A final vX.Y.Z is a hard stop: it must be a tag the
-# owner pushed. Signing completes in Phase 5; the minisign step below is the intended shape.
+# owner pushed. Assets: both ISOs, the UTM bundle, the key files, SHA256SUMS and its minisign
+# signature (ADR-0007); verify-release then checks the published release like a user would.
 name: release
 on:
   push:
@@ -19,6 +20,7 @@ jobs:
     outputs:
       tag: ${{ steps.g.outputs.tag }}
       prerelease: ${{ steps.g.outputs.prerelease }}
+      version: ${{ steps.g.outputs.version }}
     steps:
       - id: g
         env:
@@ -36,30 +38,49 @@ jobs:
           # The build uses this run's commit, so the tag must point at it (run from the tag ref).
           tagged="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha 2>/dev/null || true)"
           [[ "$tagged" == "$GITHUB_SHA" ]] || { echo "::error::tag $TAG is ${tagged:-missing}, run is at $GITHUB_SHA; dispatch with --ref $TAG"; exit 1; }
-          printf 'tag=%s\nprerelease=%s\n' "$TAG" "$pre" >>"$GITHUB_OUTPUT"
+          printf 'tag=%s\nprerelease=%s\nversion=%s\n' "$TAG" "$pre" "${TAG#v}" >>"$GITHUB_OUTPUT"
   build:
     needs: guard
     permissions:
       contents: read
       actions: read   # build-iso/boot-test fetch the ISO artifact through the REST API
     uses: ./.github/workflows/build-iso.yml
+  # The UTM bundle (P5-W1, #319): utm-disk.yml builds the pinned oem disk, wraps it in
+  # zeeos-<ver>-aarch64.utm.zip and boots it with UTM's firmware on the Mac (utm-test).
+  utm:
+    needs: guard
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/utm-disk.yml
+    with:
+      version: ${{ needs.guard.outputs.version }}
   publish:
-    needs: [guard, build]
+    needs: [guard, build, utm]
     runs-on: ubuntu-24.04
     environment: release   # ADR-0007: signing secrets live here (repo-level secrets also resolve)
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.guard.outputs.tag }}
+      VERSION: ${{ needs.guard.outputs.version }}
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v6
         with:
           pattern: iso-*
           merge-multiple: true
-          path: dist
-      - name: Checksums
+          path: in
+      - uses: actions/download-artifact@v6
+        with:
+          name: utm-bundle-aarch64
+          path: in
+      # Published names, the < 2 GiB asset limit, the key files and SHA256SUMS (scripts/release-assets.sh, P5-6).
+      - name: Stage assets
         run: |
-          ls dist/*.iso >/dev/null 2>&1 || { echo "::error::no ISO artifacts (build-iso uploads iso-<arch>)"; exit 1; }
-          cd dist && sha256sum -- * >SHA256SUMS
+          shopt -s nullglob
+          files=(in/*.iso in/*.utm.zip)
+          (( ${#files[@]} == 3 )) || { echo "::error::want two ISOs and the UTM bundle, got: ${files[*]:-none}"; exit 1; }
+          scripts/release-assets.sh -v "$VERSION" -o dist "${files[@]}"
       - name: Sign (minisign, CI key)
         env:
           KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
@@ -68,15 +89,31 @@ jobs:
         run: |
           if [[ -z "$KEY" ]]; then
             [[ "$PRE" == true ]] || { echo "::error::final releases must be signed"; exit 1; }
-            echo "::warning::MINISIGN_SECRET_KEY not set; release candidate is UNSIGNED"; exit 0
+            echo "::warning::MINISIGN_SECRET_KEY not set; release candidate is UNSIGNED (verify-release will fail)"; exit 0
           fi
           sudo apt-get install -yq minisign >/dev/null
           umask 077; printf '%s\n' "$KEY" >"$RUNNER_TEMP/ci.key"
           minisign -S -s "$RUNNER_TEMP/ci.key" -m dist/SHA256SUMS -t "zeeos $TAG" <<<"$PASS"
           rm -f "$RUNNER_TEMP/ci.key"
+      - name: Release notes (keys, verify commands, CHANGELOG section)
+        run: scripts/release-notes.sh "$TAG" >"$RUNNER_TEMP/notes.md"
       - name: Publish
         env:
           PRE: ${{ needs.guard.outputs.prerelease }}
         run: |
           flag=""; [[ "$PRE" == true ]] && flag=--prerelease
-          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "ZeeOS $TAG" --generate-notes --verify-tag $flag
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "ZeeOS $TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" --verify-tag $flag
+  # What a user does (security/VERIFY.md): download the published release and verify it against the
+  # keys committed in the repo, never the downloaded ones (scripts/verify-release.sh, P5-6).
+  verify-release:
+    needs: [guard, publish]
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.guard.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update -q && sudo apt-get install -yq minisign
+      - name: Verify the published release
+        run: scripts/verify-release.sh "$TAG"

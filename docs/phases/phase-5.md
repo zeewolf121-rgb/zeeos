@@ -6,7 +6,7 @@
 |---|---|---|---|
 | 1 | `boot-test.yml` green on all four cells. Each serial log also has `ZEEOS_SECUREBOOT enabled=1` (SB-on cells) or `enabled=0` (SB-off cells) and `ZEEOS_HARDENING_OK …` (marker protocol below) | x86_64, aarch64 | CI run |
 | 2 | `install-test.yml` case (a) still green, and the installed system prints `ZEEOS_HARDENING_OK … autoupdate=on` | x86_64, aarch64 | CI run |
-| 3 | `utm-test` green: the disk inside `zeeos-<ver>-aarch64.utm` boots under QEMU + HVF on the self-hosted Mac to `ZEEOS_DESKTOP_READY` and `ZEEOS_HARDENING_OK … autoupdate=on` | aarch64 | CI run |
+| 3 | `utm-test` green: the disk inside `zeeos-<ver>-aarch64.utm` boots under QEMU + HVF on the self-hosted Mac, with UTM.app's own firmware, to the oem first-boot markers (`OEM_MARKERS`, `vm/markers.sh`) and a painted plasma-setup wizard (`MIN_COLORS`). *Amended 2026-11-07 (owner, #319):* the oem disk has no user before the wizard, so `ZEEOS_DESKTOP_READY` cannot print (#277), and the installed-system hardening unit only runs under a test preset (Phase 4 rule); `utm-test` still fails on any `ZEEOS_HARDENING_FAIL` and requires `autoupdate=on` whenever hardening is announced. Hardening on installed systems is exit check 2 | aarch64 | CI run |
 | 4 | A `release.yml` run on an owner-started rc tag (`v0.5.0-rc.N`, pre-release) publishes both ISOs, the UTM bundle, `SHA256SUMS` and `SHA256SUMS.minisig`, and its `verify-release` job passes against the committed public keys | both | CI run + release page |
 | 5 | Secret scan and package CVE scan green on `main` | — | CI run |
 
